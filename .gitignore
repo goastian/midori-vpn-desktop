@@ -1,0 +1,51 @@
+# ── Node / frontend ──────────────────────────────────────────────────────────
+node_modules/
+dist/
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
+.parcel-cache
+.cache/
+
+# ── Rust / Cargo ──────────────────────────────────────────────────────────────
+src-tauri/target/
+
+# ── Go agent build artefacts ─────────────────────────────────────────────────
+agent/target/
+
+# ── Tauri generated (mobile targets) ─────────────────────────────────────────
+src-tauri/gen/
+
+# ── Compiled installers / bundles ─────────────────────────────────────────────
+# (kept out of VCS — produced by CI)
+*.deb
+*.rpm
+*.AppImage
+*.dmg
+*.msi
+*.exe
+*.app
+*.tar.xz
+*.tar.gz
+*.zip
+
+# ── Config & secrets ──────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

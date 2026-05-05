@@ -1,0 +1,41 @@
+{
+  "dependencies": {
+    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/plugin-autostart": "^2.5.1",
+    "@tauri-apps/plugin-shell": "^2.3.5",
+    "cargo": "^0.8.0",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.33",
+    "vue-router": "^5.0.6"
+  },
+  "name": "midorivpn-desktop",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.10",
+    "vue-tsc": "^3.2.8"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "npm run build-agent && tauri build",
+    "build-agent": "cd agent && GOOS=linux GOARCH=amd64 go build -o target/release/agent ./cmd/agent"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/goastian/midorivpn-desktop.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/goastian/midorivpn-desktop/issues"
+  },
+  "homepage": "https://github.com/goastian/midorivpn-desktop#readme"
+}
