@@ -1,19 +1,21 @@
 <template>
   <div class="app">
-    <header class="app-titlebar">
-      <div class="title-brand" data-tauri-drag-region>
-        <span class="brand-mark" aria-hidden="true">M</span>
-        <span class="brand-name">MidoriVPN</span>
+    <header class="app-titlebar" @pointerdown="startDragPointer" @mousedown="startDragMouse">
+      <div class="title-drag-area">
+        <div class="title-brand">
+          <img class="brand-logo" :src="brandIcon" alt="MidoriVPN" />
+          <span class="brand-name">MidoriVPN</span>
+        </div>
       </div>
-      <div class="window-actions">
+      <div class="window-actions" @pointerdown.stop @mousedown.stop>
         <button class="window-btn" :aria-label="t('titlebar.minimize')" :title="t('titlebar.minimize')" @click="minimizeWindow">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
           </svg>
         </button>
         <button class="window-btn window-btn--close" :aria-label="t('titlebar.close')" :title="t('titlebar.close')" @click="closeWindow">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
           </svg>
         </button>
       </div>
@@ -67,6 +69,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { agent, initAgentToken } from './lib/agent'
+import brandIcon from './assets/midori-mv.png'
 import { useVpnStore } from './stores/vpn'
 import { useMeshStore } from './stores/mesh'
 import { useAuthStore } from './stores/auth'
@@ -105,6 +108,22 @@ async function minimizeWindow() {
 
 async function closeWindow() {
   await appWindow.hide()
+}
+
+function tryStartDrag(button: number, target: EventTarget | null) {
+  if (button !== 0) return
+  const el = target as HTMLElement | null
+  if (!el) return
+  if (el.closest('.window-actions, button, a, input, select, textarea, [role="button"]')) return
+  appWindow.startDragging().catch(() => { /* ignore */ })
+}
+
+function startDragMouse(e: MouseEvent) {
+  tryStartDrag(e.button, e.target)
+}
+
+function startDragPointer(e: PointerEvent) {
+  tryStartDrag(e.button, e.target)
 }
 
 function sleep(ms: number) {
@@ -220,48 +239,46 @@ onUnmounted(() => {
   overflow: hidden;
   background: var(--app-bg);
   color: var(--ink);
-  border: 1px solid rgba(76, 255, 147, .16);
+  border: 1px solid rgba(22, 163, 74, .18);
 }
 
 .app-titlebar {
-  height: 46px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 10px 0 14px;
-  background: linear-gradient(180deg, rgba(19, 31, 27, .96), rgba(9, 15, 14, .96));
-  border-bottom: 1px solid rgba(74, 222, 128, .16);
+  padding: 0 8px 0 12px;
+  background: var(--surface);
+  border-bottom: 2px solid var(--midori-500);
   user-select: none;
 }
 
-.window-actions,
-.window-actions * {
-  -webkit-app-region: no-drag;
+.title-drag-area {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  cursor: grab;
 }
 
 .title-brand {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
+  cursor: default;
 }
 
-.brand-mark {
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 7px;
-  background: linear-gradient(135deg, var(--midori-500), var(--midori-700));
-  color: #04110b;
-  font-size: 13px;
-  font-weight: 900;
-  box-shadow: 0 0 18px rgba(34, 197, 94, .28);
+.brand-logo {
+  flex-shrink: 0;
+  width: 34px;
+  height: 21px;
+  object-fit: contain;
 }
 
 .brand-name {
-  color: #ecfdf5;
+  color: var(--ink);
   font-size: 13px;
   font-weight: 700;
   letter-spacing: .01em;
@@ -270,62 +287,60 @@ onUnmounted(() => {
 .window-actions {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 
 .window-btn {
-  width: 32px;
-  height: 30px;
+  width: 30px;
+  height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
-  color: var(--muted-2);
+  color: var(--muted);
   cursor: pointer;
-  pointer-events: auto;
-  -webkit-app-region: no-drag;
-  transition: background .15s, color .15s;
+  transition: background .12s, color .12s;
 }
 
 .window-btn:hover {
-  background: rgba(148, 163, 184, .12);
-  color: #f8fafc;
+  background: var(--surface-3);
+  color: var(--ink);
 }
 
 .window-btn--close:hover {
-  background: rgba(248, 113, 113, .16);
-  color: #fecaca;
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 .app-body {
-  height: calc(100vh - 46px);
+  height: calc(100vh - 44px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
 /* Agent supervisor status banner */
-.agent-banner { padding: 8px 14px; font-size: 0.82rem; text-align: center; font-weight: 500; }
-.agent-banner--restarting { background: #2d2012; color: #fefcbf; border-bottom: 1px solid #d69e2e; }
-.agent-banner--failed     { background: #2d1212; color: #fed7d7; border-bottom: 1px solid #e53e3e; }
+.agent-banner { padding: 7px 14px; font-size: 0.82rem; text-align: center; font-weight: 500; }
+.agent-banner--restarting { background: #fffbeb; color: #92400e; border-bottom: 1px solid #fcd34d; }
+.agent-banner--failed     { background: #fef2f2; color: #991b1b; border-bottom: 1px solid #fca5a5; }
 
 /* Security banner */
-.security-banner { display: flex; flex-direction: column; gap: 4px; }
-.security-issue { padding: 10px 14px; font-size: 0.82rem; border-left: 4px solid; }
-.issue-error   { background: #2d1212; border-color: #e53e3e; color: #fed7d7; }
-.issue-warning { background: #2d2012; border-color: #d69e2e; color: #fefcbf; }
-.issue-info    { background: #12202d; border-color: #3182ce; color: #bee3f8; }
+.security-banner { display: flex; flex-direction: column; gap: 0; }
+.security-issue { padding: 9px 14px; font-size: 0.82rem; border-left: 3px solid; background: var(--surface); border-bottom: 1px solid var(--border); }
+.issue-error   { border-color: #ef4444; }
+.issue-warning { border-color: #f59e0b; }
+.issue-info    { border-color: #3b82f6; }
 .issue-header  { display: flex; align-items: center; gap: 8px; }
 .issue-icon    { font-size: 1rem; }
-.issue-close   { margin-left: auto; background: none; border: none; color: inherit; cursor: pointer; font-size: 1rem; opacity: 0.7; }
-.issue-close:hover { opacity: 1; }
-.issue-detail  { margin-top: 6px; font-size: 0.80rem; line-height: 1.4; }
+.issue-close   { margin-left: auto; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1rem; opacity: 0.7; }
+.issue-close:hover { opacity: 1; color: var(--ink); }
+.issue-detail  { margin-top: 4px; font-size: 0.80rem; line-height: 1.4; color: var(--ink-3); }
 .issue-fix     { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
-.fix-cmd       { flex: 1; padding: 6px 10px; background: rgba(0,0,0,.45); border-radius: 4px;
-                 font-family: monospace; font-size: 0.78rem; white-space: pre; overflow-x: auto; }
-.fix-copy      { flex-shrink: 0; padding: 4px 10px; border: 1px solid currentColor; border-radius: 4px;
-                 background: none; color: inherit; cursor: pointer; font-size: 0.78rem; opacity: 0.85; white-space: nowrap; }
-.fix-copy:hover { opacity: 1; background: rgba(255,255,255,.1); }
+.fix-cmd       { flex: 1; padding: 5px 9px; background: var(--surface-3); border: 1px solid var(--border); border-radius: 4px;
+                 font-family: monospace; font-size: 0.78rem; white-space: pre; overflow-x: auto; color: var(--ink-2); }
+.fix-copy      { flex-shrink: 0; padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px;
+                 background: none; color: var(--midori-700); cursor: pointer; font-size: 0.78rem; white-space: nowrap; }
+.fix-copy:hover { background: var(--midori-50); }
 </style>

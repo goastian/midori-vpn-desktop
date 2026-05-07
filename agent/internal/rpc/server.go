@@ -244,6 +244,15 @@ func (s *Server) AutoEnableMesh(ctx context.Context) {
 func (s *Server) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
 
+	isLoopbackRemote := func(remoteAddr string) bool {
+		host, _, err := net.SplitHostPort(remoteAddr)
+		if err != nil {
+			return false
+		}
+		ip := net.ParseIP(host)
+		return ip != nil && ip.IsLoopback()
+	}
+
 	// Read the ephemeral token injected by Tauri via env var.
 	// If the token is empty (agent launched outside Tauri, e.g. manual debug),
 	// log a warning and proceed without token enforcement so developers are not
@@ -253,13 +262,24 @@ func (s *Server) Start(ctx context.Context) error {
 		slog.Warn("MIDORIVPN_AGENT_TOKEN is not set; token enforcement disabled")
 	}
 
-	// allowedOrigin is baked at compile time via -ldflags.
-	allowedOrigin := config.AllowedOrigin
+	allowedOrigins := map[string]struct{}{
+		"tauri://localhost":     {},
+		"http://localhost:1420": {},
+	}
+	defaultCORSOrigin := "tauri://localhost"
 
-	// withCORS sets CORS headers and enforces the allowed origin.
+	// withCORS sets CORS headers and reflects the request origin when it is one
+	// of our hardcoded desktop origins. This keeps tauri dev working without any
+	// .env-driven build-time origin injection.
 	withCORS := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+			corsOrigin := defaultCORSOrigin
+			if origin := r.Header.Get("Origin"); origin != "" {
+				if _, ok := allowedOrigins[origin]; ok {
+					corsOrigin = origin
+				}
+			}
+			w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Agent-Token")
 			if r.Method == http.MethodOptions {
@@ -282,18 +302,19 @@ func (s *Server) Start(ctx context.Context) error {
 				return
 			}
 
-			// Loopback check — reject anything not from 127.0.0.1.
-			host, _, err := net.SplitHostPort(r.RemoteAddr)
-			if err != nil || (host != "127.0.0.1" && host != "::1") {
+			// Loopback check — reject anything not from localhost.
+			if !isLoopbackRemote(r.RemoteAddr) {
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
 
 			// Origin check.
 			origin := r.Header.Get("Origin")
-			if origin != "" && origin != allowedOrigin {
+			if origin != "" {
+				if _, ok := allowedOrigins[origin]; !ok {
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
+				}
 			}
 
 			// Token check (skip if token enforcement is disabled in dev mode).
@@ -320,6 +341,11 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 	wrapSSE := func(h http.Handler) http.Handler {
 		return requireAuth(withCORS(h), true)
+	}
+	// OAuth start only generates an authorization URL and is safe to expose on
+	// the loopback-bound RPC server without token checks.
+	wrapOAuthStart := func(h http.Handler) http.Handler {
+		return withCORS(h)
 	}
 
 	mux.Handle("GET /status", wrap(http.HandlerFunc(s.handleStatus)))
@@ -358,7 +384,7 @@ func (s *Server) Start(ctx context.Context) error {
 	// OAuth 2.0 PKCE login flow.
 	// /oauth/start is called from Tauri (has token); /oauth/callback is reached
 	// by the system browser (exempt from token+Origin check).
-	mux.Handle("POST /oauth/start", wrap(http.HandlerFunc(s.handleOAuthStart)))
+	mux.Handle("POST /oauth/start", wrapOAuthStart(http.HandlerFunc(s.handleOAuthStart)))
 	mux.Handle("GET /oauth/callback", http.HandlerFunc(s.handleOAuthCallback))
 
 	// Start the local transparent forwarder (chains to exit node when active).

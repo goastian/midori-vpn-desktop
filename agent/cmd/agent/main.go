@@ -3,17 +3,14 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/goastian/midorivpn-agent/internal/rpc"
 	"github.com/goastian/midorivpn-agent/internal/state"
-	"golang.org/x/sys/unix"
 )
 
 func main() {
@@ -32,32 +29,12 @@ func main() {
 	}
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
 
-	// ── Single-instance lock ──────────────────────────────────────────────
-	// Use an exclusive flock on a well-known file so only one agent process
-	// can run at a time regardless of how it was launched.
-	// Prefer $XDG_RUNTIME_DIR (per-user, always writable) over /tmp which
-	// may have a root-owned file left from a previous pkexec run.
-	lockDir := os.Getenv("XDG_RUNTIME_DIR")
-	if lockDir == "" {
-		lockDir = os.TempDir()
-	}
-	lockPath := filepath.Join(lockDir, "midorivpn-agent.lock")
-	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
+	releaseLock, err := acquireSingleInstanceLock()
 	if err != nil {
-		slog.Error("cannot open lock file", "path", lockPath, "err", err)
+		slog.Error("cannot acquire single-instance lock", "err", err)
 		os.Exit(1)
 	}
-	// LOCK_EX | LOCK_NB — non-blocking exclusive lock
-	if err := unix.Flock(int(lockFile.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
-		fmt.Fprintf(os.Stderr, "midorivpn-agent: already running (lock held by another process)\n")
-		os.Exit(0) // exit 0 so Tauri doesn't report an error
-	}
-	defer func() {
-		unix.Flock(int(lockFile.Fd()), unix.LOCK_UN) //nolint:errcheck
-		lockFile.Close()
-		os.Remove(lockPath)
-	}()
-	// ─────────────────────────────────────────────────────────────────────
+	defer releaseLock()
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()

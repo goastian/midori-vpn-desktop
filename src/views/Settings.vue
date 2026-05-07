@@ -9,6 +9,9 @@
           <option value="es">Español</option>
           <option value="en">English</option>
           <option value="pt">Português</option>
+          <option value="de">Deutsch</option>
+          <option value="fr">Français</option>
+          <option value="ru">Русский</option>
         </select>
       </div>
     </div>
@@ -164,17 +167,29 @@ async function toggleMeshAutoStart() {
 
 <style scoped>
 .lang-select {
-  background: var(--surface-2, #1a2b24);
-  color: var(--ink, #ecfdf5);
-  border: 1px solid var(--border, #2d4a3e);
-  border-radius: 6px;
-  padding: 5px 10px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;
+  color: var(--ink-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 32px 7px 12px;
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   outline: none;
-  min-width: 120px;
+  min-width: 130px;
+  transition: border-color .15s;
+}
+.lang-select:hover {
+  border-color: var(--midori-500);
 }
 .lang-select:focus {
-  border-color: var(--midori-500, #22c55e);
+  border-color: var(--midori-500);
+  box-shadow: 0 0 0 3px rgba(34,197,94,.14);
+}
+.lang-select option {
+  background: #ffffff;
+  color: #111827;
 }
 </style>

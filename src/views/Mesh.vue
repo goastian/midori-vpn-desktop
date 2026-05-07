@@ -8,7 +8,7 @@
     </div>
 
     <!-- Mesh toggle -->
-    <div class="card">
+    <div class="card" :class="{ 'card--locked': featuresLocked }">
       <div class="row">
         <div>
           <div style="font-size:15px;font-weight:600;">Mesh Network</div>
@@ -80,12 +80,12 @@ async function toggleMesh() {
 
 <style scoped>
 .locked-card {
-  border-color: rgba(74, 222, 128, .24);
-  background: rgba(34, 197, 94, .08);
+  border-color: rgba(22, 163, 74, .24);
+  background: var(--midori-50);
 }
 .locked-text {
   font-size: 13px;
-  color: var(--midori-200);
+  color: var(--midori-700);
   text-align: center;
   padding: 4px 0;
 }

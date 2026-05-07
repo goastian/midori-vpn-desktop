@@ -11,6 +11,12 @@
 # Best-effort — never fails the uninstall.
 set -eu
 
+# RPM passes $1=1 on upgrade and $1=0 on final uninstall.
+# Skip cleanup on upgrade so the new package can keep using the same paths.
+if [ "${1:-0}" -ne 0 ]; then
+    exit 0
+fi
+
 AGENT_INSTALL="/usr/local/bin/midorivpn-agent"
 APPARMOR_PROFILE="/etc/apparmor.d/usr.local.bin.midorivpn-agent"
 DESKTOP_APPLICATIONS="/usr/share/applications/midorivpn.desktop"

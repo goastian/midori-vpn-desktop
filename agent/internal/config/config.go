@@ -19,13 +19,6 @@ import (
 	"strings"
 )
 
-// AllowedOrigin is the HTTP Origin that the agent's RPC server accepts.
-// Baked in at compile time via -ldflags "-X github.com/.../config.AllowedOrigin=<value>".
-// Defaults to "tauri://localhost" which is the production Tauri v2 webview origin.
-// In dev mode pass "http://localhost:1420" through build-agent.sh reading AGENT_ALLOWED_ORIGIN
-// from .env.
-var AllowedOrigin = "tauri://localhost"
-
 // Config is the resolved runtime configuration.
 type Config struct {
 	APIURL                string

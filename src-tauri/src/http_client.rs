@@ -98,8 +98,20 @@ where
     let token = read_token(app);
     let client = http_client();
     let url = format!("{}/{}", AGENT_BASE, path);
-    let resp = send_with_retry(|| build(client, &url, &token).send())
+    let mut resp = send_with_retry(|| build(client, &url, &token).send())
         .await
         .map_err(|e| e.to_string())?;
+
+    // If the agent just restarted, the in-memory token can rotate between the
+    // first read and the request dispatch. Retry once with the latest token.
+    if resp.status() == reqwest::StatusCode::FORBIDDEN {
+        let latest = read_token(app);
+        if !latest.is_empty() && latest != token {
+            resp = send_with_retry(|| build(client, &url, &latest).send())
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+    }
+
     read_json_response(resp).await
 }

@@ -46,6 +46,7 @@
       "../packaging/selinux/midorivpn.te": "selinux/midorivpn.te",
       "../packaging/selinux/midorivpn.fc": "selinux/midorivpn.fc",
       "../packaging/autostart/midorivpn.desktop": "autostart/midorivpn.desktop",
+      "../packaging/launcher/midorivpn.desktop": "launcher/midorivpn.desktop",
       "icons/32x32.png": "icons/32x32.png",
       "icons/128x128.png": "icons/128x128.png",
       "icons/128x128@2x.png": "icons/128x128@2x.png"
@@ -63,7 +64,7 @@
         "preRemoveScript": "../packaging/maintainer/prerm"
       },
       "rpm": {
-        "depends": ["webkit2gtk4.1", "openssl-libs", "polkit"],
+        "depends": [],
         "files": {
           "/usr/share/polkit-1/actions/org.astian.midorivpn.policy": "polkit/org.astian.midorivpn.policy",
           "/usr/share/midorivpn/selinux/midorivpn.te": "../packaging/selinux/midorivpn.te",

@@ -9,7 +9,7 @@
     />
 
     <!-- Connection card -->
-    <div class="card">
+    <div class="card" :class="{ 'card--locked': featuresLocked }">
       <!-- Server picker -->
       <div v-if="auth.authenticated" class="picker-wrap" ref="pickerRef">
         <button
@@ -449,20 +449,20 @@ function formatBytes(b: number): string {
   min-width: 38px;
   height: 26px;
   padding: 0 6px;
-  background: rgba(34, 197, 94, .12);
-  border: 1px solid rgba(74, 222, 128, .22);
+  background: var(--midori-50);
+  border: 1px solid rgba(22, 163, 74, .22);
   border-radius: 5px;
   font-size: 12px;
   font-weight: 700;
-  color: var(--midori-200);
+  color: var(--midori-700);
   letter-spacing: 0;
   flex-shrink: 0;
   font-family: 'SF Mono', 'Fira Code', monospace;
 }
 .cc-badge.cc-mesh {
-  background: rgba(34, 211, 238, .10);
-  border-color: rgba(34, 211, 238, .24);
-  color: #a5f3fc;
+  background: rgba(34, 211, 238, .08);
+  border-color: rgba(34, 211, 238, .28);
+  color: #0891b2;
   font-family: inherit;
   font-size: 14px;
   letter-spacing: 0;
@@ -545,7 +545,7 @@ function formatBytes(b: number): string {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  box-shadow: 0 18px 44px rgba(0,0,0,.38);
+  box-shadow: 0 8px 24px rgba(0,0,0,.12);
   overflow: hidden;
   max-height: 260px;
   overflow-y: auto;
@@ -624,8 +624,8 @@ function formatBytes(b: number): string {
   margin-top: 4px;
 }
 .stat-cell {
-  background: rgba(34,197,94,.08);
-  border: 1px solid rgba(74,222,128,.12);
+  background: var(--midori-50);
+  border: 1px solid rgba(22,163,74,.14);
   border-radius: 8px;
   padding: 11px 13px;
 }
@@ -673,17 +673,17 @@ function formatBytes(b: number): string {
   gap: 6px;
   width: 100%;
   padding: 10px 14px;
-  background: rgba(245, 158, 11, .10);
-  border: 1px solid rgba(245, 158, 11, .30);
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
   border-radius: 10px;
   font-size: 12.5px;
   font-weight: 600;
-  color: #fbbf24;
+  color: #92400e;
   cursor: pointer;
   text-align: left;
   transition: background 0.15s;
 }
-.perms-badge:hover { background: rgba(245, 158, 11, .16); }
+.perms-badge:hover { background: #fef3c7; }
 
 /* ── Permissions trigger card ────────────────────────────────────────────── */
 .perms-trigger-card {

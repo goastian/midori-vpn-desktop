@@ -1,6 +1,6 @@
-//go:build windows
+//go:build darwin
 
-// Package wg — stub for Windows (WireGuard kernel driver not yet implemented).
+// Package wg — stub for macOS until a platform-specific WireGuard manager is implemented.
 package wg
 
 import "errors"
@@ -19,7 +19,7 @@ type Manager struct{}
 func NewManager() *Manager { return &Manager{} }
 
 func (m *Manager) Connect(_ *Config) error {
-	return errors.New("WireGuard not supported on Windows yet")
+	return errors.New("WireGuard not supported on macOS yet")
 }
 
 func (m *Manager) Disconnect() {}

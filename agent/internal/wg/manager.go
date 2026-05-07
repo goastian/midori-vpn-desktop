@@ -1,4 +1,4 @@
-//go:build linux || darwin
+//go:build linux
 
 // Package wg manages a WireGuard TUN interface using wireguard-go (no system WG required).
 package wg
