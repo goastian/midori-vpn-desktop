@@ -43,13 +43,13 @@
       </p>
     </div>
 
-    <button class="quit-fab" @click="quitApp" aria-label="Cerrar MidoriVPN">
+    <button class="quit-fab" @click="quitApp" :aria-label="t('login.quit')">
       <span class="quit-fab__icon" aria-hidden="true">
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
           <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
         </svg>
       </span>
-      <span class="quit-fab__text">Cerrar MidoriVPN</span>
+      <span class="quit-fab__text">{{ t('login.quit') }}</span>
     </button>
   </div>
 </template>

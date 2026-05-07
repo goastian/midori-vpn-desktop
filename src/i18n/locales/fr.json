@@ -83,7 +83,8 @@
   "login": {
     "tagline": "Réseau privé sécurisé",
     "subtitle": "Connectez-vous avec votre compte Astian pour rejoindre votre réseau privé.",
-    "hint": "Le navigateur s'ouvrira. Une fois approuvé, revenez à MidoriVPN et la session se terminera automatiquement."
+    "hint": "Le navigateur s'ouvrira. Une fois approuvé, revenez à MidoriVPN et la session se terminera automatiquement.",
+    "quit": "Fermer MidoriVPN"
   },
   "mesh": {
     "locked": "🔒 Mesh désactivé jusqu'à ce que les autorisations réseau soient accordées dans l'onglet VPN.",

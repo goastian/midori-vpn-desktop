@@ -83,7 +83,8 @@
   "login": {
     "tagline": "Red privada segura",
     "subtitle": "Inicia sesión con tu cuenta Astian para unirte a tu red privada.",
-    "hint": "Se abrirá el navegador. Al aprobar, vuelve a MidoriVPN y la sesión se completará automáticamente."
+    "hint": "Se abrirá el navegador. Al aprobar, vuelve a MidoriVPN y la sesión se completará automáticamente.",
+    "quit": "Cerrar MidoriVPN"
   },
   "mesh": {
     "locked": "🔒 Mesh deshabilitado hasta conceder permisos de red en la pestaña VPN.",

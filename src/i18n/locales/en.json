@@ -83,7 +83,8 @@
   "login": {
     "tagline": "Secure private network",
     "subtitle": "Sign in with your Astian account to join your private network.",
-    "hint": "The browser will open. Once approved, return to MidoriVPN and the session will complete automatically."
+    "hint": "The browser will open. Once approved, return to MidoriVPN and the session will complete automatically.",
+    "quit": "Close MidoriVPN"
   },
   "mesh": {
     "locked": "🔒 Mesh disabled until network permissions are granted on the VPN tab.",
