@@ -56,6 +56,11 @@ jobs:
       - run: cargo clippy --no-deps -- -D warnings
         working-directory: src-tauri
 
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - run: bash scripts/cargo-audit.sh
+
       - run: cargo test
         working-directory: src-tauri
 

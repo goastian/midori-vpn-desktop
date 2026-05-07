@@ -1,0 +1,22 @@
+[advisories]
+# These warnings are inherited through Tauri/wry's current Linux GTK/WebKit stack.
+# Keep them explicit so `scripts/cargo-audit.sh` fails for any new warning.
+ignore = [
+  "RUSTSEC-2024-0370", # proc-macro-error: transitively through gtk3-macros/glib-macros
+  "RUSTSEC-2024-0411", # gdkwayland-sys: transitively through tao/wry
+  "RUSTSEC-2024-0412", # gdk: transitively through gtk/webkit2gtk
+  "RUSTSEC-2024-0413", # atk: transitively through gtk
+  "RUSTSEC-2024-0414", # gdkx11-sys: transitively through tao/wry
+  "RUSTSEC-2024-0415", # gtk: transitively through wry/webkit2gtk
+  "RUSTSEC-2024-0416", # atk-sys: transitively through gtk-sys/atk
+  "RUSTSEC-2024-0417", # gdkx11: transitively through wry
+  "RUSTSEC-2024-0418", # gdk-sys: transitively through webkit2gtk/gtk-sys
+  "RUSTSEC-2024-0419", # gtk3-macros: transitively through gtk
+  "RUSTSEC-2024-0420", # gtk-sys: transitively through webkit2gtk/gtk
+  "RUSTSEC-2024-0429", # glib: transitively through gtk/webkit2gtk
+  "RUSTSEC-2025-0075", # unic-char-range: transitively through tauri-utils urlpattern
+  "RUSTSEC-2025-0080", # unic-common: transitively through tauri-utils urlpattern
+  "RUSTSEC-2025-0081", # unic-char-property: transitively through tauri-utils urlpattern
+  "RUSTSEC-2025-0098", # unic-ucd-version: transitively through tauri-utils urlpattern
+  "RUSTSEC-2025-0100", # unic-ucd-ident: transitively through tauri-utils urlpattern
+]
