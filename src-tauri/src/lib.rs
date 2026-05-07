@@ -11,6 +11,7 @@ use serde_json::Value;
 use std::sync::{Arc, Mutex};
 use tauri::AppHandle;
 use tauri::Manager;
+use tauri_plugin_shell::ShellExt;
 use tauri_plugin_autostart::MacosLauncher;
 
 // ── Tauri commands ────────────────────────────────────────────────────────────
@@ -55,6 +56,28 @@ fn quit_app(app: AppHandle) {
 #[tauri::command]
 fn security_check() -> Vec<security::SecurityIssue> {
     security::check()
+}
+
+fn is_allowed_oauth_url(raw: &str) -> bool {
+    let Ok(url) = reqwest::Url::parse(raw) else {
+        return false;
+    };
+    if url.scheme() != "https" {
+        return false;
+    }
+    let Some(host) = url.host_str().map(str::to_ascii_lowercase) else {
+        return false;
+    };
+    (host == "accounts.astian.org" || host.ends_with(".astian.org"))
+        && url.path().starts_with("/application/o/")
+}
+
+#[tauri::command]
+async fn open_oauth_url(app: AppHandle, url: String) -> Result<(), String> {
+    if !is_allowed_oauth_url(&url) {
+        return Err("OAuth URL is not allowed".to_string());
+    }
+    app.shell().open(url, None).map_err(|e| e.to_string())
 }
 
 // ── App entry point ───────────────────────────────────────────────────────────
@@ -102,6 +125,7 @@ pub fn run() {
             restart_agent_cmd,
             quit_app,
             security_check,
+            open_oauth_url,
             agent::agent_has_caps,
             agent::grant_agent_permissions,
             agent::revert_agent_permissions,
@@ -124,4 +148,24 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_allowed_oauth_url;
+
+    #[test]
+    fn allows_only_astian_oauth_urls() {
+        assert!(is_allowed_oauth_url(
+            "https://accounts.astian.org/application/o/authorize/?client_id=x"
+        ));
+        assert!(is_allowed_oauth_url(
+            "https://login.astian.org/application/o/authorize/?client_id=x"
+        ));
+
+        assert!(!is_allowed_oauth_url("http://accounts.astian.org/application/o/authorize/"));
+        assert!(!is_allowed_oauth_url("https://evil.example/application/o/authorize/"));
+        assert!(!is_allowed_oauth_url("https://accounts.astian.org.evil.example/application/o/"));
+        assert!(!is_allowed_oauth_url("https://accounts.astian.org/not-oauth"));
+    }
 }

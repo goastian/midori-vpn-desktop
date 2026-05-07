@@ -27,6 +27,48 @@ fn read_token(app: &AppHandle) -> String {
     lock_safe(&app.state::<AgentToken>().0).clone()
 }
 
+#[derive(Copy, Clone)]
+enum AgentMethod {
+    Get,
+    Post,
+    Delete,
+}
+
+fn is_allowed_agent_path(method: AgentMethod, path: &str) -> bool {
+    if path.is_empty()
+        || path.starts_with('/')
+        || path.contains('?')
+        || path.contains('#')
+        || path.contains('\\')
+        || path.contains("..")
+        || path.contains("://")
+    {
+        return false;
+    }
+
+    matches!(
+        (method, path),
+        (AgentMethod::Get, "status")
+            | (AgentMethod::Get, "servers")
+            | (AgentMethod::Get, "settings")
+            | (AgentMethod::Get, "mesh/exit-nodes")
+            | (AgentMethod::Get, "public-ip")
+            | (AgentMethod::Post, "auth/set-tokens")
+            | (AgentMethod::Post, "auth/refresh")
+            | (AgentMethod::Post, "vpn/connect")
+            | (AgentMethod::Post, "vpn/disconnect")
+            | (AgentMethod::Post, "mesh/enable")
+            | (AgentMethod::Post, "mesh/disable")
+            | (AgentMethod::Post, "mesh/exit-node")
+            | (AgentMethod::Post, "mesh/full-tunnel/enable")
+            | (AgentMethod::Post, "mesh/full-tunnel/disable")
+            | (AgentMethod::Post, "oauth/start")
+            | (AgentMethod::Post, "settings")
+            | (AgentMethod::Delete, "auth/logout")
+            | (AgentMethod::Delete, "mesh/exit-node")
+    )
+}
+
 async fn read_json_response(resp: reqwest::Response) -> Result<Value, String> {
     let status = resp.status();
     let body = resp.text().await.map_err(|e| e.to_string())?;
@@ -67,7 +109,7 @@ where
 }
 
 pub async fn post(app: &AppHandle, path: &str, body: &str) -> Result<Value, String> {
-    request(app, path, |client, url, token| {
+    request(app, AgentMethod::Post, path, |client, url, token| {
         client
             .post(url)
             .header("Content-Type", "application/json")
@@ -78,23 +120,32 @@ pub async fn post(app: &AppHandle, path: &str, body: &str) -> Result<Value, Stri
 }
 
 pub async fn get(app: &AppHandle, path: &str) -> Result<Value, String> {
-    request(app, path, |client, url, token| {
+    request(app, AgentMethod::Get, path, |client, url, token| {
         client.get(url).header("X-Agent-Token", token)
     })
     .await
 }
 
 pub async fn delete(app: &AppHandle, path: &str) -> Result<Value, String> {
-    request(app, path, |client, url, token| {
+    request(app, AgentMethod::Delete, path, |client, url, token| {
         client.delete(url).header("X-Agent-Token", token)
     })
     .await
 }
 
-async fn request<F>(app: &AppHandle, path: &str, build: F) -> Result<Value, String>
+async fn request<F>(
+    app: &AppHandle,
+    method: AgentMethod,
+    path: &str,
+    build: F,
+) -> Result<Value, String>
 where
     F: Fn(&Client, &str, &str) -> RequestBuilder,
 {
+    if !is_allowed_agent_path(method, path) {
+        return Err("agent path is not allowed".to_string());
+    }
+
     let token = read_token(app);
     let client = http_client();
     let url = format!("{}/{}", AGENT_BASE, path);
@@ -114,4 +165,26 @@ where
     }
 
     read_json_response(resp).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_allowed_agent_path, AgentMethod};
+
+    #[test]
+    fn allows_only_known_agent_routes() {
+        assert!(is_allowed_agent_path(AgentMethod::Get, "status"));
+        assert!(is_allowed_agent_path(AgentMethod::Post, "vpn/connect"));
+        assert!(is_allowed_agent_path(AgentMethod::Delete, "mesh/exit-node"));
+
+        assert!(!is_allowed_agent_path(AgentMethod::Get, "/status"));
+        assert!(!is_allowed_agent_path(
+            AgentMethod::Get,
+            "http://127.0.0.1:7071/status"
+        ));
+        assert!(!is_allowed_agent_path(AgentMethod::Get, "status?token=x"));
+        assert!(!is_allowed_agent_path(AgentMethod::Get, "../status"));
+        assert!(!is_allowed_agent_path(AgentMethod::Post, "servers"));
+        assert!(!is_allowed_agent_path(AgentMethod::Delete, "settings"));
+    }
 }
