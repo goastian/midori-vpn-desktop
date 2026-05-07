@@ -73,19 +73,11 @@ fn is_allowed_oauth_url(raw: &str) -> bool {
 }
 
 #[tauri::command]
-<<<<<<< Updated upstream
-async fn open_oauth_url(app: AppHandle, url: String) -> Result<(), String> {
-    if !is_allowed_oauth_url(&url) {
-        return Err("OAuth URL is not allowed".to_string());
-    }
-    app.shell().open(url, None).map_err(|e| e.to_string())
-=======
 async fn open_oauth_url(_app: AppHandle, url: String) -> Result<(), String> {
     if !is_allowed_oauth_url(&url) {
         return Err("OAuth URL is not allowed".to_string());
     }
     open::that(url).map_err(|e| e.to_string())
->>>>>>> Stashed changes
 }
 
 // ── App entry point ───────────────────────────────────────────────────────────
@@ -170,12 +162,6 @@ mod tests {
             "https://login.astian.org/application/o/authorize/?client_id=x"
         ));
 
-<<<<<<< Updated upstream
-        assert!(!is_allowed_oauth_url("http://accounts.astian.org/application/o/authorize/"));
-        assert!(!is_allowed_oauth_url("https://evil.example/application/o/authorize/"));
-        assert!(!is_allowed_oauth_url("https://accounts.astian.org.evil.example/application/o/"));
-        assert!(!is_allowed_oauth_url("https://accounts.astian.org/not-oauth"));
-=======
         assert!(!is_allowed_oauth_url(
             "http://accounts.astian.org/application/o/authorize/"
         ));
@@ -188,6 +174,5 @@ mod tests {
         assert!(!is_allowed_oauth_url(
             "https://accounts.astian.org/not-oauth"
         ));
->>>>>>> Stashed changes
     }
 }
