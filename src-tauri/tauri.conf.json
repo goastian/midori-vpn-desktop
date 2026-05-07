@@ -14,11 +14,11 @@
       {
         "label": "main",
         "title": "MidoriVPN",
-        "width": 380,
-        "height": 580,
+        "width": 460,
+        "height": 700,
         "resizable": false,
         "visible": true,
-        "decorations": true
+        "decorations": false
       }
     ],
     "security": {
@@ -31,7 +31,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["deb", "appimage", "rpm", "dmg", "app", "msi", "nsis"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -40,7 +40,38 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../agent/target/release/agent": "agent"
+      "../agent/target/release/agent": "agent",
+      "polkit/org.astian.midorivpn.policy": "polkit/org.astian.midorivpn.policy",
+      "../packaging/apparmor/usr.local.bin.midorivpn-agent": "apparmor/usr.local.bin.midorivpn-agent",
+      "../packaging/selinux/midorivpn.te": "selinux/midorivpn.te",
+      "../packaging/selinux/midorivpn.fc": "selinux/midorivpn.fc",
+      "../packaging/autostart/midorivpn.desktop": "autostart/midorivpn.desktop",
+      "icons/32x32.png": "icons/32x32.png",
+      "icons/128x128.png": "icons/128x128.png",
+      "icons/128x128@2x.png": "icons/128x128@2x.png"
+    },
+    "linux": {
+      "deb": {
+        "depends": ["libwebkit2gtk-4.1-0", "libssl3", "policykit-1"],
+        "files": {
+          "/usr/share/polkit-1/actions/org.astian.midorivpn.policy": "polkit/org.astian.midorivpn.policy",
+          "/etc/apparmor.d/usr.local.bin.midorivpn-agent": "../packaging/apparmor/usr.local.bin.midorivpn-agent",
+          "/usr/share/midorivpn/selinux/midorivpn.te": "../packaging/selinux/midorivpn.te",
+          "/usr/share/midorivpn/selinux/midorivpn.fc": "../packaging/selinux/midorivpn.fc"
+        },
+        "postInstallScript": "../packaging/maintainer/postinst",
+        "preRemoveScript": "../packaging/maintainer/prerm"
+      },
+      "rpm": {
+        "depends": ["webkit2gtk4.1", "openssl-libs", "polkit"],
+        "files": {
+          "/usr/share/polkit-1/actions/org.astian.midorivpn.policy": "polkit/org.astian.midorivpn.policy",
+          "/usr/share/midorivpn/selinux/midorivpn.te": "../packaging/selinux/midorivpn.te",
+          "/usr/share/midorivpn/selinux/midorivpn.fc": "../packaging/selinux/midorivpn.fc"
+        },
+        "postInstallScript": "../packaging/maintainer/postinst",
+        "preRemoveScript": "../packaging/maintainer/prerm"
+      }
     }
   }
 }

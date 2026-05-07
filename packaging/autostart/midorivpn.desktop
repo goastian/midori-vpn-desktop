@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=MidoriVPN
+GenericName=Privacy Mesh VPN
+Comment=Start MidoriVPN mesh on login
+Comment[es]=Iniciar la red mesh de MidoriVPN al iniciar sesión
+Exec=midorivpn-desktop --autostart
+Icon=midorivpn
+Terminal=false
+Categories=Network;
+StartupNotify=false
+X-GNOME-Autostart-enabled=true
+X-MidoriVPN-Managed=true

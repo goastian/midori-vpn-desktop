@@ -1,0 +1,125 @@
+{
+  "nav": {
+    "vpn": "VPN",
+    "mesh": "Mesh",
+    "settings": "Ajustes"
+  },
+  "titlebar": {
+    "minimize": "Minimizar",
+    "close": "Cerrar"
+  },
+  "agent": {
+    "restarting": "Reconectando agente… Por favor espera.",
+    "failed": "El agente no está disponible. Reinicia la aplicación."
+  },
+  "security": {
+    "copyAndClose": "Copiar y cerrar"
+  },
+  "server": {
+    "switching": "Cambiando servidor…",
+    "loading": "Cargando servidores…",
+    "empty": "No hay servidores disponibles"
+  },
+  "vpn": {
+    "connected": "Conectado",
+    "disconnected": "Desconectado",
+    "connect": "Conectar",
+    "disconnect": "Desconectar"
+  },
+  "stats": {
+    "server": "Servidor",
+    "upload": "Subida",
+    "download": "Bajada",
+    "exitNode": "Nodo de salida",
+    "meshIp": "Mesh IP"
+  },
+  "perms": {
+    "title": "Permisos de red requeridos",
+    "body": "MidoriVPN necesita configurar el sistema para funcionar correctamente.",
+    "applying": "Aplicando…",
+    "enable": "Habilitar permisos necesarios",
+    "modalTitle": "Habilitar permisos necesarios",
+    "modalSubtitle": "MidoriVPN realizará los siguientes cambios en el sistema.\nTodos serán revertidos automáticamente al cerrar la aplicación.",
+    "caps": {
+      "title": "Capacidades del agente cap_net_admin, cap_net_raw, cap_dac_override, cap_linux_immutable",
+      "desc": "Permiten crear interfaces WireGuard, gestionar rutas, escribir /etc/resolv.conf y protegerlo contra sobrescritura.",
+      "revert": "Se quitan con setcap -r al cerrar."
+    },
+    "firewall": {
+      "title": "Reglas de firewall (firewalld / ufw / nftables)",
+      "desc": "Se crean reglas acotadas por source y destination para el RPC local, el túnel WireGuard y los peers Mesh activos. Solo se aplican las reglas necesarias.",
+      "revert": "Se eliminan al cerrar o desconectar."
+    },
+    "killswitch": {
+      "title": "Kill switch — tabla nftables inet midorivpn_guard",
+      "desc": "Bloquea todo el tráfico de salida excepto el túnel VPN mientras estás conectado. Garantiza que no hay fugas si la VPN se cae.",
+      "revert": "Se elimina al desconectar la VPN o al cerrar."
+    },
+    "dns": {
+      "title": "Protección DNS — /etc/resolv.conf",
+      "desc": "Mientras la VPN está activa, el agente protege el DNS para evitar fugas. Hace backup del resolv.conf original.",
+      "revert": "Se restaura al desconectar la VPN."
+    },
+    "aa": {
+      "title": "AppArmor / SELinux (informativo) — perfiles del sistema",
+      "desc": "Si AppArmor o SELinux están activos, los perfiles de MidoriVPN son instalados por el paquete del sistema (postinst). No se modifican en tiempo de ejecución.",
+      "revert": "Gestionados por el instalador del sistema."
+    },
+    "cancel": "Cancelar",
+    "accept": "Aceptar y aplicar"
+  },
+  "auth": {
+    "signIn": "Iniciar sesión",
+    "signInHint": "Inicia sesión con tu cuenta Astian para conectarte a MidoriVPN.",
+    "signInWithAstian": "Iniciar sesión con Astian",
+    "waitingBrowser": "Esperando en el navegador…",
+    "completeInBrowser": "Completa el inicio de sesión en el navegador y vuelve aquí.",
+    "activeSession": "Sesión activa",
+    "signOut": "Cerrar sesión",
+    "signingOut": "Cerrando…",
+    "sessionExpired": "Tu sesión expiró. Por favor, inicia sesión de nuevo.",
+    "cancelLogin": "Cancelar"
+  },
+  "login": {
+    "tagline": "Red privada segura",
+    "subtitle": "Inicia sesión con tu cuenta Astian para unirte a tu red privada.",
+    "hint": "Se abrirá el navegador. Al aprobar, vuelve a MidoriVPN y la sesión se completará automáticamente."
+  },
+  "mesh": {
+    "locked": "🔒 Mesh deshabilitado hasta conceder permisos de red en la pestaña VPN.",
+    "joinHint": "Únete para habilitar el enrutamiento entre pares",
+    "enabling": "Activando mesh…",
+    "disabling": "Desactivando mesh…",
+    "peers": "Peers Mesh",
+    "refresh": "Actualizar lista",
+    "noPeers": "Sin peers conectados. Para enrutar tráfico a través de un peer, selecciónalo como servidor en la pestaña VPN.",
+    "port": "puerto {n}"
+  },
+  "settings": {
+    "sectionMesh": "Mesh",
+    "sectionAutoStart": "Inicio automático",
+    "sectionAgent": "Agente",
+    "sectionAbout": "Acerca de",
+    "sectionPerms": "Permisos del sistema",
+    "meshAutoStart": "Iniciar mesh automáticamente al abrir",
+    "meshAutoStartHint": "Recomendado. Convierte este dispositivo en un peer mesh al iniciar sesión.",
+    "autoStart": "Iniciar MidoriVPN al iniciar sesión",
+    "autoStartHint": "Se ejecuta en la bandeja al iniciar sesión (XDG autostart)",
+    "localPort": "Puerto local",
+    "proxyPort": "Puerto proxy",
+    "version": "Versión",
+    "revertPerms": "Revertir permisos concedidos",
+    "revertPermsHint": "Elimina las capacidades del agente (setcap -r). La VPN y el Mesh quedarán deshabilitados hasta que se concedan de nuevo.",
+    "reverting": "Revirtiendo…",
+    "revertPermsBtn": "Revertir permisos",
+    "revertOk": "✓ Permisos revertidos correctamente.",
+    "revertErr": "No se pudo revertir.",
+    "language": "Idioma",
+    "languageHint": "Idioma de la interfaz. Se aplica inmediatamente."
+  },
+  "quit": {
+    "label": "Salir de MidoriVPN",
+    "loading": "Saliendo…",
+    "confirmBody": "Se desconectará la VPN y el agente se detendrá. Puedes volver a abrir la app desde el menú de aplicaciones."
+  }
+}

@@ -1,0 +1,10 @@
+# MidoriVPN agent — SELinux file context.
+#
+# Installed via package post-install:
+#   semanage fcontext -a -t bin_t '/usr/local/bin/midorivpn-agent'
+#   restorecon -v /usr/local/bin/midorivpn-agent
+#
+# (The .te policy module below grants the relevant transitions.)
+/usr/local/bin/midorivpn-agent              --      gen_context(system_u:object_r:bin_t,s0)
+/etc/midorivpn(/.*)?                                gen_context(system_u:object_r:etc_t,s0)
+/usr/share/polkit-1/actions/org\.astian\.midorivpn\.policy --  gen_context(system_u:object_r:usr_t,s0)

@@ -1,0 +1,101 @@
+#!/bin/sh
+# Maintainer post-install script for MidoriVPN .deb / .rpm packages.
+#
+# Responsibilities (each idempotent + best-effort):
+#   1. Symlink the bundled agent to /usr/local/bin/midorivpn-agent so polkit
+#      and AppArmor profiles resolve correctly.
+#   2. Set CAP_NET_ADMIN + CAP_NET_RAW on that path so the agent does not
+#      need pkexec on every launch.
+#   3. Reload polkit so the new action file becomes available immediately.
+#   4. Load the AppArmor profile (in complain mode first run) when the
+#      kernel + parser are present.
+#   5. Load the SELinux module + fcontext when semodule is present.
+#
+# Designed to never fail the package install — every step is wrapped in
+# `|| true` so an unexpected SELinux/AppArmor configuration does not block
+# users from getting the GUI.
+set -eu
+
+AGENT_BUNDLED="/usr/lib/MidoriVPN/agent"   # Tauri uses productName for the lib dir
+AGENT_INSTALL="/usr/local/bin/midorivpn-agent"
+APPARMOR_PROFILE="/etc/apparmor.d/usr.local.bin.midorivpn-agent"
+APPARMOR_BUNDLED="/usr/lib/MidoriVPN/apparmor/usr.local.bin.midorivpn-agent"
+SELINUX_MOD_DIR="/usr/share/midorivpn/selinux"
+DESKTOP_SRC="/usr/lib/MidoriVPN/autostart/midorivpn.desktop"
+DESKTOP_APPLICATIONS="/usr/share/applications/midorivpn.desktop"
+ICON_SRC_32="/usr/lib/MidoriVPN/icons/32x32.png"
+ICON_SRC_128="/usr/lib/MidoriVPN/icons/128x128.png"
+ICON_SRC_256="/usr/lib/MidoriVPN/icons/128x128@2x.png"
+
+# 1. Place the agent where polkit/SELinux expect it.
+# Always overwrite so package upgrades replace any previous build (dev or
+# packaged). `install` is atomic and preserves the new mtime.
+if [ -f "$AGENT_BUNDLED" ]; then
+    install -m 0755 "$AGENT_BUNDLED" "$AGENT_INSTALL" || true
+fi
+
+# 1b. Stage the AppArmor profile in /etc when not already there (rpm).
+if [ -f "$APPARMOR_BUNDLED" ] && [ ! -e "$APPARMOR_PROFILE" ]; then
+    install -m 0644 "$APPARMOR_BUNDLED" "$APPARMOR_PROFILE" || true
+fi
+
+# 1c. Install XDG icon theme entries (hicolor) so the app appears in launchers.
+if [ -f "$ICON_SRC_32" ]; then
+    install -D -m 0644 "$ICON_SRC_32" /usr/share/icons/hicolor/32x32/apps/midorivpn.png || true
+fi
+if [ -f "$ICON_SRC_128" ]; then
+    install -D -m 0644 "$ICON_SRC_128" /usr/share/icons/hicolor/128x128/apps/midorivpn.png || true
+fi
+if [ -f "$ICON_SRC_256" ]; then
+    install -D -m 0644 "$ICON_SRC_256" /usr/share/icons/hicolor/256x256/apps/midorivpn.png || true
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1 && [ -d /usr/share/icons/hicolor ]; then
+    gtk-update-icon-cache -qf /usr/share/icons/hicolor 2>/dev/null || true
+fi
+
+# 1d. Install .desktop entry into /usr/share/applications for GNOME/KDE launchers.
+if [ -f "$DESKTOP_SRC" ]; then
+    install -D -m 0644 "$DESKTOP_SRC" "$DESKTOP_APPLICATIONS" || true
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database /usr/share/applications 2>/dev/null || true
+    fi
+fi
+
+# 2. File capabilities — preferred over pkexec on every launch.
+if command -v setcap >/dev/null 2>&1 && [ -x "$AGENT_INSTALL" ]; then
+    # cap_net_admin,cap_net_raw: WireGuard interface management
+    # cap_dac_override: write /etc/resolv.conf for DNS protection in full-tunnel mode
+    # cap_linux_immutable: chattr +i to prevent NetworkManager from overwriting resolv.conf
+    setcap cap_net_admin,cap_net_raw,cap_dac_override,cap_linux_immutable=ep "$AGENT_INSTALL" || true
+fi
+
+# 3. Polkit reload (rules file dropped by package).
+if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then
+    systemctl reload polkit.service 2>/dev/null || \
+    systemctl restart polkit.service 2>/dev/null || true
+fi
+
+# 4. AppArmor — load profile in complain mode first, switch to enforce after
+#    the user has connected at least once without denials.
+if command -v apparmor_parser >/dev/null 2>&1 && [ -f "$APPARMOR_PROFILE" ]; then
+    apparmor_parser -r "$APPARMOR_PROFILE" 2>/dev/null || true
+    if command -v aa-complain >/dev/null 2>&1; then
+        aa-complain "$APPARMOR_PROFILE" >/dev/null 2>&1 || true
+    fi
+fi
+
+# 5. SELinux module install when targeted policy is in use.
+if command -v semodule >/dev/null 2>&1 && [ -d "$SELINUX_MOD_DIR" ]; then
+    (
+        cd "$SELINUX_MOD_DIR" && \
+        checkmodule -M -m -o midorivpn.mod midorivpn.te && \
+        semodule_package -o midorivpn.pp -m midorivpn.mod -f midorivpn.fc && \
+        semodule -i midorivpn.pp
+    ) >/dev/null 2>&1 || true
+
+    if command -v restorecon >/dev/null 2>&1 && [ -e "$AGENT_INSTALL" ]; then
+        restorecon -v "$AGENT_INSTALL" >/dev/null 2>&1 || true
+    fi
+fi
+
+exit 0

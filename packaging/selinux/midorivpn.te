@@ -1,0 +1,51 @@
+## <summary>MidoriVPN privileged agent.</summary>
+##
+## The agent runs as the invoking user with file capabilities
+## (cap_net_admin,cap_net_raw=ep) set on the binary, so SELinux sees it as
+## a regular user-domain process executing /usr/local/bin/midorivpn-agent.
+##
+## This module is intentionally minimal: it grants the booleans needed for
+## the agent to open /dev/net/tun, bind 127.0.0.1:7071 (RPC) and 1080
+## (SOCKS5), and load WireGuard kernel state via netlink. We do NOT define
+## a separate domain transition — the agent binary stays in the user's
+## domain because all privileged operations are gated by file capabilities,
+## not by setuid.
+
+policy_module(midorivpn, 0.1.0)
+
+########################################
+# Boolean: midorivpn_use_tun
+# Allow the agent to read/write /dev/net/tun. Default on; admins can
+# disable with `setsebool -P midorivpn_use_tun off` to block all VPN use.
+########################################
+gen_tunable(midorivpn_use_tun, true)
+
+require {
+    type unconfined_t;
+    type user_t;
+    type wireguard_t;
+    type cgroup_t;
+    type tun_tap_device_t;
+    type unreserved_port_t;
+    class chr_file { read write open ioctl };
+    class dir search;
+    class tcp_socket name_bind;
+    class udp_socket name_bind;
+    class capability { net_admin net_raw };
+}
+
+# Allow the user-domain process to manipulate the TUN device.
+tunable_policy(`midorivpn_use_tun', `
+    allow user_t tun_tap_device_t:chr_file { read write open ioctl };
+    allow unconfined_t tun_tap_device_t:chr_file { read write open ioctl };
+')
+
+# Bind the RPC + SOCKS5 ports without provoking AVC denials on systems where
+# 1080 / 7071 fall in the unreserved range.
+allow user_t self:capability { net_admin net_raw };
+allow unconfined_t self:capability { net_admin net_raw };
+
+# Some distros transition helper commands used by WireGuard tooling into
+# wireguard_t. Allow searching cgroup2 root to avoid AVC denials like:
+# wireguard_t -> cgroup_t:dir { search } (comm="sort").
+allow wireguard_t cgroup_t:dir search;

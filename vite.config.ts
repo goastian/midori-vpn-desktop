@@ -12,8 +12,9 @@ export default defineConfig(async () => ({
     port: 1420,
     strictPort: true,
     watch: {
-      // On Windows tell watchers to use polling
-      usePolling: true,
+      // File-system polling is only needed on Windows (slow native FS events)
+      // and inside Docker bind-mounts. Native events on Linux/macOS are faster.
+      usePolling: process.platform === 'win32',
     },
   },
 }))

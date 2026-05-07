@@ -4,13 +4,19 @@
 package wg
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/netip"
 	"os"
+	"os/exec"
+	"strconv"
+	"strings"
 	"sync"
+	"syscall"
+	"time"
 
 	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/conn"
@@ -30,10 +36,16 @@ type Config struct {
 
 // Manager wraps a wireguard-go Device and TUN interface.
 type Manager struct {
-	mu     sync.Mutex
-	dev    *device.Device
-	tunDev tun.Device
-	cfg    *Config
+	mu              sync.Mutex
+	dev             *device.Device
+	tunDev          tun.Device
+	cfg             *Config
+	defaultRoutes   []string
+	resolvConf      []byte
+	dnsProtected    bool
+	dnsWatchCancel  context.CancelFunc
+	// saved sysctl values restored on disconnect
+	rpFilterSaved   map[string]string
 }
 
 // NewManager creates a Manager (no interface is created until Connect).
@@ -70,18 +82,31 @@ func (m *Manager) Connect(cfg *Config) error {
 	}
 
 	// Build UAPI config.
-	allowedIPs := "0.0.0.0/0, ::/0"
+	// wireguard-go's IpcSetOperation treats a blank line as "terminate
+	// operation", so there must be NO blank lines in the middle of the
+	// config.  Each AllowedIP must be on its own "allowed_ip=<CIDR>" line
+	// (singular key, not a comma-separated "allowed_ips=…" list).
+	var uapiBuilder strings.Builder
+	fmt.Fprintf(&uapiBuilder, "private_key=%x\n", privKeyBytes)
+	fmt.Fprintf(&uapiBuilder, "public_key=%x\n", serverPubKeyBytes)
+	fmt.Fprintf(&uapiBuilder, "endpoint=%s\n", cfg.Endpoint)
+	fmt.Fprintf(&uapiBuilder, "persistent_keepalive_interval=25\n")
+	fmt.Fprintf(&uapiBuilder, "allowed_ip=0.0.0.0/0\n")
+	fmt.Fprintf(&uapiBuilder, "allowed_ip=::/0\n")
 	for _, ip := range cfg.MeshIPs {
-		allowedIPs += ", " + ip
+		ip = strings.TrimSpace(ip)
+		if ip == "" {
+			continue
+		}
+		if _, err := netip.ParsePrefix(ip); err != nil {
+			slog.Warn("wg: skipping invalid mesh IP", "ip", ip, "err", err)
+			continue
+		}
+		fmt.Fprintf(&uapiBuilder, "allowed_ip=%s\n", ip)
 	}
-
-	uapi := fmt.Sprintf(
-		"private_key=%x\n\npublic_key=%x\nendpoint=%s\nallowed_ips=%s\npersistent_keepalive_interval=25\n\n",
-		privKeyBytes,
-		serverPubKeyBytes,
-		cfg.Endpoint,
-		allowedIPs,
-	)
+	// Blank line terminates the UAPI set operation.
+	uapiBuilder.WriteByte('\n')
+	uapi := uapiBuilder.String()
 
 	if err := dev.IpcSet(uapi); err != nil {
 		tdev.Close()
@@ -97,6 +122,12 @@ func (m *Manager) Connect(cfg *Config) error {
 	if err := m.assignAddr(tdev, cfg.AssignedIP); err != nil {
 		dev.Close()
 		return fmt.Errorf("assign IP: %w", err)
+	}
+
+	if err := m.configureSystemTunnel(tdev, cfg); err != nil {
+		dev.Close()
+		tdev.Close()
+		return fmt.Errorf("configure full tunnel: %w", err)
 	}
 
 	m.dev = dev
@@ -122,6 +153,7 @@ func (m *Manager) IsConnected() bool {
 }
 
 func (m *Manager) shutdownLocked() {
+	m.restoreSystemTunnel()
 	if m.dev != nil {
 		m.dev.Close()
 		m.dev = nil
@@ -132,6 +164,59 @@ func (m *Manager) shutdownLocked() {
 	}
 	m.cfg = nil
 	slog.Info("wg: interface down")
+}
+
+func (m *Manager) DNSProtected() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.dnsProtected
+}
+
+func (m *Manager) InterfaceName() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.tunDev == nil {
+		return ""
+	}
+	name, _ := m.tunDev.Name()
+	return name
+}
+
+// ByteCounters returns tx/rx byte counters from kernel interface stats.
+func (m *Manager) ByteCounters() (tx int64, rx int64, ok bool) {
+	m.mu.Lock()
+	if m.tunDev == nil {
+		m.mu.Unlock()
+		return 0, 0, false
+	}
+	name, err := m.tunDev.Name()
+	m.mu.Unlock()
+	if err != nil || name == "" {
+		return 0, 0, false
+	}
+
+	base := "/sys/class/net/" + name + "/statistics/"
+	tx, err = readInt64File(base + "tx_bytes")
+	if err != nil {
+		return 0, 0, false
+	}
+	rx, err = readInt64File(base + "rx_bytes")
+	if err != nil {
+		return 0, 0, false
+	}
+	return tx, rx, true
+}
+
+func readInt64File(path string) (int64, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	v, err := strconv.ParseInt(strings.TrimSpace(string(b)), 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return v, nil
 }
 
 // assignAddr sets the IP address on the TUN interface using netlink (Linux).
@@ -170,29 +255,298 @@ func (m *Manager) assignAddr(tdev tun.Device, cidr string) error {
 	_ = addr
 	_ = mask
 
-	// Use the 'ip' command: portable, works on all Linux distros without cgo netlink.
-	return runIP("addr", "add", cidr, "dev", name)
+	// Bring the link up explicitly before assigning the address. device.Up()
+	// starts the WireGuard engine, but Linux routing tools still expect the
+	// netdev itself to be UP.
+	// MTU 1280 for stability over throughput; reduces packet fragmentation
+	// and improves compatibility with constrained network paths.
+	if err := runIP("link", "set", "dev", name, "up", "mtu", "1280"); err != nil {
+		return fmt.Errorf("set link up: %w", err)
+	}
+
+	// Use replace instead of add so reconnects recover from a stale address left
+	// by a previous agent crash or failed attempt.
+	return runIP("addr", "replace", cidr, "dev", name)
+}
+
+func (m *Manager) configureSystemTunnel(tdev tun.Device, cfg *Config) error {
+	name, err := tdev.Name()
+	if err != nil {
+		return err
+	}
+
+	defaults, err := outputIP("route", "show", "default")
+	if err != nil {
+		return fmt.Errorf("save default route: %w", err)
+	}
+	m.defaultRoutes = splitNonEmptyLines(defaults)
+
+	if err := m.pinEndpointRoute(cfg.Endpoint); err != nil {
+		return err
+	}
+
+	// Set rp_filter to loose (2) so that reply packets arriving on wg0 are not
+	// dropped by the kernel's reverse-path filter. wg-quick does the same.
+	m.rpFilterSaved = make(map[string]string)
+	rpKeys := []string{
+		"net.ipv4.conf.all.rp_filter",
+		"net.ipv4.conf.default.rp_filter",
+		"net.ipv4.conf." + name + ".rp_filter",
+	}
+	for _, key := range rpKeys {
+		if cur, e := sysctlGet(key); e == nil {
+			m.rpFilterSaved[key] = cur
+			_ = sysctlSet(key, "2")
+		}
+	}
+
+	for _, line := range m.defaultRoutes {
+		args := append([]string{"route", "del"}, strings.Fields(line)...)
+		_ = runIP(args...)
+	}
+	if err := runIP("route", "replace", "default", "dev", name); err != nil {
+		m.restoreSystemTunnel()
+		return fmt.Errorf("replace default route: %w", err)
+	}
+	// Best-effort IPv6 default via tunnel (suppresses AAAA leaks outside tunnel).
+	_ = runIP("-6", "route", "replace", "default", "dev", name)
+
+	slog.Info("dns: config has DNS servers", "count", len(cfg.DNS), "servers", cfg.DNS)
+	if len(cfg.DNS) > 0 {
+		if err := m.protectDNS(cfg.DNS); err != nil {
+			m.restoreSystemTunnel()
+			return err
+		}
+	} else {
+		slog.Warn("dns: no DNS servers provided by server")
+	}
+	return nil
+}
+
+func (m *Manager) pinEndpointRoute(endpoint string) error {
+	host, _, err := net.SplitHostPort(endpoint)
+	if err != nil {
+		host = endpoint
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil || len(ips) == 0 {
+		return fmt.Errorf("resolve endpoint %q: %w", host, err)
+	}
+	var endpointIP net.IP
+	for _, ip := range ips {
+		if ip4 := ip.To4(); ip4 != nil {
+			endpointIP = ip4
+			break
+		}
+	}
+	if endpointIP == nil {
+		return fmt.Errorf("endpoint %q has no IPv4 address", host)
+	}
+
+	route, err := outputIP("route", "get", endpointIP.String())
+	if err != nil {
+		return fmt.Errorf("discover endpoint route: %w", err)
+	}
+	fields := strings.Fields(route)
+	dev := ""
+	via := ""
+	for i := 0; i+1 < len(fields); i++ {
+		switch fields[i] {
+		case "dev":
+			dev = fields[i+1]
+		case "via":
+			via = fields[i+1]
+		}
+	}
+	if dev == "" {
+		return fmt.Errorf("could not parse endpoint route %q", route)
+	}
+	args := []string{"route", "replace", endpointIP.String() + "/32"}
+	if via != "" {
+		args = append(args, "via", via)
+	}
+	args = append(args, "dev", dev)
+	return runIP(args...)
+}
+
+func (m *Manager) protectDNS(dns []string) error {
+	slog.Info("dns: protecting DNS", "servers", dns)
+	if m.resolvConf == nil {
+		data, err := os.ReadFile("/etc/resolv.conf")
+		if err != nil {
+			return fmt.Errorf("backup resolv.conf: %w", err)
+		}
+		m.resolvConf = append([]byte(nil), data...)
+	}
+	var sb strings.Builder
+	sb.WriteString("# Generated by MidoriVPN while protected mode is active.\n")
+	for _, server := range dns {
+		server = strings.TrimSpace(server)
+		if server == "" {
+			continue
+		}
+		if net.ParseIP(server) == nil {
+			return fmt.Errorf("invalid DNS server %q", server)
+		}
+		sb.WriteString("nameserver ")
+		sb.WriteString(server)
+		sb.WriteByte('\n')
+	}
+	content := sb.String()
+	slog.Info("dns: new resolv.conf content", "content", content)
+
+	// If NetworkManager manages resolv.conf via a symlink to its own file,
+	// write through to the real target first.
+	if target, err := os.Readlink("/etc/resolv.conf"); err == nil {
+		slog.Info("dns: writing to symlink target", "target", target)
+		_ = os.WriteFile(target, []byte(content), 0o644)
+	}
+	// Write to /etc/resolv.conf directly.
+	if err := os.WriteFile("/etc/resolv.conf", []byte(content), 0o644); err != nil {
+		return fmt.Errorf("write resolv.conf: %w", err)
+	}
+	slog.Info("dns: wrote resolv.conf successfully")
+	// Try to make the file immutable (requires CAP_LINUX_IMMUTABLE, best-effort).
+	// If that fails, start a watcher goroutine that re-writes the file if NM overwrites it.
+	if err := exec.Command("chattr", "+i", "/etc/resolv.conf").Run(); err != nil {
+		ctx, cancel := context.WithCancel(context.Background())
+		m.dnsWatchCancel = cancel
+		dnsContent := content
+		go func() {
+			ticker := time.NewTicker(2 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					cur, err := os.ReadFile("/etc/resolv.conf")
+					if err != nil || string(cur) != dnsContent {
+						_ = os.WriteFile("/etc/resolv.conf", []byte(dnsContent), 0o644)
+					}
+				}
+			}
+		}()
+	}
+	m.dnsProtected = true
+	return nil
+}
+
+func (m *Manager) restoreSystemTunnel() {
+	// Stop the DNS watcher goroutine if running.
+	if m.dnsWatchCancel != nil {
+		m.dnsWatchCancel()
+		m.dnsWatchCancel = nil
+	}
+	if m.dnsProtected && m.resolvConf != nil {
+		// Remove immutable flag before writing (set by protectDNS chattr +i).
+		_ = exec.Command("chattr", "-i", "/etc/resolv.conf").Run()
+		if err := os.WriteFile("/etc/resolv.conf", m.resolvConf, 0o644); err != nil {
+			slog.Warn("wg: failed to restore resolv.conf", "err", err)
+		}
+	}
+	m.dnsProtected = false
+	m.resolvConf = nil
+
+	if m.tunDev != nil {
+		if name, err := m.tunDev.Name(); err == nil && name != "" {
+			_ = runIP("route", "del", "default", "dev", name)
+			_ = runIP("-6", "route", "del", "default", "dev", name)
+		}
+	}
+	for _, line := range m.defaultRoutes {
+		args := append([]string{"route", "replace"}, strings.Fields(line)...)
+		if err := runIP(args...); err != nil {
+			slog.Warn("wg: failed to restore default route", "route", line, "err", err)
+		}
+	}
+	m.defaultRoutes = nil
+
+	// Restore rp_filter values saved before tunnel setup.
+	for key, val := range m.rpFilterSaved {
+		_ = sysctlSet(key, val)
+	}
+	m.rpFilterSaved = nil
+}
+
+func splitNonEmptyLines(s string) []string {
+	var lines []string
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines
 }
 
 func runIP(args ...string) error {
-	proc, err := os.StartProcess("/sbin/ip", append([]string{"ip"}, args...), &os.ProcAttr{
-		Env: []string{"PATH=/sbin:/usr/sbin:/bin:/usr/bin"},
-	})
-	if err != nil {
-		// Try with full search path.
-		proc, err = os.StartProcess("/usr/sbin/ip", append([]string{"ip"}, args...), &os.ProcAttr{
-			Env: []string{"PATH=/sbin:/usr/sbin:/bin:/usr/bin"},
-		})
-		if err != nil {
-			return fmt.Errorf("start ip command: %w", err)
-		}
+	ipBin := findIPBin()
+	if ipBin == "" {
+		return fmt.Errorf("ip command not found")
 	}
-	state, err := proc.Wait()
-	if err != nil {
-		return fmt.Errorf("wait ip command: %w", err)
+
+	setNetAdminInheritable()
+
+	cmd := exec.Command(ipBin, args...)
+	cmd.Env = []string{"PATH=/sbin:/usr/sbin:/bin:/usr/bin"}
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		AmbientCaps: []uintptr{unix.CAP_NET_ADMIN},
 	}
-	if !state.Success() {
-		return fmt.Errorf("ip command failed: %v", state)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("ip command failed: %w: %s", err, string(out))
 	}
 	return nil
+}
+
+func outputIP(args ...string) (string, error) {
+	ipBin := findIPBin()
+	if ipBin == "" {
+		return "", fmt.Errorf("ip command not found")
+	}
+	cmd := exec.Command(ipBin, args...)
+	cmd.Env = []string{"PATH=/sbin:/usr/sbin:/bin:/usr/bin"}
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("ip command failed: %w: %s", err, string(out))
+	}
+	return string(out), nil
+}
+
+func findIPBin() string {
+	for _, path := range []string{"/sbin/ip", "/usr/sbin/ip", "/bin/ip", "/usr/bin/ip"} {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return ""
+}
+
+func setNetAdminInheritable() {
+	var hdr unix.CapUserHeader
+	hdr.Version = unix.LINUX_CAPABILITY_VERSION_3
+	var data [2]unix.CapUserData
+	if err := unix.Capget(&hdr, &data[0]); err != nil {
+		return
+	}
+	data[0].Inheritable |= 1 << unix.CAP_NET_ADMIN
+	unix.Capset(&hdr, &data[0]) //nolint:errcheck
+}
+
+// sysctlGet reads a sysctl value from /proc/sys.
+// key is dot-separated (e.g. "net.ipv4.conf.all.rp_filter").
+func sysctlGet(key string) (string, error) {
+	path := "/proc/sys/" + strings.ReplaceAll(key, ".", "/")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
+// sysctlSet writes a sysctl value to /proc/sys (requires CAP_NET_ADMIN).
+func sysctlSet(key, value string) error {
+	path := "/proc/sys/" + strings.ReplaceAll(key, ".", "/")
+	return os.WriteFile(path, []byte(value+"\n"), 0o644)
 }

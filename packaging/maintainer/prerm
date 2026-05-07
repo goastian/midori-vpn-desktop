@@ -1,0 +1,56 @@
+#!/bin/sh
+# Maintainer pre-removal script for MidoriVPN .deb / .rpm packages.
+#
+# Cleans up everything postinst installed:
+#   - drops file capabilities
+#   - removes the /usr/local/bin symlink/binary
+#   - unloads the AppArmor profile
+#   - removes the SELinux module
+#   - removes any firewall rules tagged "midorivpn-managed"
+#
+# Best-effort — never fails the uninstall.
+set -eu
+
+AGENT_INSTALL="/usr/local/bin/midorivpn-agent"
+APPARMOR_PROFILE="/etc/apparmor.d/usr.local.bin.midorivpn-agent"
+DESKTOP_APPLICATIONS="/usr/share/applications/midorivpn.desktop"
+
+# Tear down firewall rules using the agent itself (one-shot mode). If the
+# binary is gone or refuses to run we silently move on.
+if [ -x "$AGENT_INSTALL" ]; then
+    "$AGENT_INSTALL" --firewall-cleanup >/dev/null 2>&1 || true
+fi
+
+if command -v setcap >/dev/null 2>&1 && [ -e "$AGENT_INSTALL" ]; then
+    setcap -r "$AGENT_INSTALL" >/dev/null 2>&1 || true
+fi
+
+if [ -e "$AGENT_INSTALL" ]; then
+    rm -f "$AGENT_INSTALL" || true
+fi
+
+if command -v apparmor_parser >/dev/null 2>&1 && [ -f "$APPARMOR_PROFILE" ]; then
+    apparmor_parser -R "$APPARMOR_PROFILE" >/dev/null 2>&1 || true
+fi
+
+if command -v semodule >/dev/null 2>&1; then
+    semodule -r midorivpn >/dev/null 2>&1 || true
+fi
+
+# Remove icons from hicolor theme.
+rm -f /usr/share/icons/hicolor/32x32/apps/midorivpn.png || true
+rm -f /usr/share/icons/hicolor/128x128/apps/midorivpn.png || true
+rm -f /usr/share/icons/hicolor/256x256/apps/midorivpn.png || true
+if command -v gtk-update-icon-cache >/dev/null 2>&1 && [ -d /usr/share/icons/hicolor ]; then
+    gtk-update-icon-cache -qf /usr/share/icons/hicolor 2>/dev/null || true
+fi
+
+# Remove .desktop entry from system applications dir.
+if [ -f "$DESKTOP_APPLICATIONS" ]; then
+    rm -f "$DESKTOP_APPLICATIONS" || true
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database /usr/share/applications 2>/dev/null || true
+    fi
+fi
+
+exit 0

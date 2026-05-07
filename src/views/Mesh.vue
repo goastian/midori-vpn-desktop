@@ -1,76 +1,67 @@
 <template>
   <div>
+    <!-- Locked banner -->
+    <div v-if="featuresLocked" class="card locked-card">
+      <div class="locked-text">
+        {{ t('mesh.locked') }}
+      </div>
+    </div>
+
     <!-- Mesh toggle -->
     <div class="card">
       <div class="row">
         <div>
           <div style="font-size:15px;font-weight:600;">Mesh Network</div>
           <div class="label" style="margin-top:4px;">
-            {{ mesh.enabled ? `IP: ${mesh.meshIp}` : 'Join to enable peer routing' }}
+            {{ mesh.enabled ? `IP: ${mesh.meshIp}` : t('mesh.joinHint') }}
           </div>
         </div>
         <button
           class="toggle"
           :class="{ on: mesh.enabled }"
-          :disabled="mesh.loading"
+          :disabled="isTransitioning || featuresLocked"
           @click="toggleMesh"
         ></button>
       </div>
+      <div v-if="mesh.meshState === 'enabling'" class="mesh-state-hint">{{ t('mesh.enabling') }}</div>
+      <div v-else-if="mesh.meshState === 'disabling'" class="mesh-state-hint">{{ t('mesh.disabling') }}</div>
       <div v-if="mesh.error" class="error">{{ mesh.error }}</div>
     </div>
 
-    <!-- Exit node section -->
+    <!-- Peers list -->
     <div class="card" v-if="mesh.enabled">
-      <div class="section-title">Exit Node</div>
-      <div class="label" style="margin-bottom:8px;">
-        Route your traffic through another mesh peer's IP
+      <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>{{ t('mesh.peers') }}</span>
+        <button class="btn-refresh" @click="mesh.fetchExitNodes()" :title="t('mesh.refresh')">↻</button>
       </div>
-
       <div v-if="mesh.exitNodes.length === 0" style="color:#888;font-size:13px;">
-        No exit nodes available in your mesh.
+        {{ t('mesh.noPeers') }}
       </div>
-
-      <div v-else>
-        <select v-model="selectedExitNode" style="margin-bottom:12px;">
-          <option value="">— Direct (no exit node) —</option>
-          <option v-for="n in mesh.exitNodes" :key="n.user_id" :value="n.user_id">
-            {{ n.mesh_ip }} (port {{ n.proxy_port }})
-            <span v-if="!n.online"> — offline</span>
-          </option>
-        </select>
-
-        <div class="row">
-          <button class="btn btn-primary" @click="applyExitNode" :disabled="!selectedExitNode">
-            Use Exit Node
-          </button>
-          <button class="btn btn-secondary" @click="clearExitNode" v-if="mesh.exitNodeActive">
-            Clear
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- This machine as exit node -->
-    <div class="card" v-if="mesh.enabled">
-      <div class="section-title">Act as Exit Node</div>
-      <div class="label" style="margin-bottom:8px;">
-        Let mesh peers route through your IP (proxy port {{ mesh.proxyPort || 8888 }})
-      </div>
-      <div class="row">
-        <span style="font-size:13px;color:#888;">
-          {{ mesh.exitNodeActive ? 'You are an active exit node' : 'Not acting as exit node' }}
-        </span>
+      <div
+        v-for="n in mesh.exitNodes"
+        :key="n.mesh_ip"
+        style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border, #2a2a2a);"
+      >
+        <span style="font-size:13px;font-weight:500;">{{ n.mesh_ip }}</span>
+        <span class="label" style="font-size:11px;">port {{ n.proxy_port }}</span>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useMeshStore } from '../stores/mesh'
+import { useCaps } from '../composables/useCaps'
 
 const mesh = useMeshStore()
-const selectedExitNode = ref('')
+const { t } = useI18n()
+const { featuresLocked } = useCaps()
+
+const isTransitioning = computed(
+  () => mesh.meshState === 'enabling' || mesh.meshState === 'disabling'
+)
 
 onMounted(async () => {
   if (mesh.enabled) await mesh.fetchExitNodes()
@@ -81,16 +72,36 @@ watch(() => mesh.enabled, async (v) => {
 })
 
 async function toggleMesh() {
+  if (isTransitioning.value) return
   if (mesh.enabled) await mesh.disable()
   else await mesh.enable()
 }
-
-async function applyExitNode() {
-  if (selectedExitNode.value) await mesh.setExitNode(selectedExitNode.value)
-}
-
-async function clearExitNode() {
-  await mesh.clearExitNode()
-  selectedExitNode.value = ''
-}
 </script>
+
+<style scoped>
+.locked-card {
+  border-color: rgba(74, 222, 128, .24);
+  background: rgba(34, 197, 94, .08);
+}
+.locked-text {
+  font-size: 13px;
+  color: var(--midori-200);
+  text-align: center;
+  padding: 4px 0;
+}
+.mesh-state-hint {
+  font-size: 12px;
+  color: var(--muted-2);
+  margin-top: 4px;
+}
+.btn-refresh {
+  background: none;
+  border: none;
+  color: var(--muted-2);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+}
+.btn-refresh:hover { color: var(--ink); }
+</style>

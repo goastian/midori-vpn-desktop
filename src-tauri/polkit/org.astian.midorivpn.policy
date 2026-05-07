@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+  "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+  "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+
+<policyconfig>
+
+  <vendor>Astian Inc.</vendor>
+  <vendor_url>https://astian.org</vendor_url>
+
+  <!--
+    This action covers running the MidoriVPN network agent, which needs
+    CAP_NET_ADMIN to create TUN interfaces and configure iptables rules.
+
+    The executable path must match the installed binary exactly so that
+    pkexec can locate this policy automatically.
+  -->
+  <action id="org.astian.midorivpn.run-agent">
+    <description>Run MidoriVPN network agent</description>
+    <description xml:lang="es">Ejecutar el agente de red MidoriVPN</description>
+    <message>Authentication is required to start the MidoriVPN network agent.</message>
+    <message xml:lang="es">Se requiere autenticación para iniciar el agente de red MidoriVPN.</message>
+    <icon_name>network-vpn</icon_name>
+    <defaults>
+      <!-- Headless / non-desktop sessions: require admin password -->
+      <allow_any>auth_admin</allow_any>
+      <!-- Inactive desktop sessions: require admin password -->
+      <allow_inactive>auth_admin</allow_inactive>
+      <!-- Active desktop session: user password + remember for the session -->
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <!-- pkexec matches the binary path against this annotation automatically -->
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/midorivpn-agent</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+  <!--
+    Capability management (install + revert): one action for setcap so pkexec
+    always resolves to this policy instead of falling back to a generic
+    "run command as super user" prompt.
+  -->
+  <action id="org.astian.midorivpn.manage-caps">
+    <description>Authorize MidoriVPN system permissions</description>
+    <description xml:lang="es">Autorizar permisos del sistema para MidoriVPN</description>
+    <message>Authenticate to apply MidoriVPN network permissions on this device.</message>
+    <message xml:lang="es">Autentica para aplicar los permisos de red de MidoriVPN en este equipo.</message>
+    <icon_name>network-vpn</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/sbin/setcap</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+  <!-- Same action for distros that place setcap under /usr/sbin. -->
+  <action id="org.astian.midorivpn.manage-caps-usrsbin">
+    <description>Authorize MidoriVPN system permissions</description>
+    <description xml:lang="es">Autorizar permisos del sistema para MidoriVPN</description>
+    <message>Authenticate to apply MidoriVPN network permissions on this device.</message>
+    <message xml:lang="es">Autentica para aplicar los permisos de red de MidoriVPN en este equipo.</message>
+    <icon_name>network-vpn</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/sbin/setcap</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+  <!--
+    Firewall configuration: allows the agent helper to add/remove rules
+    in firewalld / ufw / nftables for the WireGuard mesh interface and
+    the loopback RPC socket. Cached for the active session so the user
+    is only prompted on first connect.
+  -->
+  <action id="org.astian.midorivpn.firewall-config">
+    <description>Configure firewall for MidoriVPN</description>
+    <description xml:lang="es">Configurar firewall para MidoriVPN</description>
+    <message>Authentication is required to configure firewall rules for MidoriVPN.</message>
+    <message xml:lang="es">Se requiere autenticación para configurar reglas de firewall para MidoriVPN.</message>
+    <icon_name>network-vpn</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+</policyconfig>

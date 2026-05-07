@@ -1,0 +1,74 @@
+# MidoriVPN agent — AppArmor profile
+#
+# This profile constrains the privileged Go agent that creates the mesh
+# WireGuard interface (wg0), runs the local SOCKS5/HTTP exit proxies and
+# persists OAuth tokens to the user's config directory.
+#
+# Designed to be loaded by the package post-install:
+#   apparmor_parser -r /etc/apparmor.d/usr.local.bin.midorivpn-agent
+#
+# Test in complain mode first:
+#   aa-complain /etc/apparmor.d/usr.local.bin.midorivpn-agent
+# Then enforce once `aa-status | grep midorivpn-agent` is clean of denials.
+
+#include <tunables/global>
+
+profile midorivpn-agent /usr/local/bin/midorivpn-agent {
+  #include <abstractions/base>
+  #include <abstractions/nameservice>
+  #include <abstractions/openssl>
+  #include <abstractions/ssl_certs>
+
+  # Capabilities required by WireGuard tunnel + raw socket operations.
+  capability net_admin,
+  capability net_raw,
+
+  # /dev/net/tun: required to create the wg0 device via wireguard-go.
+  /dev/net/tun rw,
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network netlink raw,
+
+  # The agent binary itself + its data files (when shipped via package).
+  /usr/local/bin/midorivpn-agent mr,
+  /etc/midorivpn/** r,
+  /etc/midorivpn/config.env r,
+
+  # User config (tokens.enc, .keystore, settings.json) — owner-only.
+  owner @{HOME}/.config/midorivpn/ rw,
+  owner @{HOME}/.config/midorivpn/** rwk,
+
+  # Lock file under XDG_RUNTIME_DIR.
+  owner /run/user/[0-9]*/midorivpn-agent.lock rwk,
+  owner /tmp/midorivpn-agent.lock rwk,
+
+  # System binaries the agent shells out to for firewall + WG admin.
+  /usr/sbin/iptables                rix,
+  /usr/sbin/ip6tables               rix,
+  /usr/sbin/ip                      rix,
+  /usr/bin/ip                       rix,
+  /usr/sbin/sysctl                  rix,
+  /usr/bin/sysctl                   rix,
+  /usr/bin/firewall-cmd             rix,
+  /usr/sbin/ufw                     rix,
+  /usr/sbin/nft                     rix,
+
+  # Read /proc/sys for ip_forward etc.
+  /proc/sys/net/ipv4/ip_forward rw,
+  /proc/sys/net/ipv6/conf/*/forwarding rw,
+  /proc/*/net/route r,
+  /proc/*/net/fib_trie r,
+
+  # Procfs reads needed by Go runtime.
+  /proc/sys/kernel/random/uuid r,
+  /proc/sys/net/core/somaxconn r,
+  /proc/cpuinfo r,
+  /proc/meminfo r,
+  /proc/stat r,
+  /proc/self/** r,
+
+  # Allow exec of polkit helpers when they are needed for firewall mods.
+  /usr/bin/pkexec  Pixr,
+}

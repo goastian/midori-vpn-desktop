@@ -6,6 +6,7 @@
     "cargo": "^0.8.0",
     "pinia": "^3.0.4",
     "vue": "^3.5.33",
+    "vue-i18n": "^9.14.5",
     "vue-router": "^5.0.6"
   },
   "name": "midorivpn-desktop",
@@ -13,19 +14,26 @@
   "description": "",
   "main": "index.js",
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.0",
     "@vitejs/plugin-vue": "^6.0.6",
+    "@vue/test-utils": "^2.4.10",
     "typescript": "^6.0.3",
     "vite": "^8.0.10",
+    "vitest": "^2.1.9",
     "vue-tsc": "^3.2.8"
   },
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc && vite build",
     "preview": "vite preview",
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts",
+    "test:coverage": "vitest run --config vitest.config.ts --coverage",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "npm run build-agent && tauri build",
-    "build-agent": "cd agent && GOOS=linux GOARCH=amd64 go build -o target/release/agent ./cmd/agent"
+    "build-agent": "bash scripts/build-agent.sh",
+    "build-agent:host": "cd agent && go build -trimpath -ldflags='-s -w' -o target/release/agent ./cmd/agent"
   },
   "repository": {
     "type": "git",

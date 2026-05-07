@@ -2,8 +2,16 @@ use tauri::{
     image::Image,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    App, Manager,
+    App, AppHandle, Manager,
 };
+
+/// Fully quit the application.
+/// Called from both the tray menu and the GUI quit button.
+pub fn quit_application(app: &AppHandle) {
+    // Let the global RunEvent::Exit handler perform the shutdown/revoke path
+    // exactly once to avoid duplicate polkit prompts.
+    app.exit(0);
+}
 
 pub fn setup_tray(app: &App) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Open", true, None::<&str>)?;
@@ -39,7 +47,7 @@ pub fn setup_tray(app: &App) -> tauri::Result<()> {
                 });
             }
             "quit" => {
-                app.exit(0);
+                quit_application(app);
             }
             _ => {}
         })
