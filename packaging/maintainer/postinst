@@ -43,6 +43,16 @@ ensure_root_owner() {
     [ -e "$1" ] && chown root:root "$1" 2>/dev/null || true
 }
 
+ensure_tree_root_owner() {
+    [ -e "$1" ] && chown -R root:root "$1" 2>/dev/null || true
+}
+
+revoke_file_caps() {
+    if command -v setcap >/dev/null 2>&1 && [ -e "$1" ]; then
+        setcap -r "$1" >/dev/null 2>&1 || true
+    fi
+}
+
 # 1. Place the agent where polkit/SELinux expect it.
 # Always overwrite so package upgrades replace any previous build (dev or
 # packaged). `install` is atomic and preserves the new mtime.
@@ -51,6 +61,7 @@ if [ -f "$AGENT_BUNDLED" ]; then
     install_root -m 0755 "$AGENT_BUNDLED" "$AGENT_INSTALL" || \
         cp -f "$AGENT_BUNDLED" "$AGENT_INSTALL" && chmod 0755 "$AGENT_INSTALL" || true
     ensure_root_owner "$AGENT_INSTALL"
+    revoke_file_caps "$AGENT_INSTALL"
 else
     echo "WARNING: midorivpn-agent binary not found at $AGENT_BUNDLED." >&2
 fi
@@ -89,6 +100,18 @@ if [ -f "$_DESKTOP_FOR_APPS" ]; then
         update-desktop-database /usr/share/applications 2>/dev/null || true
     fi
 fi
+
+# 1e. Normalize ownership for files that come directly from the RPM payload.
+# Some build/install environments can preserve a non-root build user even
+# though package metadata says root:root; keep installed state deterministic.
+ensure_root_owner /usr/bin/midorivpn-desktop
+ensure_tree_root_owner /usr/lib/MidoriVPN
+ensure_root_owner /usr/share/applications/MidoriVPN.desktop
+ensure_root_owner /usr/share/icons/hicolor/32x32/apps/midorivpn-desktop.png
+ensure_root_owner /usr/share/icons/hicolor/128x128/apps/midorivpn-desktop.png
+ensure_root_owner /usr/share/icons/hicolor/256x256@2/apps/midorivpn-desktop.png
+ensure_tree_root_owner "$SELINUX_MOD_DIR"
+ensure_root_owner /usr/share/polkit-1/actions/org.astian.midorivpn.policy
 
 # 2. Polkit reload (rules file dropped by package).
 if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then
