@@ -53,6 +53,9 @@ jobs:
       - run: cargo fmt --check
         working-directory: src-tauri
 
+      - name: Build agent resource for Tauri checks
+        run: bash scripts/build-agent.sh linux-amd64
+
       - run: cargo clippy --no-deps -- -D warnings
         working-directory: src-tauri
 
