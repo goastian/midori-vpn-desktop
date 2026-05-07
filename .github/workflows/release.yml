@@ -98,7 +98,7 @@ jobs:
             asset-arch: x64
 
           - label: macOS Apple Silicon
-            runner: macos-latest
+            runner: macos-15
             os: macos
             rust-target: aarch64-apple-darwin
             agent-target: darwin-arm64
@@ -107,7 +107,7 @@ jobs:
             asset-arch: arm64
 
           - label: macOS Intel
-            runner: macos-latest
+            runner: macos-15-intel
             os: macos
             rust-target: x86_64-apple-darwin
             agent-target: darwin-amd64
@@ -116,7 +116,7 @@ jobs:
             asset-arch: x64
 
           - label: Windows x86_64
-            runner: windows-latest
+            runner: windows-2025
             os: windows
             rust-target: x86_64-pc-windows-msvc
             agent-target: windows-amd64
