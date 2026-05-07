@@ -107,6 +107,8 @@
     "autoStartHint": "Läuft im Tray, wenn du dich anmeldest (XDG-Autostart)",
     "localPort": "Lokaler Port",
     "proxyPort": "Proxy-Port",
+    "tokenStore": "Anmeldedatenspeicher",
+    "tokenStoreFallback": "Verschlüsselter Datei-Fallback wird verwendet. Entsperre den System-Schlüsselbund für besseren Schutz.",
     "version": "Version",
     "revertPerms": "Erteilte Berechtigungen widerrufen",
     "revertPermsHint": "Entfernt Agent-Fähigkeiten (setcap -r). VPN und Mesh werden deaktiviert, bis sie erneut erteilt werden.",

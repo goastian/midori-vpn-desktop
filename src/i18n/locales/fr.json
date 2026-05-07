@@ -107,6 +107,8 @@
     "autoStartHint": "S'exécute dans la barre des tâches à la connexion (démarrage automatique XDG)",
     "localPort": "Port local",
     "proxyPort": "Port proxy",
+    "tokenStore": "Stockage des identifiants",
+    "tokenStoreFallback": "Utilisation du repli fichier chiffré. Déverrouillez le trousseau système pour une meilleure protection.",
     "version": "Version",
     "revertPerms": "Révoquer les autorisations accordées",
     "revertPermsHint": "Supprime les capacités de l'agent (setcap -r). VPN et Mesh seront désactivés jusqu'à ce qu'elles soient à nouveau accordées.",

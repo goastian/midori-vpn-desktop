@@ -107,6 +107,8 @@
     "autoStartHint": "Se ejecuta en la bandeja al iniciar sesión (XDG autostart)",
     "localPort": "Puerto local",
     "proxyPort": "Puerto proxy",
+    "tokenStore": "Almacén de credenciales",
+    "tokenStoreFallback": "Usando respaldo cifrado en archivo. Desbloquea el llavero del sistema para mayor protección.",
     "version": "Versión",
     "revertPerms": "Revertir permisos concedidos",
     "revertPermsHint": "Elimina las capacidades del agente (setcap -r). La VPN y el Mesh quedarán deshabilitados hasta que se concedan de nuevo.",

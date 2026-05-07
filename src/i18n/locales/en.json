@@ -107,6 +107,8 @@
     "autoStartHint": "Runs in tray when you log in (XDG autostart)",
     "localPort": "Local port",
     "proxyPort": "Proxy port",
+    "tokenStore": "Credential store",
+    "tokenStoreFallback": "Using encrypted file fallback. Unlock your system keyring for stronger credential protection.",
     "version": "Version",
     "revertPerms": "Revoke granted permissions",
     "revertPermsHint": "Removes agent capabilities (setcap -r). VPN and Mesh will be disabled until granted again.",

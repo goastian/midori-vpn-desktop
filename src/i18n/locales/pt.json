@@ -107,6 +107,8 @@
     "autoStartHint": "Executado na bandeja ao fazer login (XDG autostart)",
     "localPort": "Porta local",
     "proxyPort": "Porta proxy",
+    "tokenStore": "Armazenamento de credenciais",
+    "tokenStoreFallback": "Usando fallback de arquivo criptografado. Desbloqueie o chaveiro do sistema para maior proteção.",
     "version": "Versão",
     "revertPerms": "Revogar permissões concedidas",
     "revertPermsHint": "Remove as capacidades do agente (setcap -r). VPN e Mesh serão desativados até serem concedidos novamente.",

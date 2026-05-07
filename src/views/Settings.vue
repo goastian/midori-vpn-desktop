@@ -48,6 +48,11 @@
         <div class="label">{{ t('settings.proxyPort') }}</div>
         <div class="value">8888</div>
       </div>
+      <div class="row" style="margin-top:12px;">
+        <div class="label">{{ t('settings.tokenStore') }}</div>
+        <div class="value">{{ tokenStoreLabel }}</div>
+      </div>
+      <div v-if="tokenStoreDegraded" class="error" style="margin-top:8px;">{{ t('settings.tokenStoreFallback') }}</div>
     </div>
 
     <div class="card">
@@ -109,6 +114,8 @@ const autostart = ref(false)
 const meshAutoStart = ref(true)
 const autostartError = ref<string | null>(null)
 const meshSettingsError = ref<string | null>(null)
+const tokenStoreLabel = ref('—')
+const tokenStoreDegraded = ref(false)
 const { featuresLocked, capsGranted, capsGranting, capsError, revertCaps } = useCaps()
 const revertResult = ref<'idle' | 'ok' | 'err'>('idle')
 
@@ -136,6 +143,14 @@ onMounted(async () => {
     meshAutoStart.value = !(s?.mesh?.start_disabled ?? false)
   } catch (e) {
     meshSettingsError.value = toErrorMessage(e)
+  }
+  try {
+    const snapshot = await agent.status()
+    tokenStoreLabel.value = snapshot.security?.token_store ?? 'unknown'
+    tokenStoreDegraded.value = snapshot.security?.token_store_degraded ?? true
+  } catch {
+    tokenStoreLabel.value = 'unknown'
+    tokenStoreDegraded.value = true
   }
 })
 

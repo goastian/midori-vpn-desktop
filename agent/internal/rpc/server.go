@@ -444,6 +444,14 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"active": s.guard.Active(),
 	}
 	snap["dns_protected"] = s.wgMgr.DNSProtected()
+	authBackend := "unknown"
+	if s.authMgr != nil {
+		authBackend = s.authMgr.Backend()
+	}
+	snap["security"] = map[string]any{
+		"token_store":          authBackend,
+		"token_store_degraded": authBackend != "secret-service",
+	}
 	writeJSON(w, snap)
 }
 

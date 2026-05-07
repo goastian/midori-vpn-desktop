@@ -87,8 +87,14 @@ export interface AgentSnapshot {
   mesh: MeshStatus
   auth: AuthStatus
   protection: ProtectionStatus
+  security?: SecurityStatus
   kill_switch?: { active: boolean }
   dns_protected?: boolean
+}
+
+export interface SecurityStatus {
+  token_store: string
+  token_store_degraded: boolean
 }
 
 export interface Server {
