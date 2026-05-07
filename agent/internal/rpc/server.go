@@ -312,8 +312,8 @@ func (s *Server) Start(ctx context.Context) error {
 			origin := r.Header.Get("Origin")
 			if origin != "" {
 				if _, ok := allowedOrigins[origin]; !ok {
-				http.Error(w, "forbidden", http.StatusForbidden)
-				return
+					http.Error(w, "forbidden", http.StatusForbidden)
+					return
 				}
 			}
 
@@ -1292,16 +1292,16 @@ func isReservedIP(raw string) bool {
 		return true // unparseable → treat as unsafe
 	}
 	reserved := []string{
-		"0.0.0.0/8",          // unspecified / this-network
-		"10.0.0.0/8",         // RFC-1918 private
-		"100.64.0.0/10",      // CGNAT (also used by WireGuard mesh)
-		"127.0.0.0/8",        // loopback
-		"169.254.0.0/16",     // link-local
-		"172.16.0.0/12",      // RFC-1918 private
-		"192.168.0.0/16",     // RFC-1918 private
-		"::1/128",             // IPv6 loopback
-		"fe80::/10",           // IPv6 link-local
-		"fc00::/7",            // IPv6 unique-local
+		"0.0.0.0/8",      // unspecified / this-network
+		"10.0.0.0/8",     // RFC-1918 private
+		"100.64.0.0/10",  // CGNAT (also used by WireGuard mesh)
+		"127.0.0.0/8",    // loopback
+		"169.254.0.0/16", // link-local
+		"172.16.0.0/12",  // RFC-1918 private
+		"192.168.0.0/16", // RFC-1918 private
+		"::1/128",        // IPv6 loopback
+		"fe80::/10",      // IPv6 link-local
+		"fc00::/7",       // IPv6 unique-local
 	}
 	for _, cidr := range reserved {
 		_, network, err := net.ParseCIDR(cidr)

@@ -24,8 +24,8 @@ type Server struct {
 	addr    string
 	jwksURL string // if empty, skip JWT validation (dev mode)
 
-	keysMu  sync.RWMutex
-	keySet  jwk.Set
+	keysMu sync.RWMutex
+	keySet jwk.Set
 
 	// per-user concurrency limit
 	mu       sync.Mutex

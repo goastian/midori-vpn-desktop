@@ -1,40 +1,96 @@
 #!/usr/bin/env bash
-# Build the Go agent for multiple platforms and place binaries in agent/target/release/
+# Build the Go agent into agent/target/release/.
 set -euo pipefail
 
 AGENT_DIR="$(cd "$(dirname "$0")/../agent" && pwd)"
 OUT_DIR="$AGENT_DIR/target/release"
+TARGET="${1:-host}"
+
+: "${GOCACHE:=${TMPDIR:-/tmp}/midorivpn-go-build-cache}"
+export GOCACHE
+
 mkdir -p "$OUT_DIR"
 
-echo "Building agent from $AGENT_DIR..."
+usage() {
+  cat <<'EOF'
+Usage: scripts/build-agent.sh [target]
+
+Targets:
+  host           Build the current host target as the canonical Tauri resource
+  linux-amd64    Build Linux x86_64 as agent
+  linux-arm64    Build Linux arm64 as agent-linux-arm64
+  darwin-arm64   Build macOS Apple Silicon as agent
+  darwin-amd64   Build macOS Intel as agent
+  windows-amd64  Build Windows x86_64 as agent.exe
+  all            Build every supported target
+EOF
+}
 
 build_agent() {
   local os=$1 arch=$2 out=$3
-  echo "→ $os/$arch"
-  # CGO disabled → fully static binary, portable across glibc versions.
-  # -s -w → strip symbol table + DWARF, ~30% smaller binary.
-  # -trimpath → reproducible builds, no $HOME leaked into stack traces.
-  (cd "$AGENT_DIR" && \
-    CGO_ENABLED=0 GOOS=$os GOARCH=$arch \
-    go build -trimpath \
-      -ldflags="-s -w" \
-      -o "$out" ./cmd/agent)
+  echo "Building agent $os/$arch -> $out"
+  (
+    cd "$AGENT_DIR"
+    CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
+      go build -trimpath \
+        -ldflags="-s -w" \
+        -o "$out" ./cmd/agent
+  )
 }
 
-# Linux AMD64 (primary — also used by Tauri sidecar)
-build_agent linux amd64 "$OUT_DIR/agent"
+host_target() {
+  local os arch out
+  os="$(go env GOOS)"
+  arch="$(go env GOARCH)"
+  out="$OUT_DIR/agent"
 
-# Linux ARM64
-build_agent linux arm64 "$OUT_DIR/agent-linux-arm64"
+  if [ "$os" = "windows" ]; then
+    out="$OUT_DIR/agent.exe"
+  fi
 
-# macOS ARM64 (Apple Silicon)
-build_agent darwin arm64 "$OUT_DIR/agent-darwin-arm64"
+  build_agent "$os" "$arch" "$out"
+  if [ "$os" = "windows" ]; then
+    cp "$OUT_DIR/agent.exe" "$OUT_DIR/agent"
+  fi
+}
 
-# macOS AMD64
-build_agent darwin amd64 "$OUT_DIR/agent-darwin-amd64"
-
-# Windows AMD64
-build_agent windows amd64 "$OUT_DIR/agent.exe"
+case "$TARGET" in
+  host)
+    host_target
+    ;;
+  linux-amd64)
+    build_agent linux amd64 "$OUT_DIR/agent"
+    ;;
+  linux-arm64)
+    build_agent linux arm64 "$OUT_DIR/agent-linux-arm64"
+    ;;
+  darwin-arm64)
+    build_agent darwin arm64 "$OUT_DIR/agent"
+    cp "$OUT_DIR/agent" "$OUT_DIR/agent-darwin-arm64"
+    ;;
+  darwin-amd64)
+    build_agent darwin amd64 "$OUT_DIR/agent"
+    cp "$OUT_DIR/agent" "$OUT_DIR/agent-darwin-amd64"
+    ;;
+  windows-amd64)
+    build_agent windows amd64 "$OUT_DIR/agent.exe"
+    ;;
+  all)
+    build_agent linux amd64 "$OUT_DIR/agent"
+    build_agent linux arm64 "$OUT_DIR/agent-linux-arm64"
+    build_agent darwin arm64 "$OUT_DIR/agent-darwin-arm64"
+    build_agent darwin amd64 "$OUT_DIR/agent-darwin-amd64"
+    build_agent windows amd64 "$OUT_DIR/agent.exe"
+    ;;
+  -h|--help|help)
+    usage
+    exit 0
+    ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac
 
 echo "Done. Binaries in $OUT_DIR:"
 ls -lh "$OUT_DIR"

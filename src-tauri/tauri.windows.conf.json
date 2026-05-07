@@ -1,0 +1,7 @@
+{
+  "bundle": {
+    "resources": {
+      "../agent/target/release/agent.exe": "agent.exe"
+    }
+  }
+}

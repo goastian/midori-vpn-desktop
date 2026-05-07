@@ -2,7 +2,7 @@
 # Maintainer post-install script for MidoriVPN .deb / .rpm packages.
 #
 # Responsibilities (each idempotent + best-effort):
-#   1. Symlink the bundled agent to /usr/local/bin/midorivpn-agent so polkit
+#   1. Install the bundled agent to /usr/local/bin/midorivpn-agent so polkit
 #      and AppArmor profiles resolve correctly.
 #   2. Reload polkit so the new action file becomes available immediately.
 #   3. Load the AppArmor profile (in complain mode first run) when the
@@ -32,31 +32,47 @@ ICON_SRC_32="/usr/lib/MidoriVPN/icons/32x32.png"
 ICON_SRC_128="/usr/lib/MidoriVPN/icons/128x128.png"
 ICON_SRC_256="/usr/lib/MidoriVPN/icons/128x128@2x.png"
 
+install_root() {
+    # Force root ownership for files created by maintainer scripts. Files that
+    # come directly from the RPM/DEB payload are already root:root, but these
+    # copied compatibility paths should be deterministic too.
+    install -o root -g root "$@"
+}
+
+ensure_root_owner() {
+    [ -e "$1" ] && chown root:root "$1" 2>/dev/null || true
+}
+
 # 1. Place the agent where polkit/SELinux expect it.
 # Always overwrite so package upgrades replace any previous build (dev or
 # packaged). `install` is atomic and preserves the new mtime.
 if [ -f "$AGENT_BUNDLED" ]; then
     chmod 0755 "$AGENT_BUNDLED" || true
-    install -m 0755 "$AGENT_BUNDLED" "$AGENT_INSTALL" || \
+    install_root -m 0755 "$AGENT_BUNDLED" "$AGENT_INSTALL" || \
         cp -f "$AGENT_BUNDLED" "$AGENT_INSTALL" && chmod 0755 "$AGENT_INSTALL" || true
+    ensure_root_owner "$AGENT_INSTALL"
 else
     echo "WARNING: midorivpn-agent binary not found at $AGENT_BUNDLED." >&2
 fi
 
 # 1b. Stage the AppArmor profile in /etc when not already there (rpm).
 if [ -f "$APPARMOR_BUNDLED" ] && [ ! -e "$APPARMOR_PROFILE" ]; then
-    install -m 0644 "$APPARMOR_BUNDLED" "$APPARMOR_PROFILE" || true
+    install_root -m 0644 "$APPARMOR_BUNDLED" "$APPARMOR_PROFILE" || true
+    ensure_root_owner "$APPARMOR_PROFILE"
 fi
 
 # 1c. Install XDG icon theme entries (hicolor) so the app appears in launchers.
 if [ -f "$ICON_SRC_32" ]; then
-    install -D -m 0644 "$ICON_SRC_32" /usr/share/icons/hicolor/32x32/apps/midorivpn.png || true
+    install_root -D -m 0644 "$ICON_SRC_32" /usr/share/icons/hicolor/32x32/apps/midorivpn.png || true
+    ensure_root_owner /usr/share/icons/hicolor/32x32/apps/midorivpn.png
 fi
 if [ -f "$ICON_SRC_128" ]; then
-    install -D -m 0644 "$ICON_SRC_128" /usr/share/icons/hicolor/128x128/apps/midorivpn.png || true
+    install_root -D -m 0644 "$ICON_SRC_128" /usr/share/icons/hicolor/128x128/apps/midorivpn.png || true
+    ensure_root_owner /usr/share/icons/hicolor/128x128/apps/midorivpn.png
 fi
 if [ -f "$ICON_SRC_256" ]; then
-    install -D -m 0644 "$ICON_SRC_256" /usr/share/icons/hicolor/256x256/apps/midorivpn.png || true
+    install_root -D -m 0644 "$ICON_SRC_256" /usr/share/icons/hicolor/256x256/apps/midorivpn.png || true
+    ensure_root_owner /usr/share/icons/hicolor/256x256/apps/midorivpn.png
 fi
 if command -v gtk-update-icon-cache >/dev/null 2>&1 && [ -d /usr/share/icons/hicolor ]; then
     gtk-update-icon-cache -qf /usr/share/icons/hicolor 2>/dev/null || true
@@ -67,7 +83,8 @@ fi
 _DESKTOP_FOR_APPS="${DESKTOP_LAUNCHER_SRC}"
 [ -f "$_DESKTOP_FOR_APPS" ] || _DESKTOP_FOR_APPS="${DESKTOP_SRC}"
 if [ -f "$_DESKTOP_FOR_APPS" ]; then
-    install -D -m 0644 "$_DESKTOP_FOR_APPS" "$DESKTOP_APPLICATIONS" || true
+    install_root -D -m 0644 "$_DESKTOP_FOR_APPS" "$DESKTOP_APPLICATIONS" || true
+    ensure_root_owner "$DESKTOP_APPLICATIONS"
     if command -v update-desktop-database >/dev/null 2>&1; then
         update-desktop-database /usr/share/applications 2>/dev/null || true
     fi

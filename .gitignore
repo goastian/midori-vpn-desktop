@@ -1,6 +1,7 @@
 # ── Node / frontend ──────────────────────────────────────────────────────────
 node_modules/
 dist/
+coverage/
 *.tsbuildinfo
 .eslintcache
 .stylelintcache
@@ -12,6 +13,7 @@ src-tauri/target/
 
 # ── Go agent build artefacts ─────────────────────────────────────────────────
 agent/target/
+agent/coverage.out
 
 # ── Tauri generated (mobile targets) ─────────────────────────────────────────
 src-tauri/gen/

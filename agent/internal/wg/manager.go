@@ -36,16 +36,16 @@ type Config struct {
 
 // Manager wraps a wireguard-go Device and TUN interface.
 type Manager struct {
-	mu              sync.Mutex
-	dev             *device.Device
-	tunDev          tun.Device
-	cfg             *Config
-	defaultRoutes   []string
-	resolvConf      []byte
-	dnsProtected    bool
-	dnsWatchCancel  context.CancelFunc
+	mu             sync.Mutex
+	dev            *device.Device
+	tunDev         tun.Device
+	cfg            *Config
+	defaultRoutes  []string
+	resolvConf     []byte
+	dnsProtected   bool
+	dnsWatchCancel context.CancelFunc
 	// saved sysctl values restored on disconnect
-	rpFilterSaved   map[string]string
+	rpFilterSaved map[string]string
 }
 
 // NewManager creates a Manager (no interface is created until Connect).

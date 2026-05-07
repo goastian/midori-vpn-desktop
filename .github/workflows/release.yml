@@ -7,23 +7,31 @@ on:
 
 permissions:
   contents: write
-  id-token: write   # required for SLSA/OIDC provenance
+  id-token: write
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  # ── Quality gate: all CI checks must pass before packaging ────────────────
   quality-gate:
-    name: Quality gate (CI must pass)
+    name: Quality Gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: "npm"
+          node-version-file: .node-version
+          cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Install system deps (for cargo check)
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+
+      - name: Install Tauri Linux dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
@@ -32,143 +40,96 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy,rustfmt
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: agent/go.mod
-          cache-dependency-path: agent/go.sum
+      - run: npm ci
+      - run: npm run check
+      - run: npm audit --audit-level=moderate
 
-      - name: Frontend lint + build
-        run: npm ci && npm run lint && npm run build
-
-      - name: Frontend tests
-        run: npm test
-
-      - name: Rust clippy + tests
-        run: |
-          cargo clippy --no-deps -- -D warnings
-          cargo test
+      - run: cargo fmt --check
         working-directory: src-tauri
 
-      - name: Agent vet + tests
-        run: go vet ./... && go test -race ./...
+      - run: cargo clippy --no-deps -- -D warnings
+        working-directory: src-tauri
+
+      - run: cargo test
+        working-directory: src-tauri
+
+      - name: Check gofmt
+        run: test -z "$(gofmt -l .)"
         working-directory: agent
 
-  # ── Build Go agent for all targets first ──────────────────────────────────
-  build-agent:
-    name: Build agent (${{ matrix.os }})
+      - run: go vet ./...
+        working-directory: agent
+
+      - run: go test -race ./...
+        working-directory: agent
+
+  package:
+    name: Package ${{ matrix.label }}
     needs: quality-gate
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: linux
-            runner: ubuntu-latest
-            targets: "linux/amd64 linux/arm64"
-          - os: macos
-            runner: macos-latest
-            targets: "darwin/amd64 darwin/arm64"
-          - os: windows
-            runner: windows-latest
-            targets: "windows/amd64"
-    defaults:
-      run:
-        working-directory: agent
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: agent/go.mod
-          cache-dependency-path: agent/go.sum
-
-      - name: Build agent binaries
-        shell: bash
-        run: |
-          mkdir -p target/release
-          build_agent() {
-            local os=$1 arch=$2 out=$3
-            echo "→ ${os}/${arch}"
-            CGO_ENABLED=0 GOOS=$os GOARCH=$arch \
-              go build -trimpath \
-                -ldflags="-s -w" \
-                -o "target/release/$out" ./cmd/agent
-          }
-          case "${{ matrix.os }}" in
-            linux)
-              build_agent linux amd64 agent
-              build_agent linux arm64 agent-linux-arm64
-              ;;
-            macos)
-              build_agent darwin arm64 agent-darwin-arm64
-              build_agent darwin amd64 agent-darwin-amd64
-              # tauri sidecar expects just "agent" on macOS too
-              cp target/release/agent-darwin-arm64 target/release/agent || true
-              ;;
-            windows)
-              build_agent windows amd64 agent.exe
-              ;;
-          esac
-
-      - name: Upload agent artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: agent-${{ matrix.os }}
-          path: agent/target/release/
-          retention-days: 90
-
-  # ── Tauri package builds ──────────────────────────────────────────────────
-  package:
-    name: Package (${{ matrix.label }})
-    needs: build-agent
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
           - label: Linux x86_64
-            runner: ubuntu-latest
+            runner: ubuntu-22.04
             os: linux
-            args: "--target x86_64-unknown-linux-gnu"
-            artifact-os: linux
+            rust-target: x86_64-unknown-linux-gnu
+            agent-target: linux-amd64
+            args: --target x86_64-unknown-linux-gnu
+            asset-platform: linux
+            asset-arch: x64
 
           - label: macOS Apple Silicon
             runner: macos-latest
             os: macos
-            args: "--target aarch64-apple-darwin"
-            artifact-os: macos
+            rust-target: aarch64-apple-darwin
+            agent-target: darwin-arm64
+            args: --target aarch64-apple-darwin
+            asset-platform: macos
+            asset-arch: arm64
 
           - label: macOS Intel
             runner: macos-latest
             os: macos
-            args: "--target x86_64-apple-darwin"
-            artifact-os: macos
+            rust-target: x86_64-apple-darwin
+            agent-target: darwin-amd64
+            args: --target x86_64-apple-darwin
+            asset-platform: macos
+            asset-arch: x64
 
           - label: Windows x86_64
             runner: windows-latest
             os: windows
-            args: "--target x86_64-pc-windows-msvc"
-            artifact-os: windows
+            rust-target: x86_64-pc-windows-msvc
+            agent-target: windows-amd64
+            args: --target x86_64-pc-windows-msvc --config src-tauri/tauri.windows.conf.json
+            asset-platform: windows
+            asset-arch: x64
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: "npm"
+          node-version-file: .node-version
+          cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-go@v5
         with:
-          targets: ${{ matrix.args != '' && (contains(matrix.args, 'aarch64-apple') && 'aarch64-apple-darwin' || contains(matrix.args, 'x86_64-apple') && 'x86_64-apple-darwin' || '') || '' }}
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-target }}
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -183,20 +144,16 @@ jobs:
             libayatana-appindicator3-dev librsvg2-dev policykit-1 \
             rpm
 
-      - name: Download agent binaries
-        uses: actions/download-artifact@v4
-        with:
-          name: agent-${{ matrix.artifact-os }}
-          path: agent/target/release/
+      - run: npm ci
 
-      - name: Make agent executable (Unix)
+      - name: Build target agent
+        shell: bash
+        run: bash scripts/build-agent.sh ${{ matrix.agent-target }}
+
+      - name: Make agent executable
         if: matrix.os != 'windows'
         run: chmod +x agent/target/release/agent*
 
-      - name: Install frontend dependencies
-        run: npm ci
-
-      # macOS code signing (optional — skipped when secrets are absent)
       - name: Import macOS signing certificate
         if: matrix.os == 'macos' && env.APPLE_CERTIFICATE != ''
         env:
@@ -212,63 +169,36 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
 
       - name: Build Tauri packages
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS notarization (optional — skipped when secrets are absent)
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Windows code signing (optional)
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: .
+          tauriScript: npm run tauri --
           tagName: ${{ github.ref_name }}
-          releaseName: "MidoriVPN Desktop ${{ github.ref_name }}"
+          releaseName: MidoriVPN Desktop ${{ github.ref_name }}
           releaseBody: |
             ## MidoriVPN Desktop ${{ github.ref_name }}
 
-            ### Packages
-            | Platform | File |
-            |----------|------|
-            | Linux (Debian/Ubuntu) | `.deb` |
-            | Linux (Fedora/RHEL/openSUSE) | `.rpm` |
-            | Linux (universal) | `.AppImage` |
-            | macOS (Apple Silicon) | `.dmg` (aarch64) |
-            | macOS (Intel) | `.dmg` (x86_64) |
-            | Windows | `.msi` / `.exe` (NSIS) |
-
-            > **Note:** macOS packages are unsigned by default. You may need to allow them via System Settings → Privacy & Security.
-          releaseDraft: false
+            Draft release generated by CI. Verify installers, checksums, and SBOM before publishing.
+          releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+          releaseAssetNamePattern: MidoriVPN-${{ matrix.asset-platform }}-${{ matrix.asset-arch }}-[version][ext]
+          uploadWorkflowArtifacts: true
+          workflowArtifactNamePattern: MidoriVPN-${{ matrix.asset-platform }}-${{ matrix.asset-arch }}-[bundle]
           args: ${{ matrix.args }}
 
-      - name: Rename packages
-        shell: bash
-        run: |
-          TAG="${{ github.ref_name }}"
-          case "${{ matrix.os }}" in
-            linux)   PREFIX="MidoriVPN-Linux" ;;
-            macos)   PREFIX="MidoriVPN-Mac" ;;
-            windows) PREFIX="MidoriVPN-Win" ;;
-          esac
-          find src-tauri/target/release/bundle \
-            -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \
-                    -o -name "*.dmg" -o -name "*.msi" -o -name "*.exe" \) \
-            | while read f; do
-                ext="${f##*.}"
-                dir="$(dirname "$f")"
-                mv "$f" "${dir}/${PREFIX}-${TAG}.${ext}"
-              done
-
-  # ── Generate checksums (SHA-256) for all release assets ──────────────────
   checksums:
-    name: Generate checksums
+    name: Generate Checksums
     needs: package
     runs-on: ubuntu-latest
     steps:
-      - name: Download all release artifacts
+      - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-artifacts
@@ -279,29 +209,30 @@ jobs:
           cd release-artifacts
           find . -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \
             -o -name "*.dmg" -o -name "*.msi" -o -name "*.exe" \
-            -o -name "*.tar.gz" -o -name "*.zip" \) | sort | \
-            xargs sha256sum > SHA256SUMS.txt
+            -o -name "*.tar.gz" -o -name "*.zip" \) -print0 \
+            | sort -z \
+            | xargs -0 sha256sum > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - name: Upload checksums to release
+      - name: Upload checksums to draft release
         uses: softprops/action-gh-release@v2
         with:
-          files: release-artifacts/SHA256SUMS.txt
           tag_name: ${{ github.ref_name }}
+          draft: true
+          files: release-artifacts/SHA256SUMS.txt
+          fail_on_unmatched_files: true
 
-      - name: Upload checksums as artifact
+      - name: Upload checksums as workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: SHA256SUMS
           path: release-artifacts/SHA256SUMS.txt
           retention-days: 90
 
-  # ── GPG-sign the checksum file ────────────────────────────────────────────
   sign:
-    name: Sign checksums (GPG)
+    name: Sign Checksums
     needs: checksums
     runs-on: ubuntu-latest
-    # Only sign when the GPG secret is configured; skip silently otherwise.
     if: ${{ vars.GPG_SIGN_ENABLED == 'true' }}
     steps:
       - name: Download checksums
@@ -326,43 +257,47 @@ jobs:
           gpg --batch --yes --pinentry-mode loopback \
             --passphrase "$GPG_PASSPHRASE" \
             --detach-sign --armor SHA256SUMS.txt
-          ls -la SHA256SUMS.txt.asc
 
-      - name: Upload signature to release
+      - name: Upload signature to draft release
         uses: softprops/action-gh-release@v2
         with:
-          files: SHA256SUMS.txt.asc
           tag_name: ${{ github.ref_name }}
+          draft: true
+          files: SHA256SUMS.txt.asc
+          fail_on_unmatched_files: true
 
-  # ── SBOM generation (CycloneDX) ───────────────────────────────────────────
   sbom:
     name: Generate SBOM
-    needs: quality-gate
+    needs: package
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install syft
+      - name: Install Syft
         run: |
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
             | sh -s -- -b /usr/local/bin
 
-      - name: Generate SBOM (CycloneDX JSON)
+      - name: Generate SBOM
         run: |
           syft dir:. \
             --output cyclonedx-json=midorivpn-desktop-sbom.cdx.json \
-            --exclude '.git' --exclude 'target' --exclude 'node_modules'
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude 'src-tauri/target' \
+            --exclude 'agent/target'
 
-      - name: Upload SBOM to release
+      - name: Upload SBOM to draft release
         uses: softprops/action-gh-release@v2
         with:
-          files: midorivpn-desktop-sbom.cdx.json
           tag_name: ${{ github.ref_name }}
+          draft: true
+          files: midorivpn-desktop-sbom.cdx.json
+          fail_on_unmatched_files: true
 
-      - name: Upload SBOM as artifact
+      - name: Upload SBOM as workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: sbom
           path: midorivpn-desktop-sbom.cdx.json
           retention-days: 180
-

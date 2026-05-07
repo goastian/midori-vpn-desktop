@@ -17,14 +17,14 @@ func TestIsReservedIP(t *testing.T) {
 		"172.31.255.255",
 		"192.168.1.1",
 		"169.254.0.1",
-		"100.64.0.1",   // CGNAT
+		"100.64.0.1", // CGNAT
 		"100.127.255.255",
 		"0.0.0.1",
 		"::1",
 		"fe80::1",
 		"fc00::1",
 		"fd00::1",
-		"not-an-ip",   // unparseable → reserved
+		"not-an-ip", // unparseable → reserved
 		"",
 	}
 	for _, ip := range reserved {
@@ -111,7 +111,7 @@ func TestIsValidUUID(t *testing.T) {
 		"not-a-uuid",
 		"550e8400-e29b-41d4-a716",              // too short
 		"550e8400-e29b-41d4-a716-44665544000g", // invalid char
-		"550e8400e29b41d4a716446655440000",      // missing hyphens
+		"550e8400e29b41d4a716446655440000",     // missing hyphens
 		"../../etc/passwd",
 		"550e8400-e29b-41d4-a716-446655440000X", // too long
 	}

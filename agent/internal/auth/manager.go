@@ -43,10 +43,10 @@ type Notifier func(t Tokens, loggedIn bool)
 
 // Manager coordinates token storage and refresh. Safe for concurrent use.
 type Manager struct {
-	store    Store
-	refresh  RefreshFunc
-	notify   Notifier
-	logger   *slog.Logger
+	store   Store
+	refresh RefreshFunc
+	notify  Notifier
+	logger  *slog.Logger
 
 	mu         sync.Mutex
 	tokens     Tokens
