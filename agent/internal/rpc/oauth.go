@@ -100,6 +100,9 @@ func (s *Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 //
 // GET /oauth/callback?code=...&state=...
 func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
+	setLocalSecurityHeaders(w)
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
+
 	code := r.URL.Query().Get("code")
 	oauthState := r.URL.Query().Get("state")
 

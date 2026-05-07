@@ -15,7 +15,7 @@ const confirming = ref(false)
 async function handleQuit() {
   if (confirming.value) return
   const ok = window.confirm(
-    `¿Salir de MidoriVPN?\n\n${t('quit.confirmBody')}`
+    `${t('quit.confirmTitle')}\n\n${t('quit.confirmBody')}`
   )
   if (!ok) return
   confirming.value = true

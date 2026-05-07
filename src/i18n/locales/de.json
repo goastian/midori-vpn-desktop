@@ -18,7 +18,8 @@
   "server": {
     "switching": "Server wird gewechselt…",
     "loading": "Server werden geladen…",
-    "empty": "Keine Server verfügbar"
+    "empty": "Keine Server verfügbar",
+    "meshName": "Mesh · {ip}"
   },
   "vpn": {
     "connected": "Verbunden",
@@ -88,6 +89,8 @@
   },
   "mesh": {
     "locked": "🔒 Mesh deaktiviert, bis die Netzwerkberechtigungen auf dem VPN-Tab erteilt werden.",
+    "networkTitle": "Mesh-Netzwerk",
+    "ipAddress": "IP: {ip}",
     "joinHint": "Beitreten, um Peer-Routing zu aktivieren",
     "enabling": "Mesh wird aktiviert…",
     "disabling": "Mesh wird deaktiviert…",
@@ -118,11 +121,13 @@
     "revertOk": "✓ Berechtigungen erfolgreich widerrufen.",
     "revertErr": "Konnte nicht widerrufen.",
     "language": "Sprache",
-    "languageHint": "Oberflächensprache. Wird sofort übernommen."
+    "languageHint": "Oberflächensprache. Wird sofort übernommen.",
+    "unknown": "Unbekannt"
   },
   "quit": {
     "label": "MidoriVPN beenden",
     "loading": "Wird beendet…",
+    "confirmTitle": "MidoriVPN beenden?",
     "confirmBody": "Das VPN wird getrennt und der Agent wird gestoppt. Du kannst die App über das Anwendungsmenü erneut öffnen."
   }
 }

@@ -19,6 +19,10 @@
         {{ t('login.subtitle') }}
       </p>
 
+      <div class="language-row">
+        <LanguageSelect compact />
+      </div>
+
       <button
         class="btn btn-primary signin-btn"
         :disabled="loading"
@@ -61,6 +65,7 @@ import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 import { useAuthStore } from '../stores/auth'
 import brandIcon from '../assets/midori-mv.png'
+import LanguageSelect from '../components/LanguageSelect.vue'
 
 const auth = useAuthStore()
 const { t } = useI18n()
@@ -174,6 +179,11 @@ h1 {
   color: var(--muted);
   margin: 0 0 20px;
   line-height: 1.55;
+}
+.language-row {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 18px;
 }
 .signin-btn {
   width: 100%;

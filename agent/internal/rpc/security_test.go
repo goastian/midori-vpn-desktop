@@ -39,6 +39,18 @@ func TestResolveAgentTokenReturnsConfiguredToken(t *testing.T) {
 	}
 }
 
+func TestConstantTimeTokenEqual(t *testing.T) {
+	if !constantTimeTokenEqual("secret", "secret") {
+		t.Fatal("expected equal tokens to match")
+	}
+	if constantTimeTokenEqual("secret", "wrong") {
+		t.Fatal("expected different same-length tokens not to match")
+	}
+	if constantTimeTokenEqual("secret", "secret-with-extra-bytes") {
+		t.Fatal("expected different length tokens not to match")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // DNS validation
 // ---------------------------------------------------------------------------

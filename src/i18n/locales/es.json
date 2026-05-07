@@ -18,7 +18,8 @@
   "server": {
     "switching": "Cambiando servidor…",
     "loading": "Cargando servidores…",
-    "empty": "No hay servidores disponibles"
+    "empty": "No hay servidores disponibles",
+    "meshName": "Mesh · {ip}"
   },
   "vpn": {
     "connected": "Conectado",
@@ -88,6 +89,8 @@
   },
   "mesh": {
     "locked": "🔒 Mesh deshabilitado hasta conceder permisos de red en la pestaña VPN.",
+    "networkTitle": "Red Mesh",
+    "ipAddress": "IP: {ip}",
     "joinHint": "Únete para habilitar el enrutamiento entre pares",
     "enabling": "Activando mesh…",
     "disabling": "Desactivando mesh…",
@@ -118,11 +121,13 @@
     "revertOk": "✓ Permisos revertidos correctamente.",
     "revertErr": "No se pudo revertir.",
     "language": "Idioma",
-    "languageHint": "Idioma de la interfaz. Se aplica inmediatamente."
+    "languageHint": "Idioma de la interfaz. Se aplica inmediatamente.",
+    "unknown": "Desconocido"
   },
   "quit": {
     "label": "Salir de MidoriVPN",
     "loading": "Saliendo…",
+    "confirmTitle": "¿Salir de MidoriVPN?",
     "confirmBody": "Se desconectará la VPN y el agente se detendrá. Puedes volver a abrir la app desde el menú de aplicaciones."
   }
 }

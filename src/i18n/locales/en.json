@@ -18,7 +18,8 @@
   "server": {
     "switching": "Switching server…",
     "loading": "Loading servers…",
-    "empty": "No servers available"
+    "empty": "No servers available",
+    "meshName": "Mesh · {ip}"
   },
   "vpn": {
     "connected": "Connected",
@@ -88,6 +89,8 @@
   },
   "mesh": {
     "locked": "🔒 Mesh disabled until network permissions are granted on the VPN tab.",
+    "networkTitle": "Mesh Network",
+    "ipAddress": "IP: {ip}",
     "joinHint": "Join to enable peer routing",
     "enabling": "Enabling mesh…",
     "disabling": "Disabling mesh…",
@@ -118,11 +121,13 @@
     "revertOk": "✓ Permissions successfully revoked.",
     "revertErr": "Could not revoke.",
     "language": "Language",
-    "languageHint": "Interface language. Takes effect immediately."
+    "languageHint": "Interface language. Takes effect immediately.",
+    "unknown": "Unknown"
   },
   "quit": {
     "label": "Quit MidoriVPN",
     "loading": "Quitting…",
+    "confirmTitle": "Quit MidoriVPN?",
     "confirmBody": "The VPN will disconnect and the agent will stop. You can reopen the app from the application menu."
   }
 }

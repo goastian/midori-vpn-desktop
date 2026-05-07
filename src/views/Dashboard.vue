@@ -1,5 +1,9 @@
 <template>
   <div>
+    <div class="card card--compact">
+      <LanguageSelect compact />
+    </div>
+
     <!-- Permissions consent modal -->
     <PermissionsConsentModal
       :open="showPermsModal"
@@ -195,6 +199,7 @@ import { useAuthStore } from '../stores/auth'
 import { useMeshStore } from '../stores/mesh'
 import { useCaps } from '../composables/useCaps'
 import PermissionsConsentModal from '../components/PermissionsConsentModal.vue'
+import LanguageSelect from '../components/LanguageSelect.vue'
 
 const vpn = useVpnStore()
 const { t } = useI18n()
@@ -250,8 +255,8 @@ const allItems = computed<ServerItem[]>(() => {
       key: `mesh:${n.mesh_ip}:${n.proxy_port}:${n.proxy_scheme || 'socks5'}`,
       cc: '',
       isMesh: true,
-      name: `Mesh · ${n.mesh_ip}`,
-      ip: `port ${n.proxy_port}`,
+      name: t('server.meshName', { ip: n.mesh_ip }),
+      ip: t('mesh.port', { n: n.proxy_port }),
     })) : []),
   ]
   // Dedupe by item.key to prevent duplicates from backend or concurrent updates
@@ -443,6 +448,11 @@ function formatBytes(b: number): string {
 
 <style scoped>
 /* ── Country code badge ─────────────────────────────────────────────────── */
+.card--compact {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
 .cc-badge {
   display: inline-flex;
   align-items: center;

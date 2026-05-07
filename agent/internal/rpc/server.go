@@ -5,6 +5,7 @@ package rpc
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
@@ -36,6 +37,19 @@ import (
 // an exit node. Applications can set http_proxy=http://127.0.0.1:8889 to
 // route their traffic through the mesh exit node.
 const localFwdPort = 8889
+
+func constantTimeTokenEqual(incoming, expected string) bool {
+	incomingSum := sha256.Sum256([]byte(incoming))
+	expectedSum := sha256.Sum256([]byte(expected))
+	return subtle.ConstantTimeCompare(incomingSum[:], expectedSum[:]) == 1
+}
+
+func setLocalSecurityHeaders(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+}
 
 // Server is the local RPC HTTP server.
 type Server struct {
@@ -291,6 +305,7 @@ func (s *Server) Start(ctx context.Context) error {
 	// .env-driven build-time origin injection.
 	withCORS := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			setLocalSecurityHeaders(w)
 			corsOrigin := defaultCORSOrigin
 			if origin := r.Header.Get("Origin"); origin != "" {
 				if _, ok := allowedOrigins[origin]; ok {
@@ -344,7 +359,7 @@ func (s *Server) Start(ctx context.Context) error {
 				if incoming == "" {
 					incoming = r.Header.Get("X-Agent-Token")
 				}
-				if subtle.ConstantTimeCompare([]byte(incoming), []byte(agentToken)) != 1 {
+				if !constantTimeTokenEqual(incoming, agentToken) {
 					http.Error(w, "forbidden", http.StatusForbidden)
 					return
 				}

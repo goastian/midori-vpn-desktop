@@ -11,9 +11,9 @@
     <div class="card" :class="{ 'card--locked': featuresLocked }">
       <div class="row">
         <div>
-          <div style="font-size:15px;font-weight:600;">Mesh Network</div>
+          <div style="font-size:15px;font-weight:600;">{{ t('mesh.networkTitle') }}</div>
           <div class="label" style="margin-top:4px;">
-            {{ mesh.enabled ? `IP: ${mesh.meshIp}` : t('mesh.joinHint') }}
+            {{ mesh.enabled ? t('mesh.ipAddress', { ip: mesh.meshIp }) : t('mesh.joinHint') }}
           </div>
         </div>
         <button
@@ -43,7 +43,7 @@
         style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border, #2a2a2a);"
       >
         <span style="font-size:13px;font-weight:500;">{{ n.mesh_ip }}</span>
-        <span class="label" style="font-size:11px;">port {{ n.proxy_port }}</span>
+        <span class="label" style="font-size:11px;">{{ t('mesh.port', { n: n.proxy_port }) }}</span>
       </div>
     </div>
   </div>

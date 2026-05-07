@@ -2,18 +2,7 @@
   <div>
     <!-- Language -->
     <div class="card">
-      <div class="section-title">{{ t('settings.language') }}</div>
-      <div class="row">
-        <div class="label" style="margin-bottom:0">{{ t('settings.languageHint') }}</div>
-        <select class="lang-select" :value="currentLocale" @change="onLocaleChange">
-          <option value="es">Español</option>
-          <option value="en">English</option>
-          <option value="pt">Português</option>
-          <option value="de">Deutsch</option>
-          <option value="fr">Français</option>
-          <option value="ru">Русский</option>
-        </select>
-      </div>
+      <LanguageSelect />
     </div>
 
     <div class="card">
@@ -50,7 +39,7 @@
       </div>
       <div class="row" style="margin-top:12px;">
         <div class="label">{{ t('settings.tokenStore') }}</div>
-        <div class="value">{{ tokenStoreLabel }}</div>
+        <div class="value">{{ tokenStoreDisplay }}</div>
       </div>
       <div v-if="tokenStoreDegraded" class="error" style="margin-top:8px;">{{ t('settings.tokenStoreFallback') }}</div>
     </div>
@@ -92,23 +81,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 import { agent } from '../lib/agent'
 import { useCaps } from '../composables/useCaps'
 import { toErrorMessage } from '../lib/error'
-import { setLocale, getLocale, type Locale } from '../i18n'
+import LanguageSelect from '../components/LanguageSelect.vue'
 import QuitButton from '../components/QuitButton.vue'
 
 const { t } = useI18n()
-const currentLocale = ref<Locale>(getLocale())
-
-function onLocaleChange(e: Event) {
-  const lang = (e.target as HTMLSelectElement).value as Locale
-  setLocale(lang)
-  currentLocale.value = lang
-}
 
 const autostart = ref(false)
 const meshAutoStart = ref(true)
@@ -118,6 +100,9 @@ const tokenStoreLabel = ref('—')
 const tokenStoreDegraded = ref(false)
 const { featuresLocked, capsGranted, capsGranting, capsError, revertCaps } = useCaps()
 const revertResult = ref<'idle' | 'ok' | 'err'>('idle')
+const tokenStoreDisplay = computed(() =>
+  tokenStoreLabel.value === 'unknown' ? t('settings.unknown') : tokenStoreLabel.value
+)
 
 async function handleRevertCaps() {
   revertResult.value = 'idle'
@@ -179,32 +164,3 @@ async function toggleMeshAutoStart() {
   }
 }
 </script>
-
-<style scoped>
-.lang-select {
-  appearance: none;
-  -webkit-appearance: none;
-  background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;
-  color: var(--ink-2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 7px 32px 7px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  outline: none;
-  min-width: 130px;
-  transition: border-color .15s;
-}
-.lang-select:hover {
-  border-color: var(--midori-500);
-}
-.lang-select:focus {
-  border-color: var(--midori-500);
-  box-shadow: 0 0 0 3px rgba(34,197,94,.14);
-}
-.lang-select option {
-  background: #ffffff;
-  color: #111827;
-}
-</style>

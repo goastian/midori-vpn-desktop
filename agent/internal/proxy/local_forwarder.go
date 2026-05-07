@@ -1,8 +1,9 @@
 // Package proxy — LocalForwarder is a localhost-only HTTP CONNECT proxy that
-// optionally chains connections through a remote exit-node proxy.
+// chains connections through a configured remote exit-node proxy.
 // It is used by the desktop agent so any system application that respects
 // HTTP/HTTPS proxy settings (http_proxy / HTTPS_PROXY) can route its traffic
-// through the mesh exit node without any authentication.
+// through the mesh exit node. It intentionally refuses direct mode so the
+// localhost listener cannot become a general-purpose unauthenticated proxy.
 package proxy
 
 import (
@@ -19,13 +20,12 @@ import (
 )
 
 // LocalForwarder is an HTTP CONNECT proxy that listens on 127.0.0.1 and
-// optionally chains all connections through a remote upstream exit-node proxy.
-// No authentication is required because it is localhost-only.
+// chains all connections through a remote upstream exit-node proxy.
 type LocalForwarder struct {
 	addr string
 
 	mu       sync.RWMutex
-	upstream string // "host:port" or "" for direct
+	upstream string // "host:port" or "" when forwarding is disabled
 }
 
 // NewLocalForwarder creates a LocalForwarder bound to addr (e.g. "127.0.0.1:8889").
@@ -35,7 +35,7 @@ func NewLocalForwarder(addr string) *LocalForwarder {
 
 // SetUpstream configures the upstream exit-node proxy to chain through.
 // host is the mesh IP of the exit node; port is its proxy port (typically 8888).
-// Pass host="" or port=0 to clear (direct mode).
+// Pass host="" or port=0 to clear and disable forwarding.
 func (f *LocalForwarder) SetUpstream(host string, port int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -81,8 +81,19 @@ func (f *LocalForwarder) Start(ctx context.Context) error {
 
 // ServeHTTP implements http.Handler; only CONNECT is supported.
 func (f *LocalForwarder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !isLoopbackRemote(r.RemoteAddr) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
 	if r.Method != http.MethodConnect {
 		http.Error(w, "only CONNECT supported", http.StatusMethodNotAllowed)
+		return
+	}
+
+	upstream := f.Upstream()
+	if upstream == "" {
+		http.Error(w, "exit node proxy not configured", http.StatusServiceUnavailable)
 		return
 	}
 
@@ -91,18 +102,13 @@ func (f *LocalForwarder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	upstream := f.Upstream()
 	var (
 		targetConn net.Conn
 		err        error
 	)
 
-	if upstream != "" {
-		targetConn, err = dialViaProxy(upstream, r.Host)
-		slog.Debug("local forwarder: chaining through exit node", "upstream", upstream, "target", r.Host)
-	} else {
-		targetConn, err = net.DialTimeout("tcp", r.Host, 10*time.Second)
-	}
+	targetConn, err = dialViaProxy(upstream, r.Host)
+	slog.Debug("local forwarder: chaining through exit node", "upstream", upstream, "target", r.Host)
 
 	if err != nil {
 		slog.Warn("local forwarder: dial failed", "target", r.Host, "upstream", upstream, "err", err)
@@ -152,6 +158,15 @@ func (f *LocalForwarder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		io.Copy(clientConn, targetConn) //nolint:errcheck
 	}()
 	wg.Wait()
+}
+
+func isLoopbackRemote(remoteAddr string) bool {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // dialViaProxy opens a TCP connection to proxyAddr and sends a CONNECT request
