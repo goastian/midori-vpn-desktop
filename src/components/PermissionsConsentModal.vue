@@ -83,27 +83,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
-defineProps<{ open: boolean }>()
+defineProps<{
+  open: boolean
+  loading?: boolean
+  error?: string
+}>()
 const emit = defineEmits<{
   cancel: []
   granted: []
 }>()
 
-const loading = ref(false)
-const error = ref('')
-
 async function accept() {
-  loading.value = true
-  error.value = ''
   emit('granted')
 }
-
-// Reset state when modal opens
-defineExpose({ reset() { loading.value = false; error.value = '' } })
 </script>
 
 <style scoped>

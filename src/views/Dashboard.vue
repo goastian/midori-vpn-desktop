@@ -3,7 +3,8 @@
     <!-- Permissions consent modal -->
     <PermissionsConsentModal
       :open="showPermsModal"
-      ref="permsModalRef"
+      :loading="capsGranting"
+      :error="capsError"
       @cancel="showPermsModal = false"
       @granted="onConsentGranted"
     />
@@ -220,8 +221,8 @@ const showPermsModal = ref(false)
 /** Called when the user clicks "Aceptar y aplicar" in the modal. */
 async function onConsentGranted() {
   const ok = await grantCapsBase()
-  showPermsModal.value = false
   if (ok) {
+    showPermsModal.value = false
     await loadServersAfterLogin()
   }
 }
