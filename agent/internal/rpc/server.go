@@ -1057,14 +1057,17 @@ func (s *Server) enableMesh(ctx context.Context) error {
 	}
 
 	const proxyPort = 1080
-	if err := s.apiClient.RegisterExitNode(ctx, node.MeshID, "socks5", proxyPort, true, true); err != nil {
-		slog.Warn("mesh: failed to register exit node", "err", err)
-	}
-
 	// Enable IP forwarding + iptables NAT so mesh peers can route all their
 	// traffic through this node and appear with this node's public IP.
 	if err := mesh.EnableNAT(""); err != nil {
-		slog.Warn("mesh: NAT setup failed (may need root)", "err", err)
+		_ = s.apiClient.DeactivateNode(context.Background())
+		return fmt.Errorf("mesh NAT setup failed: %w", err)
+	}
+
+	if err := s.apiClient.RegisterExitNode(ctx, node.MeshID, "socks5", proxyPort, true, true); err != nil {
+		mesh.DisableNATAndRestore(context.Background(), "")
+		_ = s.apiClient.DeactivateNode(context.Background())
+		return fmt.Errorf("register exit node: %w", err)
 	}
 
 	// Start exit proxy for mesh peers if not already running.

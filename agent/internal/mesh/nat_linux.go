@@ -89,8 +89,7 @@ func EnableNAT(outIface string) error {
 
 	// Enable IPv4 forwarding via /proc (no sysctl binary needed).
 	if err := enableIPForward(); err != nil {
-		slog.Warn("mesh: could not enable ip_forward", "err", err)
-		// non-fatal: continue
+		return fmt.Errorf("enable ip_forward: %w", err)
 	} else if prevVal != "1" {
 		// Only record a revert entry if we actually changed the value.
 		sysstate.Global.Record("ip_forward:restore:"+prevVal, func(_ context.Context) {
@@ -125,8 +124,7 @@ func EnableNAT(outIface string) error {
 		}
 		return err
 	}
-	slog.Warn("mesh: neither nft nor iptables found; NAT not configured (mesh egress may not work)")
-	return nil
+	return fmt.Errorf("neither nft nor iptables found; NAT not configured")
 }
 
 func enableNATnft(nft, outIface string) error {
@@ -142,6 +140,7 @@ func enableNATnft(nft, outIface string) error {
 			// "File exists" is ok (table/chain already present).
 			if !strings.Contains(string(out), "File exists") {
 				slog.Warn("mesh: nft cmd failed", "args", args, "out", strings.TrimSpace(string(out)))
+				return fmt.Errorf("nft %s: %w (%s)", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 			}
 		}
 	}
