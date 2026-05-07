@@ -1,8 +1,43 @@
 package rpc
 
 import (
+	"strings"
 	"testing"
 )
+
+// ---------------------------------------------------------------------------
+// Agent RPC token gate
+// ---------------------------------------------------------------------------
+
+func TestResolveAgentTokenRequiresTokenByDefault(t *testing.T) {
+	t.Setenv("MIDORIVPN_AGENT_TOKEN", "")
+	_, err := resolveAgentToken(false)
+	if err == nil || !strings.Contains(err.Error(), "MIDORIVPN_AGENT_TOKEN") {
+		t.Fatalf("expected missing token error, got %v", err)
+	}
+}
+
+func TestResolveAgentTokenAllowsExplicitDevMode(t *testing.T) {
+	t.Setenv("MIDORIVPN_AGENT_TOKEN", "")
+	token, err := resolveAgentToken(true)
+	if err != nil {
+		t.Fatalf("expected dev mode to allow missing token: %v", err)
+	}
+	if token != "" {
+		t.Fatalf("expected empty token in dev mode, got %q", token)
+	}
+}
+
+func TestResolveAgentTokenReturnsConfiguredToken(t *testing.T) {
+	t.Setenv("MIDORIVPN_AGENT_TOKEN", "secret")
+	token, err := resolveAgentToken(false)
+	if err != nil {
+		t.Fatalf("expected configured token to pass: %v", err)
+	}
+	if token != "secret" {
+		t.Fatalf("expected token, got %q", token)
+	}
+}
 
 // ---------------------------------------------------------------------------
 // DNS validation

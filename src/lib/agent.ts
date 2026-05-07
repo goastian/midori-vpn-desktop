@@ -30,7 +30,7 @@ export async function initAgentToken(): Promise<void> {
   try {
     _agentToken = await invoke<string>('get_agent_token')
   } catch {
-    // Dev mode without Tauri shell: token stays empty → agent allows all.
+    // Only explicit agent dev mode allows requests without this token.
     _agentToken = ''
   }
 }

@@ -16,6 +16,7 @@ import (
 func main() {
 	port := flag.Int("port", 7071, "local RPC server port")
 	logLevel := flag.String("log", "info", "log level: debug|info|warn|error")
+	insecureDevNoToken := flag.Bool("insecure-dev-no-token", false, "allow loopback RPC without MIDORIVPN_AGENT_TOKEN (development only)")
 	flag.Parse()
 
 	level := slog.LevelInfo
@@ -42,6 +43,7 @@ func main() {
 	ag := state.NewAgent()
 
 	srv := rpc.NewServer(ag, *port)
+	srv.SetAllowMissingAgentTokenForDev(*insecureDevNoToken)
 	slog.Info("MidoriVPN agent starting", "port", *port)
 
 	// Load persisted OAuth tokens (if any) and run an initial refresh if the

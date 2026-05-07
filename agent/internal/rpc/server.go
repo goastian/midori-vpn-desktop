@@ -88,6 +88,8 @@ type Server struct {
 	connectMu     sync.Mutex
 	connectCancel context.CancelFunc
 	connectSeq    uint64
+
+	allowMissingAgentTokenForDev bool
 }
 
 // NewServer creates the RPC server. Configuration is loaded from layered
@@ -162,6 +164,20 @@ func NewServer(ag *state.Agent, port int) *Server {
 	})
 	s.loadServersCacheFromDisk()
 	return s
+}
+
+// SetAllowMissingAgentTokenForDev enables the legacy no-token RPC mode for
+// local development only. Production launchers must pass a token.
+func (s *Server) SetAllowMissingAgentTokenForDev(allow bool) {
+	s.allowMissingAgentTokenForDev = allow
+}
+
+func resolveAgentToken(allowMissingForDev bool) (string, error) {
+	token := os.Getenv("MIDORIVPN_AGENT_TOKEN")
+	if token == "" && !allowMissingForDev {
+		return "", fmt.Errorf("MIDORIVPN_AGENT_TOKEN is required")
+	}
+	return token, nil
 }
 
 // Init performs startup work that needs a context (loading persisted tokens,
@@ -253,13 +269,15 @@ func (s *Server) Start(ctx context.Context) error {
 		return ip != nil && ip.IsLoopback()
 	}
 
-	// Read the ephemeral token injected by Tauri via env var.
-	// If the token is empty (agent launched outside Tauri, e.g. manual debug),
-	// log a warning and proceed without token enforcement so developers are not
-	// blocked. In production the token is always set.
-	agentToken := os.Getenv("MIDORIVPN_AGENT_TOKEN")
+	// Read the ephemeral token injected by Tauri via env var. Release builds
+	// require it so a manually-started agent cannot expose the loopback RPC API
+	// to arbitrary local processes.
+	agentToken, err := resolveAgentToken(s.allowMissingAgentTokenForDev)
+	if err != nil {
+		return err
+	}
 	if agentToken == "" {
-		slog.Warn("MIDORIVPN_AGENT_TOKEN is not set; token enforcement disabled")
+		slog.Warn("MIDORIVPN_AGENT_TOKEN is not set; token enforcement disabled for development")
 	}
 
 	allowedOrigins := map[string]struct{}{
@@ -342,12 +360,6 @@ func (s *Server) Start(ctx context.Context) error {
 	wrapSSE := func(h http.Handler) http.Handler {
 		return requireAuth(withCORS(h), true)
 	}
-	// OAuth start only generates an authorization URL and is safe to expose on
-	// the loopback-bound RPC server without token checks.
-	wrapOAuthStart := func(h http.Handler) http.Handler {
-		return withCORS(h)
-	}
-
 	mux.Handle("GET /status", wrap(http.HandlerFunc(s.handleStatus)))
 	mux.Handle("GET /events", wrapSSE(http.HandlerFunc(s.handleSSE)))
 
@@ -384,7 +396,7 @@ func (s *Server) Start(ctx context.Context) error {
 	// OAuth 2.0 PKCE login flow.
 	// /oauth/start is called from Tauri (has token); /oauth/callback is reached
 	// by the system browser (exempt from token+Origin check).
-	mux.Handle("POST /oauth/start", wrapOAuthStart(http.HandlerFunc(s.handleOAuthStart)))
+	mux.Handle("POST /oauth/start", wrap(http.HandlerFunc(s.handleOAuthStart)))
 	mux.Handle("GET /oauth/callback", http.HandlerFunc(s.handleOAuthCallback))
 
 	// Start the local transparent forwarder (chains to exit node when active).
