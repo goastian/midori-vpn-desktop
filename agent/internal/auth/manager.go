@@ -78,6 +78,13 @@ func NewManager(store Store, refresh RefreshFunc, notify Notifier) *Manager {
 	}
 }
 
+func (m *Manager) Backend() string {
+	if m == nil || m.store == nil {
+		return "unknown"
+	}
+	return m.store.Backend()
+}
+
 // Init loads any persisted tokens, performs an initial refresh if the access
 // token is already expired, and schedules the next proactive refresh. It is
 // safe to call Init even when no tokens are stored — it returns nil and the
