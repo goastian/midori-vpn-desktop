@@ -11,7 +11,6 @@ use serde_json::Value;
 use std::sync::{Arc, Mutex};
 use tauri::AppHandle;
 use tauri::Manager;
-use tauri_plugin_shell::ShellExt;
 use tauri_plugin_autostart::MacosLauncher;
 
 // ── Tauri commands ────────────────────────────────────────────────────────────
