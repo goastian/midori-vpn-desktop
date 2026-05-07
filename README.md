@@ -20,15 +20,15 @@ midorivpn-desktop/
 
 ## Requisitos
 
-### Linux (Debian / Ubuntu)
+### Linux (DEB)
 ```bash
 sudo apt install libwebkit2gtk-4.1-dev libssl-dev libayatana-appindicator3-dev \
                  librsvg2-dev policykit-1 build-essential curl wget file
 ```
 
-### Linux (Fedora / RHEL)
+### Linux (RPM)
 ```bash
-sudo dnf install webkit2gtk4.1-devel openssl-devel libappindicator-gtk3-devel \
+sudo dnf/zypper install webkit2gtk4.1-devel openssl-devel libappindicator-gtk3-devel \
                  librsvg2-devel polkit gcc gcc-c++ make
 ```
 
