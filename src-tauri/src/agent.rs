@@ -1,6 +1,6 @@
 use std::io;
-use std::io::Read;
 use std::net::{SocketAddr, TcpStream};
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex, MutexGuard};
 use tauri::{AppHandle, Emitter, Manager};
@@ -27,23 +27,10 @@ pub struct AgentSupervisorStop(pub Arc<std::sync::atomic::AtomicBool>);
 pub struct AgentToken(pub Mutex<String>);
 
 /// Generate a cryptographically random 32-byte hex token.
-fn generate_token() -> String {
+fn generate_token() -> io::Result<String> {
     let mut bytes = [0u8; 32];
-    // /dev/urandom is available on Linux and macOS.
-    if let Ok(mut f) = std::fs::File::open("/dev/urandom") {
-        let _ = f.read_exact(&mut bytes);
-    } else {
-        // Fallback for platforms without /dev/urandom: mix PID + monotonic clock.
-        let pid = std::process::id() as u64;
-        let ns = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .subsec_nanos() as u64;
-        for (i, b) in bytes.iter_mut().enumerate() {
-            *b = (pid.wrapping_add(ns).wrapping_add(i as u64)) as u8;
-        }
-    }
-    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+    getrandom::fill(&mut bytes).map_err(|e| io::Error::other(e.to_string()))?;
+    Ok(bytes.iter().map(|b| format!("{:02x}", b)).collect())
 }
 
 /// Installed path of the agent binary.
@@ -51,6 +38,28 @@ fn generate_token() -> String {
 /// Path must be under /usr/local/bin/ so SELinux assigns bin_t context,
 /// allowing pkexec to use it as an entrypoint.
 const AGENT_INSTALLED_PATH: &str = "/usr/local/bin/midorivpn-agent";
+
+fn agent_command_path(app: &AppHandle) -> io::Result<PathBuf> {
+    #[cfg(target_os = "linux")]
+    {
+        let _ = app;
+        Ok(PathBuf::from(AGENT_INSTALLED_PATH))
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        app.path()
+            .resolve("agent.exe", tauri::path::BaseDirectory::Resource)
+            .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))
+    }
+
+    #[cfg(all(not(target_os = "linux"), not(target_os = "windows")))]
+    {
+        app.path()
+            .resolve("agent", tauri::path::BaseDirectory::Resource)
+            .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))
+    }
+}
 
 fn is_agent_healthy(port: u16) -> bool {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
@@ -182,7 +191,8 @@ pub fn revert_agent_permissions() -> bool {
 /// can start a fresh one with a newly-generated MIDORIVPN_AGENT_TOKEN.
 ///
 /// On Linux we use `fuser -k PORT/tcp` which sends SIGKILL to the owner PID.
-/// On other platforms we fall back to `pkill -x midorivpn-agent`.
+/// macOS and Windows use platform process tools against the packaged agent
+/// name as a best-effort fallback.
 /// Both failures are treated as non-fatal (we proceed and let spawn fail or
 /// succeed on its own).
 fn kill_stale_agent(port: u16) {
@@ -196,11 +206,20 @@ fn kill_stale_agent(port: u16) {
             .stderr(Stdio::null())
             .status();
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
     {
         let _ = Command::new("pkill")
             .arg("-x")
-            .arg("midorivpn-agent")
+            .arg("agent")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let _ = Command::new("taskkill")
+            .args(["/F", "/IM", "agent.exe"])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -305,7 +324,7 @@ fn spawn_and_wait(app: &AppHandle, port: u16) -> std::io::Result<Child> {
         kill_stale_agent(port);
     }
 
-    let token = generate_token();
+    let token = generate_token()?;
     {
         let tok_state = app.state::<AgentToken>();
         *lock_safe(&tok_state.0) = token.clone();
@@ -319,7 +338,8 @@ fn spawn_and_wait(app: &AppHandle, port: u16) -> std::io::Result<Child> {
         .open(format!("{log_path}/midorivpn-agent.log"))
         .unwrap_or_else(|_| std::fs::File::open("/dev/null").unwrap());
 
-    let mut child = Command::new(AGENT_INSTALLED_PATH)
+    let agent_path = agent_command_path(app)?;
+    let mut child = Command::new(agent_path)
         .arg("--port")
         .arg(port.to_string())
         .stdin(Stdio::null())
