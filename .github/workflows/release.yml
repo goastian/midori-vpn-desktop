@@ -85,7 +85,7 @@ jobs:
         working-directory: agent
 
   package:
-    name: Package ${{ matrix.label }}
+    name: Package
     needs: quality-gate
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -233,13 +233,17 @@ jobs:
           merge-multiple: true
 
       - name: Generate SHA-256 checksums
+        shell: bash
         run: |
           cd release-artifacts
-          find . -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \
+          mapfile -d '' artifacts < <(find . -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \
             -o -name "*.dmg" -o -name "*.msi" -o -name "*.exe" \
-            -o -name "*.tar.gz" -o -name "*.zip" \) -print0 \
-            | sort -z \
-            | xargs -0 sha256sum > SHA256SUMS.txt
+            -o -name "*.tar.gz" -o -name "*.zip" \) -print0 | sort -z)
+          if [ "${#artifacts[@]}" -eq 0 ]; then
+            echo "No release installer artifacts were found" >&2
+            exit 1
+          fi
+          printf '%s\0' "${artifacts[@]}" | xargs -0 sha256sum > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Upload checksums to draft release
@@ -259,7 +263,7 @@ jobs:
 
   sign:
     name: Sign Checksums
-    needs: checksums
+    needs: sbom
     runs-on: ubuntu-latest
     if: ${{ vars.GPG_SIGN_ENABLED == 'true' }}
     permissions:
@@ -298,7 +302,7 @@ jobs:
 
   sbom:
     name: Generate SBOM
-    needs: package
+    needs: checksums
     runs-on: ubuntu-latest
     permissions:
       contents: write

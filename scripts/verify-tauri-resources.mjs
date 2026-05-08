@@ -24,7 +24,7 @@ function checkPath(configPath, configDir, sourcePath, label) {
   }
 }
 
-function checkResourceMap(configPath, configDir, resources, label) {
+function checkResourceMap(configPath, configDir, resources, label, options = {}) {
   if (!resources) return
 
   if (Array.isArray(resources)) {
@@ -34,7 +34,8 @@ function checkResourceMap(configPath, configDir, resources, label) {
     return
   }
 
-  for (const sourcePath of Object.keys(resources)) {
+  const sourcePaths = options.valuesAreSources ? Object.values(resources) : Object.keys(resources)
+  for (const sourcePath of sourcePaths) {
     checkPath(configPath, configDir, sourcePath, label)
   }
 }
@@ -56,6 +57,7 @@ for (const configFile of configFiles) {
         dir,
         packageConfig.files,
         `bundle.${platform}.${packageType}.files`,
+        { valuesAreSources: true },
       )
     }
   }

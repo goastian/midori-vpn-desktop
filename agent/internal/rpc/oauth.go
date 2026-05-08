@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/goastian/midorivpn-agent/internal/auth"
+	"github.com/goastian/midorivpn-agent/internal/caps"
 )
 
 // oauthCallbackURI is the localhost redirect_uri the agent listens on. The
@@ -184,6 +185,10 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	// Trigger mesh activation in background unless the user opted out.
 	go func() {
 		if s.settings != nil && s.settings.Get().Mesh.StartDisabled {
+			return
+		}
+		if !caps.HasNetAdmin() {
+			slog.Info("auto-mesh after oauth login: skipped (CAP_NET_ADMIN not granted)")
 			return
 		}
 		bgCtx, bgCancel := context.WithTimeout(context.Background(), 15*time.Second)

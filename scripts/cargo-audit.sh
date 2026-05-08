@@ -15,6 +15,8 @@ if [ -n "${CARGO_AUDIT_BIN:-}" ]; then
   audit_cmd=("$CARGO_AUDIT_BIN" audit)
 elif command -v cargo-audit >/dev/null 2>&1; then
   audit_cmd=(cargo-audit audit)
+elif [ -x /tmp/midori-vpn-tools/bin/cargo-audit ]; then
+  audit_cmd=(/tmp/midori-vpn-tools/bin/cargo-audit audit)
 else
   audit_cmd=(cargo audit)
 fi

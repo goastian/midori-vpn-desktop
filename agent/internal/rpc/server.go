@@ -22,6 +22,7 @@ import (
 
 	"github.com/goastian/midorivpn-agent/internal/apiClient"
 	"github.com/goastian/midorivpn-agent/internal/auth"
+	"github.com/goastian/midorivpn-agent/internal/caps"
 	"github.com/goastian/midorivpn-agent/internal/config"
 	"github.com/goastian/midorivpn-agent/internal/firewall"
 	"github.com/goastian/midorivpn-agent/internal/mesh"
@@ -212,6 +213,10 @@ func (s *Server) AutoEnableMesh(ctx context.Context) {
 		slog.Info("auto-mesh: skipped (user opted out)")
 		return
 	}
+	if !caps.HasNetAdmin() {
+		slog.Info("auto-mesh: skipped (CAP_NET_ADMIN not granted)")
+		return
+	}
 
 	// Wait for auth to be ready (in case Init is still running an initial
 	// refresh).
@@ -240,6 +245,10 @@ func (s *Server) AutoEnableMesh(ctx context.Context) {
 		// during a slow first attempt aborts cleanly.
 		if s.settings != nil && s.settings.Get().Mesh.StartDisabled {
 			slog.Info("auto-mesh: aborted (user opted out mid-retry)")
+			return
+		}
+		if !caps.HasNetAdmin() {
+			slog.Info("auto-mesh: aborted (CAP_NET_ADMIN no longer present)")
 			return
 		}
 		callCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
@@ -541,6 +550,10 @@ func (s *Server) handleSetTokens(w http.ResponseWriter, r *http.Request) {
 	// user has explicitly disabled mesh-at-startup.
 	go func() {
 		if s.settings != nil && s.settings.Get().Mesh.StartDisabled {
+			return
+		}
+		if !caps.HasNetAdmin() {
+			slog.Info("auto-mesh on login: skipped (CAP_NET_ADMIN not granted)")
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -1518,11 +1531,23 @@ func (s *Server) gracefulShutdown() {
 
 	// Best-effort: tell the backend we're going away so peers don't see us
 	// as a stale node. Short timeout so a 504 doesn't block exit.
+	// Skip when mesh wasn't actually enabled in this session — this
+	// prevents the activate/deactivate audit churn that occurs when the
+	// agent restarts without ever having activated mesh (e.g. caps not
+	// granted, so AutoEnableMesh skipped).
 	if s.apiClient != nil && s.authMgr != nil && s.authMgr.LoggedIn() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		if err := s.apiClient.DeactivateNode(ctx); err != nil {
-			slog.Debug("shutdown: mesh deactivate failed (best effort)", "err", err)
+		meshActive := false
+		if s.agent != nil {
+			if m, ok := s.agent.Snapshot()["mesh"].(state.MeshStatus); ok {
+				meshActive = m.Active
+			}
+		}
+		if meshActive {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			if err := s.apiClient.DeactivateNode(ctx); err != nil {
+				slog.Debug("shutdown: mesh deactivate failed (best effort)", "err", err)
+			}
 		}
 	}
 }
