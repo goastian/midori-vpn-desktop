@@ -1172,14 +1172,35 @@ func (s *Server) handleListExitNodes(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, nodes)
 }
 
+func validateExitNodeProxyTarget(meshIP string, port int) error {
+	if meshIP == "" {
+		return fmt.Errorf("mesh_ip is required")
+	}
+	if port <= 0 || port > 65535 {
+		return fmt.Errorf("proxy_port must be between 1 and 65535")
+	}
+	ip := net.ParseIP(meshIP)
+	if ip == nil {
+		return fmt.Errorf("mesh_ip must be an IP address")
+	}
+	if ip.IsUnspecified() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsInterfaceLocalMulticast() || ip.IsMulticast() {
+		return fmt.Errorf("mesh_ip is not allowed")
+	}
+	return nil
+}
+
 func (s *Server) handleSetExitNode(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		MeshIP      string `json:"mesh_ip"`
 		ProxyScheme string `json:"proxy_scheme"`
 		ProxyPort   int    `json:"proxy_port"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.MeshIP == "" || req.ProxyPort <= 0 {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	if err := validateExitNodeProxyTarget(req.MeshIP, req.ProxyPort); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if req.ProxyScheme == "" {

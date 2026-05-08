@@ -42,7 +42,7 @@ func (f *LocalForwarder) SetUpstream(host string, port int) {
 	if host == "" || port == 0 {
 		f.upstream = ""
 	} else {
-		f.upstream = fmt.Sprintf("%s:%d", host, port)
+		f.upstream = net.JoinHostPort(host, fmt.Sprintf("%d", port))
 	}
 	slog.Info("local forwarder: upstream changed", "upstream", f.upstream)
 }

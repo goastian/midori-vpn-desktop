@@ -33,7 +33,7 @@ midorivpn-desktop/
 
 ### Herramientas comunes (todas las plataformas)
 
-- [Go](https://go.dev/dl/) ≥ 1.26.2
+- [Go](https://go.dev/dl/) ≥ 1.26.3
 - [Rust](https://rustup.rs/) (stable) + `cargo`
 - [Node.js](https://nodejs.org/) ≥ 22 + `npm`
 

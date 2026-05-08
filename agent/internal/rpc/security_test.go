@@ -138,6 +138,46 @@ func TestSanitizeDNS_AlreadyClean(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Exit-node proxy target validation
+// ---------------------------------------------------------------------------
+
+func TestValidateExitNodeProxyTarget(t *testing.T) {
+	valid := []struct {
+		meshIP string
+		port   int
+	}{
+		{"100.64.10.20", 8888},
+		{"10.20.30.40", 443},
+		{"fd7a:115c:a1e0::1", 8888},
+	}
+	for _, tc := range valid {
+		if err := validateExitNodeProxyTarget(tc.meshIP, tc.port); err != nil {
+			t.Errorf("validateExitNodeProxyTarget(%q, %d) unexpected error: %v", tc.meshIP, tc.port, err)
+		}
+	}
+
+	invalid := []struct {
+		meshIP string
+		port   int
+	}{
+		{"", 8888},
+		{"example.com", 8888},
+		{"127.0.0.1", 8888},
+		{"::1", 8888},
+		{"0.0.0.0", 8888},
+		{"169.254.1.1", 8888},
+		{"224.0.0.1", 8888},
+		{"100.64.10.20", 0},
+		{"100.64.10.20", 65536},
+	}
+	for _, tc := range invalid {
+		if err := validateExitNodeProxyTarget(tc.meshIP, tc.port); err == nil {
+			t.Errorf("validateExitNodeProxyTarget(%q, %d) expected error", tc.meshIP, tc.port)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
 // UUID validation
 // ---------------------------------------------------------------------------
 

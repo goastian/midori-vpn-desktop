@@ -7,6 +7,14 @@ import (
 	"testing"
 )
 
+func TestLocalForwarderFormatsIPv6Upstream(t *testing.T) {
+	f := NewLocalForwarder("127.0.0.1:0")
+	f.SetUpstream("fd7a:115c:a1e0::1", 8888)
+	if got := f.Upstream(); got != "[fd7a:115c:a1e0::1]:8888" {
+		t.Fatalf("expected bracketed IPv6 upstream, got %q", got)
+	}
+}
+
 func TestLocalForwarderRejectsNonLoopbackRemote(t *testing.T) {
 	f := NewLocalForwarder("127.0.0.1:0")
 	req := httptest.NewRequest(http.MethodConnect, "http://example.com:443", nil)
