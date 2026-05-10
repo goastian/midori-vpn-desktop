@@ -319,6 +319,9 @@ func (s *Server) Start(ctx context.Context) error {
 			if origin := r.Header.Get("Origin"); origin != "" {
 				if _, ok := allowedOrigins[origin]; ok {
 					corsOrigin = origin
+				} else if r.Method == http.MethodOptions {
+					http.Error(w, "forbidden", http.StatusForbidden)
+					return
 				}
 			}
 			w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
