@@ -312,11 +312,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
       - name: Install Syft
         id: syft
         uses: anchore/sbom-action/download-syft@v0.24.0
 
-      - name: Generate SBOM
+      - name: Generate source SBOM
         run: |
           "${{ steps.syft.outputs.cmd }}" dir:. \
             --output cyclonedx-json=midorivpn-desktop-sbom.cdx.json \
@@ -325,17 +331,26 @@ jobs:
             --exclude 'src-tauri/target' \
             --exclude 'agent/target'
 
-      - name: Upload SBOM to draft release
+      - name: Generate artifact SBOM
+        run: |
+          "${{ steps.syft.outputs.cmd }}" dir:release-artifacts \
+            --output cyclonedx-json=midorivpn-desktop-artifacts-sbom.cdx.json
+
+      - name: Upload SBOMs to draft release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           draft: true
-          files: midorivpn-desktop-sbom.cdx.json
+          files: |
+            midorivpn-desktop-sbom.cdx.json
+            midorivpn-desktop-artifacts-sbom.cdx.json
           fail_on_unmatched_files: true
 
-      - name: Upload SBOM as workflow artifact
+      - name: Upload SBOMs as workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: sbom
-          path: midorivpn-desktop-sbom.cdx.json
+          path: |
+            midorivpn-desktop-sbom.cdx.json
+            midorivpn-desktop-artifacts-sbom.cdx.json
           retention-days: 180
