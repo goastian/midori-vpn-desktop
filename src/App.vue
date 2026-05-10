@@ -177,7 +177,7 @@ let keepAliveTimer: ReturnType<typeof setInterval> | null = null
 let unlistenAgentStatus: (() => void) | null = null
 
 onMounted(async () => {
-  // Fetch ephemeral token first so EventSource URL includes ?token=
+  // Initialise the agent client before subscribing to Rust-relayed events.
   await initAgentToken()
   await loadSnapshot(20)
   unsubscribe = agent.subscribe((event) => {
@@ -190,7 +190,7 @@ onMounted(async () => {
   listen<{ status: string }>('agent://status', async (ev) => {
     const s = ev.payload.status
     if (s === 'running') {
-      // Re-fetch token (supervisor regenerates it on restart) then reconnect SSE.
+      // Rust rotates the private RPC token on restart; the WebView only reloads state.
       await initAgentToken()
       await loadSnapshot(10)
       agentStatus.value = 'running'
@@ -201,7 +201,7 @@ onMounted(async () => {
     }
   }).then(fn => { unlistenAgentStatus = fn })
 
-  // Re-poll snapshot when the window regains focus (WebKit may pause EventSource
+  // Re-poll snapshot when the window regains focus (WebKit may pause event
   // while the OAuth browser tab is open, causing the auth_status event to be missed).
   window.addEventListener('focus', refreshSnapshot)
 

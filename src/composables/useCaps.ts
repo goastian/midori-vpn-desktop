@@ -10,7 +10,6 @@
 
 import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import { initAgentToken } from '../lib/agent'
 
 const capsGranted = ref(false)   // default false — assume not granted until checked
 const capsGranting = ref(false)
@@ -44,8 +43,7 @@ export function useCaps() {
         // The currently running agent may still have CapEff=0 if it was
         // started before setcap. Restart it so create TUN succeeds.
         try {
-		  await invoke('restart_agent_cmd')
-		  await initAgentToken()
+          await invoke('restart_agent_cmd')
         } catch {
           // If restart fails we'll still expose granted state; callers surface
           // runtime errors and the user can retry.

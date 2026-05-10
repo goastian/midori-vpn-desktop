@@ -104,6 +104,7 @@ pub fn run() {
             // Start the agent supervisor (keeps the agent alive across crashes).
             let handle = app.handle().clone();
             agent::start_supervisor(handle, 7071);
+            agent::start_event_relay(app.handle().clone(), 7071);
 
             Ok(())
         })
@@ -127,7 +128,6 @@ pub fn run() {
             agent::agent_has_caps,
             agent::grant_agent_permissions,
             agent::revert_agent_permissions,
-            agent::get_agent_token,
             autostart::autostart_is_enabled,
             autostart::autostart_set,
         ])
