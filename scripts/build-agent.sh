@@ -50,7 +50,9 @@ host_target() {
 
   build_agent "$os" "$arch" "$out"
   if [ "$os" = "windows" ]; then
-    cp "$OUT_DIR/agent.exe" "$OUT_DIR/agent"
+    if [ ! -e "$OUT_DIR/agent" ]; then
+      cp "$OUT_DIR/agent.exe" "$OUT_DIR/agent"
+    fi
   fi
 }
 
@@ -74,7 +76,9 @@ case "$TARGET" in
     ;;
   windows-amd64)
     build_agent windows amd64 "$OUT_DIR/agent.exe"
-    cp "$OUT_DIR/agent.exe" "$OUT_DIR/agent"
+    if [ ! -e "$OUT_DIR/agent" ]; then
+      cp "$OUT_DIR/agent.exe" "$OUT_DIR/agent"
+    fi
     ;;
   all)
     build_agent linux amd64 "$OUT_DIR/agent"
