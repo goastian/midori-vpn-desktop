@@ -1102,7 +1102,16 @@ func (s *Server) enableMesh(ctx context.Context) error {
 	if s.proxyCtx == nil {
 		proxyCtx, cancel := context.WithCancel(context.Background())
 		s.proxyCtx = cancel
-		p := proxy.NewSOCKS5(fmt.Sprintf(":%d", proxyPort))
+		proxyAddr := fmt.Sprintf(":%d", proxyPort)
+		sourceCIDRs := proxy.SourceCIDRsForIPs(peerMeshIPs(node.Peers))
+		if len(sourceCIDRs) == 0 {
+			sourceCIDRs = proxy.SourceCIDRsForIPs([]string{node.MeshIP})
+		}
+		p := proxy.NewSOCKS5(
+			proxyAddr,
+			proxy.WithAllowedSourceCIDRs(sourceCIDRs),
+			proxy.WithMaxConnections(256),
+		)
 		s.socks5Srv = p
 		go func() {
 			if err := p.Start(proxyCtx); err != nil {

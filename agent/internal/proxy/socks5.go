@@ -13,11 +13,72 @@ import (
 )
 
 type SOCKS5Server struct {
-	addr string
+	addr              string
+	allowedSourceNets []*net.IPNet
+	maxConnections    int
+	limit             chan struct{}
 }
 
-func NewSOCKS5(addr string) *SOCKS5Server {
-	return &SOCKS5Server{addr: addr}
+type SOCKS5Option func(*SOCKS5Server)
+
+func WithAllowedSourceCIDRs(cidrs []string) SOCKS5Option {
+	return func(s *SOCKS5Server) {
+		s.allowedSourceNets = parseCIDRs(cidrs)
+	}
+}
+
+func WithMaxConnections(n int) SOCKS5Option {
+	return func(s *SOCKS5Server) {
+		if n > 0 {
+			s.maxConnections = n
+		}
+	}
+}
+
+func NewSOCKS5(addr string, opts ...SOCKS5Option) *SOCKS5Server {
+	s := &SOCKS5Server{addr: addr, maxConnections: 128}
+	for _, opt := range opts {
+		opt(s)
+	}
+	s.limit = make(chan struct{}, s.maxConnections)
+	return s
+}
+
+func MeshSourceCIDRs(meshIP string) []string {
+	ip := net.ParseIP(meshIP)
+	if ip == nil {
+		return nil
+	}
+	if ip.To4() != nil {
+		switch {
+		case cidrContains("100.64.0.0/10", ip):
+			return []string{"100.64.0.0/10"}
+		case ip.IsPrivate():
+			return []string{privateIPv4CIDR(ip)}
+		default:
+			return []string{ip.String() + "/32"}
+		}
+	}
+	if cidrContains("fd00::/8", ip) {
+		return []string{"fd00::/8"}
+	}
+	return []string{ip.String() + "/128"}
+}
+
+func SourceCIDRsForIPs(ips []string) []string {
+	cidrs := make([]string, 0, len(ips))
+	for _, raw := range ips {
+		ip := net.ParseIP(raw)
+		if ip == nil {
+			continue
+		}
+		if ip.To4() != nil {
+			cidrs = append(cidrs, ip.String()+"/32")
+		} else {
+			cidrs = append(cidrs, ip.String()+"/128")
+		}
+	}
+	return cidrs
 }
 
 func (s *SOCKS5Server) Start(ctx context.Context) error {
@@ -30,7 +91,7 @@ func (s *SOCKS5Server) Start(ctx context.Context) error {
 		<-ctx.Done()
 		_ = ln.Close()
 	}()
-	slog.Info("mesh socks5 proxy listening", "addr", s.addr)
+	slog.Info("mesh socks5 proxy listening", "addr", s.addr, "source_filters", len(s.allowedSourceNets))
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -39,13 +100,27 @@ func (s *SOCKS5Server) Start(ctx context.Context) error {
 			}
 			return err
 		}
-		go s.handle(ctx, conn)
+		if !s.allowConn(conn) {
+			slog.Warn("mesh socks5 rejected remote source", "remote", conn.RemoteAddr().String())
+			_ = conn.Close()
+			continue
+		}
+		select {
+		case s.limit <- struct{}{}:
+			go func() {
+				defer func() { <-s.limit }()
+				s.handle(ctx, conn)
+			}()
+		default:
+			slog.Warn("mesh socks5 rejected connection: limit reached", "remote", conn.RemoteAddr().String())
+			_ = conn.Close()
+		}
 	}
 }
 
 func (s *SOCKS5Server) handle(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(2 * time.Hour))
+	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
 
 	buf := make([]byte, 262)
 	if _, err := io.ReadFull(conn, buf[:2]); err != nil || buf[0] != 0x05 {
@@ -64,6 +139,7 @@ func (s *SOCKS5Server) handle(ctx context.Context, conn net.Conn) {
 		_ = writeSOCKS5Reply(conn, 0x01, nil)
 		return
 	}
+	_ = conn.SetDeadline(time.Now().Add(2 * time.Hour))
 
 	switch cmd {
 	case 0x01:
@@ -109,7 +185,7 @@ func (s *SOCKS5Server) handleConnect(client net.Conn, target string) {
 }
 
 func (s *SOCKS5Server) handleUDPAssociate(ctx context.Context, control net.Conn) {
-	udpConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+	udpConn, err := net.ListenUDP("udp", s.udpListenAddr())
 	if err != nil {
 		_ = writeSOCKS5Reply(control, 0x01, nil)
 		return
@@ -139,11 +215,79 @@ func (s *SOCKS5Server) handleUDPAssociate(ctx context.Context, control net.Conn)
 				continue
 			}
 		}
+		if !s.allowIP(clientAddr.IP) {
+			slog.Warn("mesh socks5 rejected UDP source", "remote", clientAddr.String())
+			continue
+		}
 		target, payload, err := parseUDPRequest(buf[:n])
 		if err != nil {
 			continue
 		}
 		go relayUDP(udpConn, clientAddr, target, payload)
+	}
+}
+
+func (s *SOCKS5Server) allowConn(conn net.Conn) bool {
+	host, _, err := net.SplitHostPort(conn.RemoteAddr().String())
+	if err != nil {
+		return false
+	}
+	return s.allowIP(net.ParseIP(host))
+}
+
+func (s *SOCKS5Server) allowIP(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+	if len(s.allowedSourceNets) == 0 {
+		return true
+	}
+	for _, n := range s.allowedSourceNets {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *SOCKS5Server) udpListenAddr() *net.UDPAddr {
+	host, _, err := net.SplitHostPort(s.addr)
+	if err != nil || host == "" {
+		return &net.UDPAddr{IP: net.IPv4zero, Port: 0}
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || ip.IsUnspecified() {
+		return &net.UDPAddr{IP: net.IPv4zero, Port: 0}
+	}
+	return &net.UDPAddr{IP: ip, Port: 0}
+}
+
+func parseCIDRs(cidrs []string) []*net.IPNet {
+	nets := make([]*net.IPNet, 0, len(cidrs))
+	for _, cidr := range cidrs {
+		_, n, err := net.ParseCIDR(cidr)
+		if err == nil {
+			nets = append(nets, n)
+		}
+	}
+	return nets
+}
+
+func cidrContains(cidr string, ip net.IP) bool {
+	_, n, err := net.ParseCIDR(cidr)
+	return err == nil && n.Contains(ip)
+}
+
+func privateIPv4CIDR(ip net.IP) string {
+	switch {
+	case cidrContains("10.0.0.0/8", ip):
+		return "10.0.0.0/8"
+	case cidrContains("172.16.0.0/12", ip):
+		return "172.16.0.0/12"
+	case cidrContains("192.168.0.0/16", ip):
+		return "192.168.0.0/16"
+	default:
+		return ip.String() + "/32"
 	}
 }
 
