@@ -40,11 +40,11 @@
     "applying": "Wird angewendet…",
     "enable": "Erforderliche Berechtigungen aktivieren",
     "modalTitle": "Erforderliche Berechtigungen aktivieren",
-    "modalSubtitle": "MidoriVPN nimmt die folgenden Systemänderungen vor.\nAlle Änderungen werden beim Schließen der App automatisch rückgängig gemacht.",
+    "modalSubtitle": "MidoriVPN nimmt die folgenden Systemänderungen vor.\nDu kannst Berechtigungen in den Einstellungen oder beim vollständigen Beenden widerrufen.",
     "caps": {
       "title": "Agent-Fähigkeiten cap_net_admin, cap_net_raw, cap_dac_override, cap_linux_immutable",
       "desc": "Ermöglicht das Erstellen von WireGuard-Schnittstellen, die Verwaltung von Routen, das Schreiben von /etc/resolv.conf und den Schutz vor Überschreibung.",
-      "revert": "Wird bei Schließen mit setcap -r entfernt."
+      "revert": "Wird mit setcap -r entfernt, wenn Berechtigungen widerrufen werden."
     },
     "firewall": {
       "title": "Firewall-Regeln (firewalld / ufw / nftables)",

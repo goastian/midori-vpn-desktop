@@ -15,8 +15,8 @@ Cliente de escritorio para la red privada **MidoriVPN** (mesh + VPN), construido
 
 ## Estado
 
-- ✅ **Phase 1** — Mesh + login OAuth con seguridad completa para Linux.
-- 🚧 **Phase 2** — Full-Tunnel VPN (próximamente).
+- ✅ **Release candidate** — Login OAuth, VPN WireGuard, mesh y full-tunnel con hardening Linux.
+- 🔒 **Pre-release hardening** — CI/CD, empaquetado y permisos se validan antes de publicar.
 
 ## Estructura del repositorio
 
@@ -95,7 +95,7 @@ npm run tauri:dev
 
 - Abre la ventana con Hot Module Replacement del frontend.
 - El agente Go se lanza automáticamente.
-- En Linux, la primera vez pedirá contraseña vía `pkexec` para hacer `setcap cap_net_admin,cap_net_raw=ep` sobre el binario; tras eso no se vuelve a pedir.
+- En Linux, las capacidades de red se conceden solo desde el modal de permisos de la app. El paquete no aplica `setcap` automáticamente.
 
 ### 4. Validar el frontend (typecheck + lint + tests + build)
 
@@ -130,14 +130,14 @@ sudo dpkg -i src-tauri/target/release/bundle/deb/MidoriVPN_*_amd64.deb
 # Fedora / RHEL / openSUSE / SUSE
 sudo rpm -i src-tauri/target/release/bundle/rpm/MidoriVPN-*.x86_64.rpm
 
-# Lánzalo
-midorivpn
+# Lánzalo desde el menú de aplicaciones o con el binario instalado
+midorivpn-desktop
 ```
 
 El script `postinst` hace, de forma idempotente y *best-effort*:
 
 1. Copiar el agente a `/usr/local/bin/midorivpn-agent`.
-2. Aplicar `setcap cap_net_admin,cap_net_raw=ep` (ya no necesita pkexec en cada arranque).
+2. Quitar cualquier file capability heredada para que el usuario conceda permisos explícitamente desde la app.
 3. Recargar polkit para que la nueva acción esté disponible.
 4. Cargar el perfil AppArmor en modo *complain* (revisa `aa-status` y pasa a *enforce* cuando no haya denegaciones).
 5. Compilar e instalar el módulo SELinux (`midorivpn`) si `semodule` está presente.
@@ -145,12 +145,13 @@ El script `postinst` hace, de forma idempotente y *best-effort*:
 ## Verificar que arrancó bien (Linux)
 
 ```bash
-# El agente escucha en localhost:7071
-curl -s http://127.0.0.1:7071/status | jq
+# El agente escucha en localhost:7071, pero /status exige token interno.
+# Una llamada manual sin token debe fallar con 403:
+curl -i http://127.0.0.1:7071/status
 
-# Las file capabilities deberían estar puestas
+# Las file capabilities deben estar vacías después de instalar el paquete.
 getcap /usr/local/bin/midorivpn-agent
-# → /usr/local/bin/midorivpn-agent cap_net_admin,cap_net_raw=ep
+# → sin salida
 
 # El perfil AppArmor cargado
 sudo aa-status | grep midorivpn
@@ -177,7 +178,7 @@ Los archivos viven en `~/.config/midorivpn/` (modo `0700`):
 | Archivo          | Contenido                                     |
 |------------------|-----------------------------------------------|
 | `tokens.enc`     | Tokens OAuth cifrados con AES-GCM (256-bit)   |
-| `.keystore`      | Clave de cifrado aleatoria de 32 bytes        |
+| `.keystore`      | Fallback degradado si Secret Service no está disponible |
 | `settings.json`  | Preferencias (mesh auto-start, autostart)     |
 
 ## Desinstalar
@@ -196,7 +197,8 @@ El script `prerm` limpia: file capabilities, perfil AppArmor, módulo SELinux y 
 
 | Síntoma | Causa probable | Solución |
 |---|---|---|
-| Agente pide pkexec en cada arranque | `setcap` no se aplicó | `sudo setcap cap_net_admin,cap_net_raw=ep /usr/local/bin/midorivpn-agent` |
+| VPN/Mesh bloqueados por permisos | Aún no se concedieron capabilities | Abre MidoriVPN y usa el modal de permisos. Como último recurso: `sudo setcap cap_net_admin,cap_net_raw,cap_dac_override,cap_linux_immutable=ep /usr/local/bin/midorivpn-agent` |
+| `/status` devuelve 403 | El RPC local está protegido por token interno | Es esperado fuera de la app; valida salud desde la UI o logs del agente |
 | `aa-status` muestra denegaciones | Perfil AppArmor estricto | Mantén `aa-complain`, recopila logs con `journalctl -k`, abre un issue |
 | SELinux bloquea `/dev/net/tun` | Boolean apagado | `sudo setsebool -P midorivpn_use_tun on` |
 | Mesh no levanta tras login | Firewall bloqueando wg0 | Revisa `firewall-cmd --list-interfaces` o `sudo ufw status` |
@@ -205,9 +207,10 @@ El script `prerm` limpia: file capabilities, perfil AppArmor, módulo SELinux y 
 
 1. Haz un fork del repositorio y crea una rama descriptiva.
 2. Ejecuta `npm run check` para verificar typecheck, lint, tests y build del frontend.
-3. Ejecuta `cargo fmt --check` y `cargo clippy --no-deps -- -D warnings` en `src-tauri/`.
-4. Ejecuta `go vet ./...` y `go test -race ./...` en `agent/`.
-5. Abre un Pull Request describiendo los cambios.
+3. Ejecuta `npm run security:tools` una vez para instalar scanners fijados.
+4. Ejecuta `cargo fmt --check`, `cargo clippy --no-deps -- -D warnings` y `bash ../scripts/cargo-audit.sh` en `src-tauri/`.
+5. Ejecuta `go vet ./...`, `govulncheck ./...` y `go test -race ./...` en `agent/`.
+6. Abre un Pull Request describiendo los cambios.
 
 ## Licencia
 

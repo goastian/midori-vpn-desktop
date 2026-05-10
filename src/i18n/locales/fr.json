@@ -40,11 +40,11 @@
     "applying": "Application…",
     "enable": "Activer les autorisations requises",
     "modalTitle": "Activer les autorisations requises",
-    "modalSubtitle": "MidoriVPN effectuera les modifications système suivantes.\nToutes les modifications sont automatiquement annulées à la fermeture de l'application.",
+    "modalSubtitle": "MidoriVPN effectuera les modifications système suivantes.\nVous pouvez révoquer les autorisations depuis les réglages ou à la fermeture complète.",
     "caps": {
       "title": "Capacités de l'agent cap_net_admin, cap_net_raw, cap_dac_override, cap_linux_immutable",
       "desc": "Permet de créer des interfaces WireGuard, gérer les routes, écrire /etc/resolv.conf et le protéger contre l'écrasement.",
-      "revert": "Supprimé avec setcap -r à la fermeture."
+      "revert": "Supprimé avec setcap -r lorsque les autorisations sont révoquées."
     },
     "firewall": {
       "title": "Règles de pare-feu (firewalld / ufw / nftables)",
