@@ -223,7 +223,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p package-status
-          status="${{ steps.build_tauri.outcome }}"
+          status='${{ steps.build_tauri.outcome }}'
 
           jq -n \
             --arg label "${{ matrix.label }}" \
