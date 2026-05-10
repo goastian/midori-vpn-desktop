@@ -3,7 +3,7 @@ module github.com/goastian/midorivpn-agent
 go 1.26.3
 
 require (
-	github.com/godbus/dbus/v5 v5.1.0
+	github.com/godbus/dbus/v5 v5.2.2
 	github.com/lestrrat-go/jwx/v2 v2.1.6
 	golang.org/x/sys v0.43.0
 	golang.zx2c4.com/wireguard v0.0.0-20250521234502-f333402bd9cb
