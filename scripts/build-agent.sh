@@ -38,6 +38,14 @@ build_agent() {
   )
 }
 
+copy_if_distinct() {
+  local src=$1 dst=$2
+  if [ -e "$dst" ] && [ "$src" -ef "$dst" ]; then
+    return 0
+  fi
+  cp "$src" "$dst"
+}
+
 host_target() {
   local os arch out
   os="$(go env GOOS)"
@@ -50,7 +58,7 @@ host_target() {
 
   build_agent "$os" "$arch" "$out"
   if [ "$os" = "windows" ]; then
-    cp "$OUT_DIR/agent.exe" "$OUT_DIR/agent"
+    copy_if_distinct "$OUT_DIR/agent.exe" "$OUT_DIR/agent"
   fi
 }
 
@@ -74,7 +82,7 @@ case "$TARGET" in
     ;;
   windows-amd64)
     build_agent windows amd64 "$OUT_DIR/agent.exe"
-    cp "$OUT_DIR/agent.exe" "$OUT_DIR/agent"
+    copy_if_distinct "$OUT_DIR/agent.exe" "$OUT_DIR/agent"
     ;;
   all)
     build_agent linux amd64 "$OUT_DIR/agent"

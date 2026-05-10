@@ -102,7 +102,6 @@ jobs:
             os: linux
             rust-target: x86_64-unknown-linux-gnu
             agent-target: linux-amd64
-            args: --target x86_64-unknown-linux-gnu
             asset-platform: linux
             asset-arch: x64
 
@@ -111,7 +110,6 @@ jobs:
             os: macos
             rust-target: aarch64-apple-darwin
             agent-target: darwin-arm64
-            args: --target aarch64-apple-darwin
             asset-platform: macos
             asset-arch: arm64
 
@@ -120,7 +118,6 @@ jobs:
             os: macos
             rust-target: x86_64-apple-darwin
             agent-target: darwin-amd64
-            args: --target x86_64-apple-darwin
             asset-platform: macos
             asset-arch: x64
 
@@ -129,7 +126,6 @@ jobs:
             os: windows
             rust-target: x86_64-pc-windows-msvc
             agent-target: windows-amd64
-            args: --target x86_64-pc-windows-msvc --config src-tauri/tauri.windows.conf.json
             asset-platform: windows
             asset-arch: x64
 
@@ -220,7 +216,6 @@ jobs:
           releaseAssetNamePattern: MidoriVPN-${{ matrix.asset-platform }}-${{ matrix.asset-arch }}-[version][ext]
           uploadWorkflowArtifacts: true
           workflowArtifactNamePattern: MidoriVPN-${{ matrix.asset-platform }}-${{ matrix.asset-arch }}-[bundle]
-          args: ${{ matrix.args }}
 
   checksums:
     name: Generate Checksums
