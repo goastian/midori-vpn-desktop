@@ -223,9 +223,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p package-status
-          status="failed"
-          if [ "${{ steps.build_tauri.outcome }}" = "success" ]; then
-            status="success"
+          status="${{ steps.build_tauri.outcome }}"
+          if [ -z "$status" ]; then
+            status="unknown"
           fi
 
           jq -n \
@@ -308,8 +308,8 @@ jobs:
             fi
 
             if [ "$(jq '.failed | length' package-summary.json)" -gt 0 ]; then
-              echo "### Packages In Progress"
-              jq -r '.failed[] | "- \(.label) (in progress)"' package-summary.json
+              echo "### Packages Not Yet Available"
+              jq -r '.failed[] | "- \(.label) (temporarily unavailable)"' package-summary.json
               echo
               echo "_This draft release includes the available packages while these platforms finish building._"
             fi
