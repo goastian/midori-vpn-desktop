@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+env:
+  CARGO_AUDIT_VERSION: "0.22.1"
+  GOVULNCHECK_VERSION: "v1.3.0"
+
 concurrency:
   group: desktop-release-${{ github.ref }}
   cancel-in-progress: false
@@ -61,7 +65,7 @@ jobs:
         working-directory: src-tauri
 
       - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
+        run: bash scripts/install-security-tools.sh cargo-audit
 
       - run: bash scripts/cargo-audit.sh
 
@@ -76,10 +80,9 @@ jobs:
         working-directory: agent
 
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+        run: bash scripts/install-security-tools.sh govulncheck
 
-      - run: $(go env GOPATH)/bin/govulncheck ./...
-        working-directory: agent
+      - run: bash scripts/govulncheck.sh
 
       - run: go test -race ./...
         working-directory: agent
