@@ -224,9 +224,6 @@ jobs:
         run: |
           mkdir -p package-status
           status="${{ steps.build_tauri.outcome }}"
-          if [ -z "$status" ]; then
-            status="unknown"
-          fi
 
           jq -n \
             --arg label "${{ matrix.label }}" \
@@ -308,10 +305,10 @@ jobs:
             fi
 
             if [ "$(jq '.failed | length' package-summary.json)" -gt 0 ]; then
-              echo "### Packages Not Yet Available"
-              jq -r '.failed[] | "- \(.label) (temporarily unavailable)"' package-summary.json
+              echo "### Packages Unavailable"
+              jq -r '.failed[] | "- \(.label) (unavailable)"' package-summary.json
               echo
-              echo "_This draft release includes the available packages while these platforms finish building._"
+              echo "_Some platform builds were not included in this draft release._"
             fi
           } > release-body.md
 
