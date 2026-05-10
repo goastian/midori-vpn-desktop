@@ -267,7 +267,7 @@ jobs:
         shell: bash
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-          FAILURE_MESSAGE: en construcción
+          IN_PROGRESS_MESSAGE: en construcción
         run: |
           shopt -s nullglob
           files=(package-status/*.json)
@@ -312,7 +312,7 @@ jobs:
 
             if [ "$(jq '.failed | length' package-summary.json)" -gt 0 ]; then
               echo "### Paquetes en construcción"
-              jq -r --arg msg "$FAILURE_MESSAGE" '.failed[] | "- \(.label) (\($msg))"' package-summary.json
+              jq -r --arg msg "$IN_PROGRESS_MESSAGE" '.failed[] | "- \(.label) (\($msg))"' package-summary.json
               echo
               echo "_El release se publica con los paquetes listos mientras estas plataformas terminan de prepararse._"
             fi
