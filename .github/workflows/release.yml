@@ -271,9 +271,9 @@ jobs:
         run: |
           shopt -s nullglob
           files=(package-status/*.json)
+          echo "has-successful-packages=false" >> "$GITHUB_OUTPUT"
 
           if [ "${#files[@]}" -eq 0 ]; then
-            echo "has-successful-packages=false" >> "$GITHUB_OUTPUT"
             cat > release-body.md <<EOF
           ## MidoriVPN Desktop ${RELEASE_TAG}
 
@@ -294,8 +294,6 @@ jobs:
 
           if [ "$(jq '.successful | length' package-summary.json)" -gt 0 ]; then
             echo "has-successful-packages=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has-successful-packages=false" >> "$GITHUB_OUTPUT"
           fi
 
           {
@@ -314,7 +312,7 @@ jobs:
               echo "### Packages In Progress"
               jq -r --arg msg "$IN_PROGRESS_MESSAGE" '.failed[] | "- \(.label) (\($msg))"' package-summary.json
               echo
-              echo "_The release is published with available packages while these platforms finish building._"
+              echo "_This draft release includes the available packages while these platforms finish building._"
             fi
           } > release-body.md
 
