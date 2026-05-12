@@ -379,7 +379,7 @@ jobs:
 
       - name: Upload package status
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: package-status-${{ matrix.asset-platform }}-${{ matrix.asset-arch }}
           path: package-status/${{ matrix.asset-platform }}-${{ matrix.asset-arch }}.json
@@ -542,7 +542,7 @@ jobs:
           cat SHA256SUMS.txt
 
       - name: Upload checksums as workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SHA256SUMS
           path: release-artifacts/SHA256SUMS.txt
@@ -610,7 +610,7 @@ jobs:
             --detach-sign --armor SHA256SUMS.txt
 
       - name: Upload signature as workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SHA256SUMS-signature
           path: SHA256SUMS.txt.asc
@@ -681,7 +681,7 @@ jobs:
             --output cyclonedx-json=midorivpn-desktop-artifacts-sbom.cdx.json
 
       - name: Upload SBOMs as workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom
           path: |
