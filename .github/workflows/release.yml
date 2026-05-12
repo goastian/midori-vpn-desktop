@@ -47,7 +47,12 @@ permissions:
 env:
   CARGO_AUDIT_VERSION: "0.22.1"
   GOVULNCHECK_VERSION: "v1.3.0"
-  RUST_TOOLCHAIN: "1.83.0"
+  # Note on Rust toolchain: we intentionally track `stable` here instead of a
+  # hard pin because cargo-audit 0.22.x requires Rust >= 1.85 and the
+  # `Cargo.lock` resolved deps frequently depend on the current stable. If
+  # you need reproducibility, add a `rust-toolchain.toml` in `src-tauri/`
+  # rather than pinning the action ref - dtolnay/rust-toolchain will honor
+  # the toolchain file automatically.
 
 concurrency:
   group: desktop-release-${{ github.ref }}
@@ -98,7 +103,7 @@ jobs:
             libwebkit2gtk-4.1-dev libssl-dev libgtk-3-dev \
             libayatana-appindicator3-dev librsvg2-dev policykit-1
 
-      - uses: dtolnay/rust-toolchain@1.83.0
+      - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy,rustfmt
 
@@ -220,7 +225,7 @@ jobs:
           go-version-file: agent/go.mod
           cache-dependency-path: agent/go.sum
 
-      - uses: dtolnay/rust-toolchain@1.83.0
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.rust-target }}
 
