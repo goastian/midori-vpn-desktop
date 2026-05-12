@@ -322,15 +322,15 @@ jobs:
           mkdir -p package-status
           status='${{ steps.build_tauri.outcome }}'
 
-          # NOTE: keys must be quoted because `label` is a reserved keyword in
-          # jq >= 1.7 (used for `label $out | ... | break $out`). Without the
-          # quotes jq aborts with "unexpected label, expecting IDENT".
+          # `label` is a reserved keyword in jq >= 1.7 (label-break feature).
+          # Using it as both --arg name and inside the filter causes a parse
+          # error even with quoted keys. We use `name` instead.
           jq -n \
-            --arg label "${{ matrix.label }}" \
+            --arg name "${{ matrix.label }}" \
             --arg platform "${{ matrix.asset-platform }}" \
             --arg arch "${{ matrix.asset-arch }}" \
             --arg status "$status" \
-            '{"label": $label, "platform": $platform, "arch": $arch, "status": $status}' \
+            '{"name": $name, "platform": $platform, "arch": $arch, "status": $status}' \
             > "package-status/${{ matrix.asset-platform }}-${{ matrix.asset-arch }}.json"
 
       - name: Summarize platform result
@@ -402,8 +402,8 @@ jobs:
 
           jq -s '
             {
-              successful: map(select(.status == "success")) | sort_by(.label),
-              failed: map(select(.status != "success")) | sort_by(.label)
+              successful: map(select(.status == "success")) | sort_by(.name),
+              failed: map(select(.status != "success")) | sort_by(.name)
             }
           ' "${files[@]}" > package-summary.json
 
@@ -421,13 +421,13 @@ jobs:
 
             if [ "$(jq '.successful | length' package-summary.json)" -gt 0 ]; then
               echo "### Available Packages"
-              jq -r '.successful[] | "- \(.label)"' package-summary.json
+              jq -r '.successful[] | "- \(.name)"' package-summary.json
               echo
             fi
 
             if [ "$(jq '.failed | length' package-summary.json)" -gt 0 ]; then
               echo "### Packages Unavailable"
-              jq -r '.failed[] | "- \(.label) (unavailable)"' package-summary.json
+              jq -r '.failed[] | "- \(.name) (unavailable)"' package-summary.json
               echo
               echo "_Some platform builds were not included in this draft release._"
             fi
