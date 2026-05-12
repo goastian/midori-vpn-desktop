@@ -1,8 +1,9 @@
 # MidoriVPN Desktop release pipeline.
 #
-# Triggered on push of any tag matching `v*`. Produces a draft GitHub Release
-# with one bundle per supported platform plus checksums, SBOMs, and (optionally)
-# GPG-signed checksums.
+# Triggered on push of any tag matching `v*`. Creates a draft GitHub Release
+# during assembly, uploads one bundle per supported platform plus checksums,
+# SBOMs, and (optionally) GPG-signed checksums, then publishes automatically
+# after release asset validation passes.
 #
 # Fault-isolation policy
 # ----------------------
@@ -12,9 +13,9 @@
 #   `package-status-*` artifact reporting `success` or `failure` per platform.
 # * The `release-status` job aggregates those statuses and rewrites the draft
 #   release body listing available and unavailable platforms.
-# * Downstream jobs (`checksums`, `sbom`, `sign`) only run when at least one
-#   platform succeeded (`has-successful-packages == 'true'`), so a single
-#   failing platform never blocks publishing the others.
+# * Downstream jobs (`checksums`, `sbom`, `sign`, `publish-release`) only run
+#   when at least one platform succeeded (`has-successful-packages == 'true'`),
+#   so a single failing platform never blocks publishing the others.
 #
 # Required GitHub configuration
 # -----------------------------
@@ -32,7 +33,7 @@
 # -----------------------------------
 # Use the GitHub Actions UI: "Re-run failed jobs" on this workflow. Successful
 # matrix entries are not rebuilt; only the failed one re-executes and uploads
-# its asset to the existing draft release.
+# its asset to the existing draft release before final validation publishes it.
 
 name: Desktop Release
 
@@ -675,3 +676,80 @@ jobs:
             midorivpn-desktop-sbom.cdx.json
             midorivpn-desktop-artifacts-sbom.cdx.json
           retention-days: 180
+
+  publish-release:
+    name: Publish Release
+    needs: [release-status, checksums, sbom, sign]
+    if: >-
+      ${{
+        always() &&
+        needs.release-status.outputs.has-successful-packages == 'true' &&
+        needs.checksums.result == 'success' &&
+        needs.sbom.result == 'success' &&
+        (needs.sign.result == 'success' || needs.sign.result == 'skipped')
+      }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Validate draft release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          GPG_SIGN_ENABLED: ${{ vars.GPG_SIGN_ENABLED }}
+        run: |
+          gh release view "${RELEASE_TAG}" \
+            --repo "${{ github.repository }}" \
+            --json isDraft,isPrerelease,assets \
+            > release.json
+
+          is_draft="$(jq -r '.isDraft' release.json)"
+          if [ "$is_draft" != "true" ]; then
+            echo "Release ${RELEASE_TAG} is not a draft; refusing to publish an unexpected release state." >&2
+            exit 1
+          fi
+
+          installer_count="$(jq '
+            [.assets[].name | select(test("\\.(deb|rpm|AppImage|dmg|msi|exe|tar\\.gz|zip)$"))]
+            | length
+          ' release.json)"
+          if [ "$installer_count" -eq 0 ]; then
+            echo "Release ${RELEASE_TAG} has no installer assets." >&2
+            exit 1
+          fi
+
+          required_assets=(
+            "SHA256SUMS.txt"
+            "midorivpn-desktop-sbom.cdx.json"
+            "midorivpn-desktop-artifacts-sbom.cdx.json"
+          )
+
+          if [ "$GPG_SIGN_ENABLED" = "true" ]; then
+            required_assets+=("SHA256SUMS.txt.asc")
+          fi
+
+          for asset in "${required_assets[@]}"; do
+            if ! jq -e --arg asset "$asset" 'any(.assets[].name; . == $asset)' release.json >/dev/null; then
+              echo "Release ${RELEASE_TAG} is missing required asset: ${asset}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Publish draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          publish_args=(--draft=false)
+
+          if [[ "$RELEASE_TAG" == *"-rc"* || "$RELEASE_TAG" == *"-beta"* || "$RELEASE_TAG" == *"-alpha"* ]]; then
+            publish_args+=(--prerelease --latest=false)
+          else
+            publish_args+=(--latest)
+          fi
+
+          gh release edit "${RELEASE_TAG}" \
+            --repo "${{ github.repository }}" \
+            "${publish_args[@]}"
