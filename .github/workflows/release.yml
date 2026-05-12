@@ -248,6 +248,20 @@ jobs:
         shell: bash
         run: bash scripts/build-agent.sh ${{ matrix.agent-target }}
 
+      - name: Ensure Windows agent alias
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $exe = "agent/target/release/agent.exe"
+          $alias = "agent/target/release/agent"
+
+          if (!(Test-Path $exe)) {
+            throw "Missing expected Windows agent binary: $exe"
+          }
+
+          Copy-Item -Force $exe $alias
+          Write-Host "Created Windows agent alias: $alias"
+
       - name: Inspect built agent artifacts
         shell: bash
         run: |
