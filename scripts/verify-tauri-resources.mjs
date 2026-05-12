@@ -40,13 +40,25 @@ function checkResourceMap(configPath, configDir, resources, label, options = {})
   }
 }
 
+let effectiveBundleResources = null
+
 for (const configFile of configFiles) {
   const { dir, json } = readJson(configFile)
   checkResourceMap(configFile, dir, json.bundle?.icon, 'bundle.icon')
   if (json.app?.trayIcon?.iconPath) {
     checkPath(configFile, dir, json.app.trayIcon.iconPath, 'app.trayIcon.iconPath')
   }
-  checkResourceMap(configFile, dir, json.bundle?.resources, 'bundle.resources')
+
+  // Tauri merges config files in order, and a later `bundle.resources` object
+  // overrides an earlier one for platform-specific builds. Validate only the
+  // effective (last-defined) resources map to avoid false positives.
+  if (json.bundle?.resources !== undefined) {
+    effectiveBundleResources = {
+      configFile,
+      dir,
+      resources: json.bundle.resources,
+    }
+  }
 
   for (const [platform, platformConfig] of Object.entries(json.bundle ?? {})) {
     if (!platformConfig || typeof platformConfig !== 'object') continue
@@ -61,6 +73,15 @@ for (const configFile of configFiles) {
       )
     }
   }
+}
+
+if (effectiveBundleResources) {
+  checkResourceMap(
+    effectiveBundleResources.configFile,
+    effectiveBundleResources.dir,
+    effectiveBundleResources.resources,
+    'bundle.resources',
+  )
 }
 
 if (missing.length) {
