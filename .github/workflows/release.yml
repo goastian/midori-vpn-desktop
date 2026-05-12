@@ -1,3 +1,39 @@
+# MidoriVPN Desktop release pipeline.
+#
+# Triggered on push of any tag matching `v*`. Produces a draft GitHub Release
+# with one bundle per supported platform plus checksums, SBOMs, and (optionally)
+# GPG-signed checksums.
+#
+# Fault-isolation policy
+# ----------------------
+# * Each platform builds in its own matrix entry with `fail-fast: false`.
+# * The `Build Tauri packages` step is allowed to fail without aborting the
+#   matrix entry: subsequent steps run with `if: always()` so we always emit a
+#   `package-status-*` artifact reporting `success` or `failure` per platform.
+# * The `release-status` job aggregates those statuses and rewrites the draft
+#   release body listing available and unavailable platforms.
+# * Downstream jobs (`checksums`, `sbom`, `sign`) only run when at least one
+#   platform succeeded (`has-successful-packages == 'true'`), so a single
+#   failing platform never blocks publishing the others.
+#
+# Required GitHub configuration
+# -----------------------------
+# Repository (or organization) variables:
+#   APPLE_SIGNING_ENABLED   set to "true" to import the Apple signing cert
+#   GPG_SIGN_ENABLED        set to "true" to GPG-sign SHA256SUMS.txt
+#
+# Repository (or organization) secrets:
+#   APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, KEYCHAIN_PASSWORD
+#   APPLE_ID, APPLE_ID_PASSWORD, APPLE_TEAM_ID                 (notarization)
+#   TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD (updater)
+#   GPG_PRIVATE_KEY, GPG_PASSPHRASE                            (checksum sig)
+#
+# Re-running a single failed platform
+# -----------------------------------
+# Use the GitHub Actions UI: "Re-run failed jobs" on this workflow. Successful
+# matrix entries are not rebuilt; only the failed one re-executes and uploads
+# its asset to the existing draft release.
+
 name: Desktop Release
 
 on:
@@ -11,14 +47,35 @@ permissions:
 env:
   CARGO_AUDIT_VERSION: "0.22.1"
   GOVULNCHECK_VERSION: "v1.3.0"
+  RUST_TOOLCHAIN: "1.83.0"
 
 concurrency:
   group: desktop-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  quality-gate:
-    name: Quality Gate
+  # ---------------------------------------------------------------------------
+  # Quality gates - split into three parallel jobs for faster feedback. All
+  # three must pass before any platform is packaged.
+  # ---------------------------------------------------------------------------
+  frontend-gate:
+    name: Quality Gate - Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci
+      - run: npm run check
+      - run: npm audit --audit-level=moderate
+
+  rust-gate:
+    name: Quality Gate - Rust
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,7 +98,7 @@ jobs:
             libwebkit2gtk-4.1-dev libssl-dev libgtk-3-dev \
             libayatana-appindicator3-dev librsvg2-dev policykit-1
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.83.0
         with:
           components: clippy,rustfmt
 
@@ -50,8 +107,6 @@ jobs:
           workspaces: src-tauri -> target
 
       - run: npm ci
-      - run: npm run check
-      - run: npm audit --audit-level=moderate
 
       - run: cargo fmt --check
         working-directory: src-tauri
@@ -72,27 +127,41 @@ jobs:
       - run: cargo test
         working-directory: src-tauri
 
+  agent-gate:
+    name: Quality Gate - Go Agent
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+
       - name: Check gofmt
         run: test -z "$(gofmt -l .)"
-        working-directory: agent
 
       - run: go vet ./...
-        working-directory: agent
 
       - name: Install govulncheck
-        run: bash scripts/install-security-tools.sh govulncheck
+        run: bash ../scripts/install-security-tools.sh govulncheck
 
-      - run: bash scripts/govulncheck.sh
+      - run: bash ../scripts/govulncheck.sh
 
       - run: go test -race ./...
-        working-directory: agent
 
   package:
-    name: Package
-    needs: quality-gate
+    name: Package - ${{ matrix.label }}
+    needs: [frontend-gate, rust-gate, agent-gate]
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: write
+    # fail-fast: false ensures one platform failing does not cancel the others.
+    # Combined with `if: always()` on status/upload steps below, this guarantees
+    # every platform is reported and successful bundles are still published.
     strategy:
       fail-fast: false
       matrix:
@@ -104,6 +173,14 @@ jobs:
             agent-target: linux-amd64
             asset-platform: linux
             asset-arch: x64
+
+          - label: Linux aarch64
+            runner: ubuntu-22.04-arm
+            os: linux
+            rust-target: aarch64-unknown-linux-gnu
+            agent-target: linux-arm64
+            asset-platform: linux
+            asset-arch: arm64
 
           - label: macOS Apple Silicon
             runner: macos-15
@@ -143,7 +220,7 @@ jobs:
           go-version-file: agent/go.mod
           cache-dependency-path: agent/go.sum
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.83.0
         with:
           targets: ${{ matrix.rust-target }}
 
@@ -177,10 +254,16 @@ jobs:
 
       - name: Make agent executable
         if: matrix.os != 'windows'
+        shell: bash
         run: chmod +x agent/target/release/agent*
 
+      # Import the Apple signing certificate only when explicitly enabled via
+      # the `APPLE_SIGNING_ENABLED` repository/organization variable. We cannot
+      # gate this step on `secrets.*` directly because secrets are not exposed
+      # to `if:` conditions. Setting the variable to `true` is the supported
+      # opt-in once the required secrets are configured.
       - name: Import macOS signing certificate
-        if: matrix.os == 'macos' && env.APPLE_CERTIFICATE != ''
+        if: matrix.os == 'macos' && vars.APPLE_SIGNING_ENABLED == 'true'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -193,9 +276,12 @@ jobs:
           security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
 
+      # tauri-action is pinned to a minor release line to avoid a flaky
+      # release run if upstream ships a breaking change. Bump deliberately.
       - name: Build Tauri packages
         id: build_tauri
-        uses: tauri-apps/tauri-action@v0
+        continue-on-error: true
+        uses: tauri-apps/tauri-action@v0.5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -232,6 +318,24 @@ jobs:
             --arg status "$status" \
             '{label: $label, platform: $platform, arch: $arch, status: $status}' \
             > "package-status/${{ matrix.asset-platform }}-${{ matrix.asset-arch }}.json"
+
+      - name: Summarize platform result
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          status='${{ steps.build_tauri.outcome }}'
+          {
+            echo "## ${{ matrix.label }} (${{ matrix.asset-platform }}/${{ matrix.asset-arch }})"
+            echo
+            echo "- Runner: \`${{ matrix.runner }}\`"
+            echo "- Rust target: \`${{ matrix.rust-target }}\`"
+            echo "- Agent target: \`${{ matrix.agent-target }}\`"
+            echo "- Tauri build outcome: **${status}**"
+            if [ "$status" != "success" ]; then
+              echo
+              echo "Tauri packaging failed. See the \`Build Tauri packages\` step log above for details. Other platforms continue independently."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload package status
         if: ${{ always() }}
@@ -368,9 +472,9 @@ jobs:
 
   sign:
     name: Sign Checksums
-    needs: sbom
+    needs: [release-status, sbom]
     runs-on: ubuntu-latest
-    if: ${{ vars.GPG_SIGN_ENABLED == 'true' }}
+    if: ${{ vars.GPG_SIGN_ENABLED == 'true' && needs.release-status.outputs.has-successful-packages == 'true' }}
     permissions:
       contents: write
     steps:
@@ -407,7 +511,8 @@ jobs:
 
   sbom:
     name: Generate SBOM
-    needs: checksums
+    needs: [release-status, checksums]
+    if: ${{ needs.release-status.outputs.has-successful-packages == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
