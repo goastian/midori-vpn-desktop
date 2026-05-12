@@ -22,8 +22,8 @@ Primera version publica de MidoriVPN Desktop.
 - macOS Intel x86_64: DMG y APP.
 - Windows x86_64: MSI y NSIS.
 
-### Release Assets
+### Release Verification
 
-- Checksums SHA-256 para los instaladores publicados.
-- SBOM de codigo fuente y SBOM de artefactos de release.
-- Firma GPG de checksums cuando `GPG_SIGN_ENABLED` esta configurado.
+- Checksums SHA-256 incluidos en la descripcion del release para copiar y pegar facilmente.
+- SBOM de codigo fuente y SBOM de artefactos conservados como artifacts internos del workflow.
+- Firma GPG de checksums conservada como artifact interno cuando `GPG_SIGN_ENABLED` esta configurado.

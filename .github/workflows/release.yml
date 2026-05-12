@@ -541,20 +541,42 @@ jobs:
           printf '%s\0' "${artifacts[@]}" | xargs -0 sha256sum > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
-      - name: Upload checksums to draft release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          draft: true
-          files: release-artifacts/SHA256SUMS.txt
-          fail_on_unmatched_files: true
-
       - name: Upload checksums as workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: SHA256SUMS
           path: release-artifacts/SHA256SUMS.txt
           retention-days: 90
+
+      - name: Add checksums to draft release body
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "${RELEASE_TAG}" \
+            --repo "${{ github.repository }}" \
+            --json body \
+            --jq '.body' \
+            > release-body.md
+
+          awk '
+            /^### SHA-256 Checksums$/ { exit }
+            { print }
+          ' release-body.md > release-body-with-checksums.md
+
+          {
+            echo
+            echo "### SHA-256 Checksums"
+            echo
+            echo '```text'
+            cat release-artifacts/SHA256SUMS.txt
+            echo '```'
+          } >> release-body-with-checksums.md
+
+          gh release edit "${RELEASE_TAG}" \
+            --repo "${{ github.repository }}" \
+            --notes-file release-body-with-checksums.md
 
   sign:
     name: Sign Checksums
@@ -587,13 +609,12 @@ jobs:
             --passphrase "$GPG_PASSPHRASE" \
             --detach-sign --armor SHA256SUMS.txt
 
-      - name: Upload signature to draft release
-        uses: softprops/action-gh-release@v2
+      - name: Upload signature as workflow artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ github.ref_name }}
-          draft: true
-          files: SHA256SUMS.txt.asc
-          fail_on_unmatched_files: true
+          name: SHA256SUMS-signature
+          path: SHA256SUMS.txt.asc
+          retention-days: 90
 
   sbom:
     name: Generate SBOM
@@ -659,16 +680,6 @@ jobs:
           "${{ steps.syft.outputs.cmd }}" dir:release-artifacts \
             --output cyclonedx-json=midorivpn-desktop-artifacts-sbom.cdx.json
 
-      - name: Upload SBOMs to draft release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          draft: true
-          files: |
-            midorivpn-desktop-sbom.cdx.json
-            midorivpn-desktop-artifacts-sbom.cdx.json
-          fail_on_unmatched_files: true
-
       - name: Upload SBOMs as workflow artifact
         uses: actions/upload-artifact@v4
         with:
@@ -698,7 +709,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ github.ref_name }}
-          GPG_SIGN_ENABLED: ${{ vars.GPG_SIGN_ENABLED }}
         run: |
           gh release view "${RELEASE_TAG}" \
             --repo "${{ github.repository }}" \
@@ -719,23 +729,6 @@ jobs:
             echo "Release ${RELEASE_TAG} has no installer assets." >&2
             exit 1
           fi
-
-          required_assets=(
-            "SHA256SUMS.txt"
-            "midorivpn-desktop-sbom.cdx.json"
-            "midorivpn-desktop-artifacts-sbom.cdx.json"
-          )
-
-          if [ "$GPG_SIGN_ENABLED" = "true" ]; then
-            required_assets+=("SHA256SUMS.txt.asc")
-          fi
-
-          for asset in "${required_assets[@]}"; do
-            if ! jq -e --arg asset "$asset" 'any(.assets[].name; . == $asset)' release.json >/dev/null; then
-              echo "Release ${RELEASE_TAG} is missing required asset: ${asset}" >&2
-              exit 1
-            fi
-          done
 
       - name: Publish draft release
         shell: bash
