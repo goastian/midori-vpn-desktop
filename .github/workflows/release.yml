@@ -465,19 +465,24 @@ jobs:
       - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: MidoriVPN-*
           path: release-artifacts
           merge-multiple: true
 
       - name: Generate SHA-256 checksums
         shell: bash
         run: |
+          mkdir -p release-artifacts
           cd release-artifacts
+
+          echo "Downloaded artifacts tree:"
+          find . -maxdepth 3 -type f | sort || true
+
           mapfile -d '' artifacts < <(find . -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \
             -o -name "*.dmg" -o -name "*.msi" -o -name "*.exe" \
             -o -name "*.tar.gz" -o -name "*.zip" \) -print0 | sort -z)
           if [ "${#artifacts[@]}" -eq 0 ]; then
-            echo "No release installer artifacts were found" >&2
+            echo "No release installer artifacts were found after download-artifact." >&2
+            echo "Check that tauri-action uploaded workflow artifacts matching pattern MidoriVPN-*" >&2
             exit 1
           fi
           printf '%s\0' "${artifacts[@]}" | xargs -0 sha256sum > SHA256SUMS.txt
