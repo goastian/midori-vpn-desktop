@@ -248,6 +248,12 @@ jobs:
         shell: bash
         run: bash scripts/build-agent.sh ${{ matrix.agent-target }}
 
+      - name: Inspect built agent artifacts
+        shell: bash
+        run: |
+          echo "Contents of agent/target/release after build:"
+          ls -la agent/target/release || true
+
       - name: Verify Tauri resources
         shell: bash
         run: |
@@ -316,12 +322,15 @@ jobs:
           mkdir -p package-status
           status='${{ steps.build_tauri.outcome }}'
 
+          # NOTE: keys must be quoted because `label` is a reserved keyword in
+          # jq >= 1.7 (used for `label $out | ... | break $out`). Without the
+          # quotes jq aborts with "unexpected label, expecting IDENT".
           jq -n \
             --arg label "${{ matrix.label }}" \
             --arg platform "${{ matrix.asset-platform }}" \
             --arg arch "${{ matrix.asset-arch }}" \
             --arg status "$status" \
-            '{label: $label, platform: $platform, arch: $arch, status: $status}' \
+            '{"label": $label, "platform": $platform, "arch": $arch, "status": $status}' \
             > "package-status/${{ matrix.asset-platform }}-${{ matrix.asset-arch }}.json"
 
       - name: Summarize platform result

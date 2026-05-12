@@ -40,10 +40,25 @@ build_agent() {
 
 copy_if_distinct() {
   local src=$1 dst=$2
-  if [ -e "$dst" ] && [ "$src" -ef "$dst" ]; then
+
+  if [ ! -e "$src" ]; then
+    echo "copy_if_distinct: source missing: $src" >&2
+    return 1
+  fi
+
+  # When src and dst already resolve to the same inode `cp` would error out
+  # with "input and output are the same file". Skip in that case. On Windows
+  # Git Bash `-ef` may behave differently, so we guard with `2>/dev/null`.
+  if [ -e "$dst" ] && [ "$src" -ef "$dst" ] 2>/dev/null; then
+    echo "copy_if_distinct: $dst already mirrors $src; skipping copy"
     return 0
   fi
+
+  # Remove any pre-existing destination first to side-step Windows runners
+  # where `cp -f` over an in-use file silently no-ops.
+  rm -f "$dst"
   cp "$src" "$dst"
+  echo "copy_if_distinct: copied $src -> $dst"
 }
 
 host_target() {
@@ -70,7 +85,8 @@ case "$TARGET" in
     build_agent linux amd64 "$OUT_DIR/agent"
     ;;
   linux-arm64)
-    build_agent linux arm64 "$OUT_DIR/agent-linux-arm64"
+    build_agent linux arm64 "$OUT_DIR/agent"
+    cp "$OUT_DIR/agent" "$OUT_DIR/agent-linux-arm64"
     ;;
   darwin-arm64)
     build_agent darwin arm64 "$OUT_DIR/agent"
