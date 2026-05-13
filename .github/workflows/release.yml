@@ -337,7 +337,7 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
           releaseAssetNamePattern: MidoriVPN-Desktop-[version]-${{ matrix.asset-id }}[ext]
           uploadWorkflowArtifacts: true
-          workflowArtifactNamePattern: MidoriVPN-Desktop-${{ matrix.asset-id }}-[bundle]
+          workflowArtifactNamePattern: MidoriVPN-Desktop-[version]-${{ matrix.asset-id }}-[bundle]
 
       - name: Record package status
         if: ${{ always() }}
