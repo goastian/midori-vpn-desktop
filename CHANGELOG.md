@@ -2,6 +2,28 @@
 
 All notable MidoriVPN Desktop changes are documented here.
 
+## v1.0.1 - MidoriVPN Desktop 1.0.1
+
+Mini patch para corregir el arranque del AppImage en escritorios Linux donde WebKitGTK abortaba antes de pintar la ventana.
+
+### Fixes
+
+- AppImage fuerza un fallback grafico compatible para evitar abortos de WebKitGTK al crear el display EGL.
+
+### Packages
+
+- Linux x86_64: DEB, RPM y AppImage.
+- Linux arm64: DEB, RPM y AppImage.
+- macOS Apple Silicon arm64: DMG y APP.
+- macOS Intel x86_64: DMG y APP.
+- Windows x86_64: MSI y NSIS.
+
+### Release Verification
+
+- Checksums SHA-256 incluidos en la descripcion del release para copiar y pegar facilmente.
+- SBOM de codigo fuente y SBOM de artefactos conservados como artifacts internos del workflow.
+- Firma GPG de checksums conservada como artifact interno cuando `GPG_SIGN_ENABLED` esta configurado.
+
 ## v1.0.0 - MidoriVPN Desktop 1.0.0
 
 Primera version publica de MidoriVPN Desktop.
