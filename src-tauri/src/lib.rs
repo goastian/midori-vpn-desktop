@@ -13,6 +13,23 @@ use tauri::AppHandle;
 use tauri::Manager;
 use tauri_plugin_autostart::MacosLauncher;
 
+#[cfg(target_os = "linux")]
+fn configure_linux_appimage_graphics() {
+    if std::env::var_os("APPIMAGE").is_none() {
+        return;
+    }
+
+    // Some WebKitGTK/AppImage combinations abort before first paint while
+    // creating an EGL display. Disable the DMABuf renderer only for AppImage
+    // launches, and keep any explicit user override intact.
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn configure_linux_appimage_graphics() {}
+
 // ── Tauri commands ────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -83,6 +100,8 @@ async fn open_oauth_url(_app: AppHandle, url: String) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    configure_linux_appimage_graphics();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // When a second instance launches, focus the existing window.
