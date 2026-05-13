@@ -179,16 +179,16 @@ jobs:
             agent-target: linux-amd64
             asset-platform: linux
             asset-arch: x86_64
-            asset-id: Linux-x86_64
+            asset-id: linux-x86_64
 
-          - label: Linux aarch64
+          - label: Linux arm64
             runner: ubuntu-22.04-arm
             os: linux
             rust-target: aarch64-unknown-linux-gnu
             agent-target: linux-arm64
             asset-platform: linux
             asset-arch: arm64
-            asset-id: Linux-arm64
+            asset-id: linux-arm64
 
           - label: macOS Apple Silicon
             runner: macos-15
@@ -197,7 +197,7 @@ jobs:
             agent-target: darwin-arm64
             asset-platform: macos
             asset-arch: arm64
-            asset-id: macOS-Apple-Silicon-arm64
+            asset-id: macos-arm64
 
           - label: macOS Intel
             runner: macos-15-intel
@@ -206,7 +206,7 @@ jobs:
             agent-target: darwin-amd64
             asset-platform: macos
             asset-arch: x86_64
-            asset-id: macOS-Intel-x86_64
+            asset-id: macos-x86_64
 
           - label: Windows x86_64
             runner: windows-2025
@@ -215,7 +215,7 @@ jobs:
             agent-target: windows-amd64
             asset-platform: windows
             asset-arch: x86_64
-            asset-id: Windows-x86_64
+            asset-id: windows-x86_64
 
     steps:
       - uses: actions/checkout@v4
