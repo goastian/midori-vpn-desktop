@@ -45,6 +45,8 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "npm run build-agent:host && tauri build",
+    "appimage:build:local": "bash scripts/build-local-appimage.sh",
+    "appimage:run:local": "bash scripts/run-local-appimage.sh",
     "verify:tauri-resources": "node scripts/verify-tauri-resources.mjs",
     "security:tools": "bash scripts/install-security-tools.sh",
     "security:audit": "bash scripts/cargo-audit.sh && bash scripts/govulncheck.sh",
