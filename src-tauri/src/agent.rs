@@ -41,7 +41,17 @@ const AGENT_INSTALLED_PATH: &str = "/usr/local/bin/midorivpn-agent";
 fn agent_command_path(app: &AppHandle) -> io::Result<PathBuf> {
     #[cfg(target_os = "linux")]
     {
-        let _ = app;
+        if std::env::var_os("APPIMAGE").is_some() {
+            if let Ok(path) = app
+                .path()
+                .resolve("agent", tauri::path::BaseDirectory::Resource)
+            {
+                if path.exists() {
+                    return Ok(path);
+                }
+            }
+        }
+
         Ok(PathBuf::from(AGENT_INSTALLED_PATH))
     }
 
