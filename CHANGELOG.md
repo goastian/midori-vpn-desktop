@@ -2,13 +2,40 @@
 
 All notable MidoriVPN Desktop changes are documented here.
 
-## v1.0.1 - MidoriVPN Desktop 1.0.1
+## v1.0.2 - MidoriVPN Desktop 1.0.2
 
-Mini patch para corregir el arranque del AppImage en escritorios Linux donde WebKitGTK abortaba antes de pintar la ventana.
+Mini patch para corregir el AppImage en escritorios Linux donde `v1.0.1` seguia fallando en maquinas sin instalacion previa del agente.
 
 ### Fixes
 
-- AppImage fuerza un fallback grafico compatible para evitar abortos de WebKitGTK al crear el display EGL.
+- AppImage ahora resuelve el binario `agent` empaquetado en sus recursos en vez de asumir `/usr/local/bin/midorivpn-agent`.
+- Fallback grafico de AppImage aplicado desde el entrypoint principal antes de iniciar Tauri/WebKitGTK.
+- AppImage desactiva tambien el modo de composicion de WebKitGTK y fuerza backend X11 cuando no hay override del usuario.
+
+## v1.0.1 - MidoriVPN Desktop 1.0.1
+
+Mini patch para corregir el AppImage de Linux y pulir la identificacion de paquetes del release.
+
+### Fixes
+
+- AppImage configura un fallback grafico para WebKitGTK cuando se ejecuta desde entorno AppImage, evitando el aborto `EGL_BAD_PARAMETER` antes de pintar la ventana.
+
+### Build
+
+- Agregados comandos locales para compilar y probar el AppImage fuera del CI:
+  - `npm run appimage:build:local`
+  - `npm run appimage:run:local`
+- Version de la aplicacion actualizada a `1.0.1` en npm, Cargo y Tauri.
+
+### Release
+
+- Nombres de assets publicos normalizados con tokens ordenables y consistentes:
+  - `linux-x86_64`
+  - `linux-arm64`
+  - `macos-arm64`
+  - `macos-x86_64`
+  - `windows-x86_64`
+- Artifacts internos del workflow ahora incluyen la version en el nombre para facilitar auditoria.
 
 ### Packages
 
@@ -17,12 +44,6 @@ Mini patch para corregir el arranque del AppImage en escritorios Linux donde Web
 - macOS Apple Silicon arm64: DMG y APP.
 - macOS Intel x86_64: DMG y APP.
 - Windows x86_64: MSI y NSIS.
-
-### Release Verification
-
-- Checksums SHA-256 incluidos en la descripcion del release para copiar y pegar facilmente.
-- SBOM de codigo fuente y SBOM de artefactos conservados como artifacts internos del workflow.
-- Firma GPG de checksums conservada como artifact interno cuando `GPG_SIGN_ENABLED` esta configurado.
 
 ## v1.0.0 - MidoriVPN Desktop 1.0.0
 
@@ -43,9 +64,3 @@ Primera version publica de MidoriVPN Desktop.
 - macOS Apple Silicon arm64: DMG y APP.
 - macOS Intel x86_64: DMG y APP.
 - Windows x86_64: MSI y NSIS.
-
-### Release Verification
-
-- Checksums SHA-256 incluidos en la descripcion del release para copiar y pegar facilmente.
-- SBOM de codigo fuente y SBOM de artefactos conservados como artifacts internos del workflow.
-- Firma GPG de checksums conservada como artifact interno cuando `GPG_SIGN_ENABLED` esta configurado.
