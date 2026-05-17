@@ -20,7 +20,7 @@
     "@eslint/js": "10.0.1",
     "@tauri-apps/cli": "2.11.1",
     "@vitejs/plugin-vue": "^6.0.6",
-    "@vitest/coverage-v8": "4.1.5",
+    "@vitest/coverage-v8": "4.1.6",
     "@vue/test-utils": "^2.4.10",
     "eslint": "10.3.0",
     "eslint-plugin-vue": "10.9.1",
