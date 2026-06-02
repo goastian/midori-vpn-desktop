@@ -43,7 +43,8 @@ export const useMeshStore = defineStore('mesh', () => {
     // Reconcile state machine with authoritative backend state.
     if (s.active && meshState.value !== 'enabled') {
       meshState.value = 'enabled'
-    } else if (!s.active && (meshState.value === 'enabled' || meshState.value === 'enabling')) {
+    } else if (!s.active && meshState.value !== 'idle') {
+      // Covers 'enabled', 'enabling', 'disabling', and 'error' → reset to idle.
       meshState.value = 'idle'
     }
 

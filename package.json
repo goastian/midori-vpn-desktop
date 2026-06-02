@@ -25,6 +25,7 @@
     "eslint": "10.3.0",
     "eslint-plugin-vue": "10.9.1",
     "globals": "17.6.0",
+    "happy-dom": "^20.9.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "8.59.2",
     "vite": "8.0.11",
@@ -49,7 +50,8 @@
     "appimage:run:local": "bash scripts/run-local-appimage.sh",
     "verify:tauri-resources": "node scripts/verify-tauri-resources.mjs",
     "security:tools": "bash scripts/install-security-tools.sh",
-    "security:audit": "bash scripts/cargo-audit.sh && bash scripts/govulncheck.sh",
+    "security:audit": "bash scripts/cargo-audit.sh && bash scripts/govulncheck.sh && bash scripts/npm-audit.sh",
+    "security:audit:npm": "bash scripts/npm-audit.sh",
     "build-agent": "bash scripts/build-agent.sh all",
     "build-agent:host": "bash scripts/build-agent.sh host"
   },

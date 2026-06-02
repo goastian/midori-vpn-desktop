@@ -6,7 +6,6 @@
           <img class="brand-logo" :src="brandIcon" alt="MidoriVPN" />
         </div>
         <h1>MidoriVPN</h1>
-        <span class="brand-pill">{{ t('login.tagline') }}</span>
       </div>
 
       <!-- Session expired banner -->
@@ -14,10 +13,6 @@
         <span class="expired-icon">⚠</span>
         {{ t('auth.sessionExpired') }}
       </div>
-
-      <p class="subtitle">
-        {{ t('login.subtitle') }}
-      </p>
 
       <div class="language-row">
         <LanguageSelect compact />
@@ -42,9 +37,6 @@
       </button>
       <button v-if="loading" class="cancel-btn" @click="cancelLogin">{{ t('auth.cancelLogin') }}</button>
       <div v-if="error" class="error">{{ error }}</div>
-      <p class="hint">
-        {{ t('login.hint') }}
-      </p>
     </div>
 
     <button class="quit-fab" @click="quitApp" :aria-label="t('login.quit')">
@@ -59,7 +51,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
@@ -114,6 +106,16 @@ async function quitApp() {
     // ignore
   }
 }
+
+// Auto-trigger the OAuth browser flow on first mount so the user lands on the
+// Astian login page without an extra click. We skip it when the user was
+// redirected here because their session expired (they may want to read the
+// banner first) or when a session is already authenticated.
+onMounted(() => {
+  if (auth.authenticated) return
+  if (isExpired.value) return
+  doLogin()
+})
 </script>
 
 <style scoped>

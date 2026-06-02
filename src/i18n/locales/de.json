@@ -92,6 +92,8 @@
     "networkTitle": "Mesh-Netzwerk",
     "ipAddress": "IP: {ip}",
     "joinHint": "Beitreten, um Peer-Routing zu aktivieren",
+    "enabledHint": "Mit dem Mesh-Netzwerk verbunden",
+
     "enabling": "Mesh wird aktiviert…",
     "disabling": "Mesh wird deaktiviert…",
     "peers": "Mesh-Peers",

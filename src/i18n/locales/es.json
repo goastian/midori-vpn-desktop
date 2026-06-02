@@ -69,6 +69,12 @@
     "cancel": "Cancelar",
     "accept": "Aceptar y aplicar"
   },
+  "dnsProtection": {
+    "title": "La protección contra fugas de DNS requiere permisos adicionales",
+    "body": "Este sistema no usa systemd-resolved, así que el agente necesita cap_dac_override y cap_linux_immutable para proteger /etc/resolv.conf de fugas DNS.",
+    "enable": "Conceder permisos de protección DNS",
+    "applying": "Aplicando…"
+  },
   "auth": {
     "signIn": "Iniciar sesión",
     "signInHint": "Inicia sesión con tu cuenta Astian para conectarte a MidoriVPN.",
@@ -92,6 +98,8 @@
     "networkTitle": "Red Mesh",
     "ipAddress": "IP: {ip}",
     "joinHint": "Únete para habilitar el enrutamiento entre pares",
+    "enabledHint": "Conectado a la red mesh",
+
     "enabling": "Activando mesh…",
     "disabling": "Desactivando mesh…",
     "peers": "Peers Mesh",

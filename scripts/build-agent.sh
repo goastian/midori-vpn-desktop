@@ -11,6 +11,34 @@ export GOCACHE
 
 mkdir -p "$OUT_DIR"
 
+# When rebuilding, wipe the user-scoped state (tokens, keystore, settings).
+# Avoids stale credentials / mesh keys leaking across iterations. Honour
+# KEEP_USER_DATA=1 if a caller needs to preserve the directory.
+if [ "${KEEP_USER_DATA:-0}" != "1" ]; then
+  for dir in \
+    "${XDG_CONFIG_HOME:-$HOME/.config}/midorivpn" \
+    "${XDG_DATA_HOME:-$HOME/.local/share}/midorivpn" \
+    "${XDG_STATE_HOME:-$HOME/.local/state}/midorivpn"
+  do
+    if [ -d "$dir" ]; then
+      echo "Removing user state at $dir"
+      rm -rf -- "$dir"
+    fi
+  done
+
+  # Drop any lingering file capabilities on the installed agent so the next
+  # run of the desktop app re-triggers the smart-grant prompt and re-applies
+  # the correct cap set for the host's DNS backend. We do this best-effort
+  # (no sudo prompt): only run if the user can already write the inode.
+  installed="/usr/local/bin/midorivpn-agent"
+  if [ -w "$installed" ] && command -v setcap >/dev/null 2>&1; then
+    if getcap "$installed" 2>/dev/null | grep -q cap_; then
+      echo "Clearing file capabilities on $installed"
+      setcap -r "$installed" 2>/dev/null || true
+    fi
+  fi
+fi
+
 usage() {
   cat <<'EOF'
 Usage: scripts/build-agent.sh [target]

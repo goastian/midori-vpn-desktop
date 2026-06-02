@@ -92,6 +92,8 @@
     "networkTitle": "Сеть Mesh",
     "ipAddress": "IP: {ip}",
     "joinHint": "Присоединитесь для включения маршрутизации через пиры",
+    "enabledHint": "Подключено к mesh-сети",
+
     "enabling": "Включение mesh…",
     "disabling": "Отключение mesh…",
     "peers": "Mesh-пиры",

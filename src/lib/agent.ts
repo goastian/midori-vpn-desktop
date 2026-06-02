@@ -213,6 +213,18 @@ export const agent = {
     // the existing Tauri `agent_post` bridge here.
     put: (s: UserSettings) => post<UserSettings>('settings', s),
   },
+
+  dns: {
+    /** Reports the active DNS backend and whether extra caps are needed. */
+    status: () => get<DnsStatus>('dns/status'),
+  },
+}
+
+export interface DnsStatus {
+  backend: 'resolved' | 'resolvconf' | 'none'
+  needs_extra_caps: boolean
+  caps_missing: string[]
+  caps_ok: boolean
 }
 
 export interface UserSettings {

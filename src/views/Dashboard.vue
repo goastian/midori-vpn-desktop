@@ -4,15 +4,6 @@
       <LanguageSelect compact />
     </div>
 
-    <!-- Permissions consent modal -->
-    <PermissionsConsentModal
-      :open="showPermsModal"
-      :loading="capsGranting"
-      :error="capsError"
-      @cancel="showPermsModal = false"
-      @granted="onConsentGranted"
-    />
-
     <!-- Connection card -->
     <div class="card" :class="{ 'card--locked': featuresLocked }">
       <!-- Server picker -->
@@ -120,10 +111,6 @@
             <div class="label">{{ t('stats.exitNode') }}</div>
             <div class="value">{{ activeMeshExitIp || '—' }}</div>
           </div>
-          <div class="stat-cell">
-            <div class="label">{{ t('stats.meshIp') }}</div>
-            <div class="value">{{ mesh.meshIp || '—' }}</div>
-          </div>
         </template>
       </div>
 
@@ -131,63 +118,18 @@
     </div>
 
     <!-- Permissions trigger: shown after login until caps are granted -->
-    <div v-if="auth.authenticated && !capsGranted" class="card perms-trigger-card">
-      <div class="perms-trigger-body">
-        <div class="perms-trigger-icon">🔐</div>
-        <div class="perms-trigger-text">
-          <div class="perms-trigger-title">{{ t('perms.title') }}</div>
-          <div class="perms-trigger-sub">{{ t('perms.body') }}</div>
-        </div>
-        <button class="btn btn-primary" :disabled="capsGranting" @click="showPermsModal = true">
-          {{ capsGranting ? t('perms.applying') : t('perms.enable') }}
-        </button>
-      </div>
-      <div v-if="capsError" class="error" style="margin-top:8px;font-size:12px">{{ capsError }}</div>
-    </div>
+    <PermissionsTriggerCard
+      :caps-granted="capsGranted"
+      :caps-granting="capsGranting"
+      :caps-error="capsError"
+      @request="grantCapsSmart"
+    />
 
-    <!-- Auth card: not logged in -->
-    <div class="card" v-if="!auth.authenticated">
-      <div class="section-title">{{ t('auth.signIn') }}</div>
-      <p class="hint-text">{{ t('auth.signInHint') }}</p>
+    <!-- DNS protection trigger: only on systems without systemd-resolved -->
+    <DnsProtectionCard />
 
-      <button class="btn btn-primary" style="width:100%" :disabled="loginLoading" @click="doLogin">
-        <svg v-if="loginLoading" class="spin" width="15" height="15" viewBox="0 0 24 24" fill="none"
-          style="margin-right:6px" aria-hidden="true">
-          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-dasharray="30 10" />
-        </svg>
-        <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none"
-          style="margin-right:6px" aria-hidden="true">
-          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-          <path d="M8 12h8M14 9l3 3-3 3" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        {{ loginLoading ? t('auth.waitingBrowser') : t('auth.signInWithAstian') }}
-      </button>
-
-      <p v-if="loginLoading" class="login-wait-hint">
-        {{ t('auth.completeInBrowser') }}
-        <button class="link-btn" @click="cancelLogin">{{ t('auth.cancelLogin') }}</button>
-      </p>
-
-      <div v-if="loginError" class="error">{{ loginError }}</div>
-    </div>
-
-    <!-- Auth card: logged in -->
-    <div class="card" v-else>
-      <div class="row">
-        <div>
-          <div class="label">{{ t('auth.activeSession') }}</div>
-          <div class="value">{{ auth.email || auth.userId }}</div>
-        </div>
-        <button class="btn btn-secondary" :disabled="logoutLoading" @click="doLogout">
-          <svg v-if="logoutLoading" class="spin" width="13" height="13" viewBox="0 0 24 24" fill="none"
-            style="margin-right:5px" aria-hidden="true">
-            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-dasharray="30 10" />
-          </svg>
-          {{ logoutLoading ? t('auth.signingOut') : t('auth.signOut') }}
-        </button>
-      </div>
-    </div>
+    <!-- Auth card (sign-in or signed-in session) -->
+    <AuthSection @authenticated="onAuthenticated" />
   </div>
 </template>
 
@@ -198,8 +140,11 @@ import { useVpnStore } from '../stores/vpn'
 import { useAuthStore } from '../stores/auth'
 import { useMeshStore } from '../stores/mesh'
 import { useCaps } from '../composables/useCaps'
-import PermissionsConsentModal from '../components/PermissionsConsentModal.vue'
+import { formatBytes } from '../lib/format'
 import LanguageSelect from '../components/LanguageSelect.vue'
+import AuthSection from '../components/dashboard/AuthSection.vue'
+import PermissionsTriggerCard from '../components/dashboard/PermissionsTriggerCard.vue'
+import DnsProtectionCard from '../components/dashboard/DnsProtectionCard.vue'
 
 const vpn = useVpnStore()
 const { t } = useI18n()
@@ -208,9 +153,6 @@ const mesh = useMeshStore()
 
 const selectedServer = ref('')
 const serversLoading = ref(false)
-const loginLoading = ref(false)
-const loginError = ref('')
-const logoutLoading = ref(false)
 const dropdownOpen = ref(false)
 const toggleInProgress = ref(false) // prevents double-click duplicate connects
 const switching = ref(false)        // true while auto-switching to another server
@@ -219,17 +161,21 @@ const connectionType = ref<'vpn' | 'mesh' | ''>('')
 const activeMeshExitIp = ref('')
 
 // ── Permissions ─────────────────────────────────────────────────────────────
-const { capsGranted, capsGranting, capsError, featuresLocked, checkCaps, grantCaps: grantCapsBase } = useCaps()
+const { capsGranted, capsGranting, capsError, featuresLocked, checkCaps, grantCapsSmart: grantCapsSmartRaw } = useCaps()
 
-const showPermsModal = ref(false)
-
-/** Called when the user clicks "Aceptar y aplicar" in the modal. */
-async function onConsentGranted() {
-  const ok = await grantCapsBase()
-  if (ok) {
-    showPermsModal.value = false
-    await loadServersAfterLogin()
-  }
+/**
+ * Single-prompt grant wired to PermissionsTriggerCard's @request. After a
+ * successful pkexec we kick off the server list refresh and explicitly enable
+ * mesh so the UI reflects mesh state without relying on the agent's auto-enable
+ * path (which races with token rotation and SSE reconnect during restart).
+ */
+async function grantCapsSmart() {
+  const ok = await grantCapsSmartRaw()
+  if (!ok) return
+  await loadServersAfterLogin()
+  // AutoEnableMesh in the agent handles mesh activation after the restart
+  // that accompanies the caps grant. Calling mesh.enable() here as well
+  // races with that goroutine and produces a redundant double activation.
 }
 
 // ── Item model ─────────────────────────────────────────────────────────────
@@ -316,14 +262,17 @@ function onClickOutside(e: MouseEvent) {
 
 watch(() => auth.authenticated, async (v) => {
   if (v) {
-    loginLoading.value = false  // OAuth completed → stop the waiting spinner
-    loginError.value = ''
     await checkCaps()
     if (capsGranted.value) await loadServersAfterLogin()
   } else {
     selectedServer.value = ''; vpn.error = null; vpn.clearServers()
   }
 })
+
+async function onAuthenticated() {
+  await checkCaps()
+  if (capsGranted.value) await loadServersAfterLogin()
+}
 watch(() => mesh.enabled, async (v) => {
   if (v && auth.authenticated) { await mesh.fetchExitNodes(); syncSelectedServer() }
 })
@@ -413,36 +362,6 @@ async function toggleConnection() {
   } finally {
     toggleInProgress.value = false
   }
-}
-
-async function doLogin() {
-  loginLoading.value = true
-  loginError.value = ''
-  try {
-    await auth.startLogin()
-    // Browser opened — keep loginLoading = true until the watcher above
-    // resets it when auth.authenticated flips to true.
-  } catch (e) {
-    loginError.value = String(e)
-    loginLoading.value = false
-  }
-}
-
-function cancelLogin() {
-  loginLoading.value = false
-  loginError.value = ''
-}
-
-async function doLogout() {
-  logoutLoading.value = true
-  try { await auth.logout() }
-  finally { logoutLoading.value = false }
-}
-
-function formatBytes(b: number): string {
-  if (b < 1024) return `${b} B`
-  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`
-  return `${(b / 1024 / 1024).toFixed(2)} MB`
 }
 </script>
 

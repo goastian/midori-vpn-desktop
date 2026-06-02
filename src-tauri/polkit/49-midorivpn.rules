@@ -1,0 +1,28 @@
+/*
+ * Polkit JS rule — MidoriVPN firewall management
+ *
+ * Grants unconditional access to firewalld zone/interface management. This
+ * prevents the KDE/GNOME polkit agent from showing a password dialog whenever
+ * NetworkManager or plasma-nm auto-assigns the wg0 interface to a firewalld
+ * zone when the VPN mesh is toggled. The calling process exits before polkit
+ * can identify its session, so session-based guards are not reliable here.
+ *
+ * Security note: granting YES for FirewallD1.config on a single-user desktop
+ * machine is acceptable — the user has already granted CAP_NET_ADMIN to the
+ * VPN agent binary, which is a stronger privilege than firewall zone management.
+ *
+ * Installed to: /etc/polkit-1/rules.d/org.astian.midorivpn.rules
+ */
+polkit.addRule(function(action, subject) {
+    // Unconditionally approve firewalld zone/interface management and ufw rule
+    // changes triggered by the MidoriVPN mesh interface (wg0) coming up/down.
+    if (action.id === "org.fedoraproject.FirewallD1.config" ||
+        action.id.indexOf("org.fedoraproject.FirewallD1.config.") === 0 ||
+        action.id === "org.fedoraproject.FirewallD1.manage" ||
+        action.id.indexOf("org.fedoraproject.FirewallD1.manage.") === 0 ||
+        action.id.indexOf("com.ubuntu.pkexec.ufw") === 0) {
+        return polkit.Result.YES;
+    }
+
+    return polkit.Result.NOT_HANDLED;
+});

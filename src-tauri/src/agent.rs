@@ -92,21 +92,32 @@ fn agent_has_net_admin_cap() -> bool {
     true
 }
 
-/// One-shot install of CAP_NET_ADMIN/CAP_NET_RAW on the agent binary.
+/// One-shot install of capabilities on the agent binary.
 ///
-/// Runs `pkexec setcap cap_net_admin,cap_net_raw,cap_dac_override,cap_linux_immutable=ep <agent>`. On success
-/// the agent can be launched directly forever after, no further pkexec
-/// prompts. Returns true only if the resulting binary actually carries the
-/// caps (so we don't loop on a silent failure).
+/// Two cap sets are supported:
+///   * "minimal" (default): `cap_net_admin,cap_net_raw=ep` — enough to manage
+///     the WireGuard interface and use the systemd-resolved DNS backend.
+///   * "dns-protection": adds `cap_dac_override,cap_linux_immutable=ep` so the
+///     agent's resolvconf DNS backend can rewrite /etc/resolv.conf and mark
+///     it immutable. Only required on systems without systemd-resolved.
+///
+/// Returns true only if the resulting binary actually carries CAP_NET_ADMIN
+/// (so we don't loop on a silent failure).
 #[cfg(target_os = "linux")]
-fn try_install_caps() -> bool {
+fn try_install_caps(extended: bool) -> bool {
     let Some(setcap) = find_setcap_path() else {
         return false;
     };
 
+    let cap_set = if extended {
+        "cap_net_admin,cap_net_raw,cap_dac_override,cap_linux_immutable=ep"
+    } else {
+        "cap_net_admin,cap_net_raw=ep"
+    };
+
     let status = Command::new("pkexec")
         .arg(setcap)
-        .arg("cap_net_admin,cap_net_raw,cap_dac_override,cap_linux_immutable=ep")
+        .arg(cap_set)
         .arg(AGENT_INSTALLED_PATH)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -117,7 +128,7 @@ fn try_install_caps() -> bool {
 }
 
 #[cfg(not(target_os = "linux"))]
-fn try_install_caps() -> bool {
+fn try_install_caps(_extended: bool) -> bool {
     false
 }
 
@@ -139,12 +150,23 @@ pub fn agent_has_caps() -> bool {
     return true;
 }
 
-/// Attempts to grant the agent binary the required Linux capabilities via
-/// `pkexec setcap`.  Returns true on success (caps are now set).
+/// Attempts to grant the agent binary the minimal Linux capabilities
+/// (CAP_NET_ADMIN + CAP_NET_RAW) via `pkexec setcap`. Returns true on success.
 #[tauri::command]
 pub fn grant_agent_permissions() -> bool {
     #[cfg(target_os = "linux")]
-    return try_install_caps();
+    return try_install_caps(false);
+    #[cfg(not(target_os = "linux"))]
+    return true;
+}
+
+/// Grants the extended cap set required by the resolvconf DNS backend
+/// (adds CAP_DAC_OVERRIDE + CAP_LINUX_IMMUTABLE). Only call this after the
+/// agent reports `dns_backend = "resolvconf"` and `caps_ok = false`.
+#[tauri::command]
+pub fn grant_dns_protection_caps() -> bool {
+    #[cfg(target_os = "linux")]
+    return try_install_caps(true);
     #[cfg(not(target_os = "linux"))]
     return true;
 }
@@ -271,6 +293,25 @@ fn terminate_child(child: &mut Child) {
 /// Useful after granting capabilities so the fresh process picks up file caps.
 #[tauri::command]
 pub fn restart_agent(app: AppHandle, port: u16) -> Result<(), String> {
+    // Debounce: reject calls spaced less than 500ms apart to coalesce
+    // accidental double-invocations (e.g. multiple components reacting to the
+    // same caps grant). Without this, a quick succession of restart_agent
+    // calls cycles the agent process needlessly and disrupts SSE/auto-mesh.
+    use std::sync::OnceLock;
+    use std::time::Instant;
+    static LAST_RESTART: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
+    {
+        let cell = LAST_RESTART.get_or_init(|| Mutex::new(None));
+        let mut guard = lock_safe(cell);
+        let now = Instant::now();
+        if let Some(prev) = *guard {
+            if now.duration_since(prev) < std::time::Duration::from_millis(500) {
+                return Ok(());
+            }
+        }
+        *guard = Some(now);
+    }
+
     let state = app.state::<AgentProcess>();
     let mut guard = lock_safe(&state.0);
 
@@ -348,7 +389,19 @@ pub fn start_event_relay(app: AppHandle, port: u16) {
                 eprintln!("[midorivpn] agent event relay reconnecting: {err}");
             }
 
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            // Poll for agent readiness with short interval (~100ms) instead of
+            // a fixed 1s sleep. During restart the supervisor swaps the process
+            // quickly; reconnecting fast minimises the window where SSE events
+            // (e.g. mesh_status from auto-enable) can be missed.
+            for _ in 0..30 {
+                if supervisor_should_stop(&app) {
+                    return;
+                }
+                if is_agent_healthy(port) {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
         }
     });
 }
@@ -430,17 +483,26 @@ fn emit_agent_event_block(app: &AppHandle, block: &str) {
     }
 }
 
-fn open_agent_log_file() -> std::fs::File {
+fn open_agent_log_file() -> Stdio {
     let log_dir = std::env::var("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| std::env::temp_dir());
     let log_path = log_dir.join("midorivpn-agent.log");
     rotate_agent_log(&log_path);
-    std::fs::OpenOptions::new()
+    match std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(log_path)
-        .unwrap_or_else(|_| std::fs::File::open("/dev/null").unwrap())
+        .open(&log_path)
+    {
+        Ok(f) => Stdio::from(f),
+        Err(e) => {
+            eprintln!(
+                "agent log open failed ({}): {e}; falling back to /dev/null",
+                log_path.display()
+            );
+            Stdio::null()
+        }
+    }
 }
 
 fn rotate_agent_log(path: &std::path::Path) {

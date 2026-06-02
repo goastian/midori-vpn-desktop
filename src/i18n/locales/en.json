@@ -69,6 +69,12 @@
     "cancel": "Cancel",
     "accept": "Accept and apply"
   },
+  "dnsProtection": {
+    "title": "DNS leak protection requires extra permissions",
+    "body": "This system does not run systemd-resolved, so the agent needs cap_dac_override and cap_linux_immutable to protect /etc/resolv.conf from DNS leaks.",
+    "enable": "Grant DNS protection permissions",
+    "applying": "Applying…"
+  },
   "auth": {
     "signIn": "Sign in",
     "signInHint": "Sign in with your Astian account to connect to MidoriVPN.",
@@ -92,6 +98,8 @@
     "networkTitle": "Mesh Network",
     "ipAddress": "IP: {ip}",
     "joinHint": "Join to enable peer routing",
+    "enabledHint": "Connected to the mesh network",
+
     "enabling": "Enabling mesh…",
     "disabling": "Disabling mesh…",
     "peers": "Mesh Peers",

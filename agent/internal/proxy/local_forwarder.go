@@ -17,6 +17,8 @@ import (
 	"net/url"
 	"sync"
 	"time"
+
+	"github.com/goastian/midorivpn-agent/internal/logredact"
 )
 
 // LocalForwarder is an HTTP CONNECT proxy that listens on 127.0.0.1 and
@@ -108,10 +110,10 @@ func (f *LocalForwarder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	)
 
 	targetConn, err = dialViaProxy(upstream, r.Host)
-	slog.Debug("local forwarder: chaining through exit node", "upstream", upstream, "target", r.Host)
+	slog.Debug("local forwarder: chaining through exit node", "upstream", logredact.HostPort(upstream), "target", logredact.HostPort(r.Host))
 
 	if err != nil {
-		slog.Warn("local forwarder: dial failed", "target", r.Host, "upstream", upstream, "err", err)
+		slog.Warn("local forwarder: dial failed", "target", logredact.HostPort(r.Host), "upstream", logredact.HostPort(upstream), "err", err)
 		http.Error(w, "gateway error: "+err.Error(), http.StatusBadGateway)
 		return
 	}

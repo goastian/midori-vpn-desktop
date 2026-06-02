@@ -1,9 +1,13 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import Dashboard from '../views/Dashboard.vue'
-import Mesh from '../views/Mesh.vue'
-import Settings from '../views/Settings.vue'
-import Login from '../views/Login.vue'
 import { useAuthStore } from '../stores/auth'
+
+// Route components are lazy-loaded so the initial bundle only contains the
+// auth store, the router, and shared infrastructure. Each view becomes its
+// own chunk fetched on first navigation.
+const Dashboard = () => import('../views/Dashboard.vue')
+const Mesh = () => import('../views/Mesh.vue')
+const Settings = () => import('../views/Settings.vue')
+const Login = () => import('../views/Login.vue')
 
 const routes = [
   { path: '/login', component: Login, meta: { public: true } },

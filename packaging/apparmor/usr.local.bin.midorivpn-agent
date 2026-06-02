@@ -20,8 +20,12 @@ profile midorivpn-agent /usr/local/bin/midorivpn-agent {
   #include <abstractions/ssl_certs>
 
   # Capabilities required by WireGuard tunnel + raw socket operations.
+  # Additional caps may be granted at runtime by the user when the
+  # resolvconf DNS backend is selected (CAP_DAC_OVERRIDE, CAP_LINUX_IMMUTABLE).
   capability net_admin,
   capability net_raw,
+  capability dac_override,
+  capability linux_immutable,
 
   # /dev/net/tun: required to create the wg0 device via wireguard-go.
   /dev/net/tun rw,
@@ -54,6 +58,18 @@ profile midorivpn-agent /usr/local/bin/midorivpn-agent {
   /usr/bin/firewall-cmd             rix,
   /usr/sbin/ufw                     rix,
   /usr/sbin/nft                     rix,
+
+  # DNS backend "resolved": configure per-link DNS through systemd-resolved.
+  /usr/bin/resolvectl               rix,
+  /bin/resolvectl                   rix,
+
+  # DNS backend "resolvconf" (used only when systemd-resolved is absent):
+  # rewrite /etc/resolv.conf and make it immutable.
+  /etc/resolv.conf                  rw,
+  /usr/bin/chattr                   rix,
+  /bin/chattr                       rix,
+  /usr/bin/systemctl                rix,
+  /bin/systemctl                    rix,
 
   # Read /proc/sys for ip_forward etc.
   /proc/sys/net/ipv4/ip_forward rw,

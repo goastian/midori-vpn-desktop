@@ -16,7 +16,6 @@ import (
 func main() {
 	port := flag.Int("port", 7071, "local RPC server port")
 	logLevel := flag.String("log", "info", "log level: debug|info|warn|error")
-	insecureDevNoToken := flag.Bool("insecure-dev-no-token", false, "allow loopback RPC without MIDORIVPN_AGENT_TOKEN (development only)")
 	flag.Parse()
 
 	level := slog.LevelInfo
@@ -43,23 +42,24 @@ func main() {
 	ag := state.NewAgent()
 
 	srv := rpc.NewServer(ag, *port)
-	srv.SetAllowMissingAgentTokenForDev(*insecureDevNoToken)
+	srv.SetAllowMissingAgentTokenForDev(devNoToken())
 	slog.Info("MidoriVPN agent starting", "port", *port)
 
-	// Load persisted OAuth tokens (if any) and run an initial refresh if the
-	// stored access token is already in the leeway window. Bounded so a slow
-	// IdP cannot block startup forever.
-	initCtx, initCancel := context.WithTimeout(ctx, 20*time.Second)
-	if err := srv.Init(initCtx); err != nil {
-		slog.Warn("agent init reported an error; continuing", "err", err)
-	}
-	initCancel()
-
-	// Phase 1B: if mesh is configured to auto-start and we have valid auth,
-	// kick off mesh enable in background. Failures are logged; the user can
-	// still toggle from the UI. Wrap in a recover so a panic in mesh setup
-	// can't crash the whole agent.
+	// Run token init and mesh auto-enable concurrently with the RPC listener
+	// so the UI can connect immediately without waiting up to 20 s for a
+	// slow or unreachable IdP refresh. AutoEnableMesh already polls internally
+	// for auth readiness, so ordering relative to Init is safe.
 	go func() {
+		initCtx, initCancel := context.WithTimeout(ctx, 20*time.Second)
+		if err := srv.Init(initCtx); err != nil {
+			slog.Warn("agent init reported an error; continuing", "err", err)
+		}
+		initCancel()
+
+		// Phase 1B: if mesh is configured to auto-start and we have valid auth,
+		// kick off mesh enable. Failures are logged; the user can still toggle
+		// from the UI. Wrap in a recover so a panic in mesh setup can't crash
+		// the whole agent.
 		defer func() {
 			if r := recover(); r != nil {
 				slog.Error("mesh auto-enable panicked", "panic", r)

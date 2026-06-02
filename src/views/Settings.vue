@@ -25,6 +25,7 @@
         </div>
         <button class="toggle" :class="{ on: autostart }" @click="toggleAutostart"></button>
       </div>
+      <div v-if="autostartError" class="error" style="margin-top:8px;">{{ autostartError }}</div>
     </div>
 
     <div class="card">

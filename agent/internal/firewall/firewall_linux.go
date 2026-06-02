@@ -39,6 +39,11 @@ type Scope struct {
 	MeshDestinationIP string
 	MeshPeerIPs       []string
 	MeshProxyPort     int
+	// Direct instructs Allow to use the nftables backend directly, bypassing
+	// D-Bus firewall managers (firewalld, ufw) that require polkit
+	// authentication for every rule change. Set this when the caller already
+	// holds CAP_NET_ADMIN and can write nft rules without privilege escalation.
+	Direct bool
 }
 
 // Backend reports which firewall (if any) was detected.
@@ -51,25 +56,42 @@ const (
 	BackendNftables  Backend = "nftables"
 )
 
-// Detect returns the first available firewall backend on $PATH.
+// findExe resolves a command name to an absolute path. It first consults
+// $PATH (exec.LookPath) and then falls back to well-known sbin directories
+// that desktop-session processes often lack in their PATH.
+func findExe(name string) string {
+	if p, err := exec.LookPath(name); err == nil {
+		return p
+	}
+	for _, dir := range []string{"/usr/sbin", "/sbin", "/usr/bin", "/bin"} {
+		p := dir + "/" + name
+		if _, err := exec.LookPath(p); err == nil {
+			return p
+		}
+	}
+	return ""
+}
+
+// Detect returns the first available firewall backend on $PATH or common sbin
+// directories (the agent may run with a restricted PATH from Tauri).
 func Detect() Backend {
-	if _, err := exec.LookPath("firewall-cmd"); err == nil {
+	if fwCmd := findExe("firewall-cmd"); fwCmd != "" {
 		// Verify the daemon is actually running, not just installed.
 		ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 		defer cancel()
-		if err := exec.CommandContext(ctx, "firewall-cmd", "--state").Run(); err == nil {
+		if err := exec.CommandContext(ctx, fwCmd, "--state").Run(); err == nil {
 			return BackendFirewalld
 		}
 	}
-	if _, err := exec.LookPath("ufw"); err == nil {
+	if ufwCmd := findExe("ufw"); ufwCmd != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 		defer cancel()
-		out, _ := exec.CommandContext(ctx, "ufw", "status").Output()
+		out, _ := exec.CommandContext(ctx, ufwCmd, "status").Output()
 		if strings.Contains(strings.ToLower(string(out)), "active") {
 			return BackendUFW
 		}
 	}
-	if _, err := exec.LookPath("nft"); err == nil {
+	if findExe("nft") != "" {
 		return BackendNftables
 	}
 	return BackendNone
@@ -84,7 +106,23 @@ func Detect() Backend {
 func Allow(ctx context.Context, scope Scope) error {
 	scope = normalizeScope(scope)
 	backend := Detect()
+	slog.Info("firewall: Allow called", "direct", scope.Direct, "detected_backend", backend)
+	// When the caller has CAP_NET_ADMIN it can write nft rules directly without
+	// going through firewalld or ufw's D-Bus interfaces (which require polkit
+	// authentication for every individual rule and cause cascading cancelled
+	// dialogs in desktop polkit agents). Fall through to nftables in that case.
+	if scope.Direct && (backend == BackendFirewalld || backend == BackendUFW) {
+		if findExe("nft") != "" {
+			backend = BackendNftables
+			slog.Info("firewall: Direct mode — redirecting to nftables")
+		} else {
+			// nft not available — nothing we can do silently; skip.
+			slog.Info("firewall: Direct mode requested but nft not found, skipping")
+			return nil
+		}
+	}
 	var err error
+	slog.Info("firewall: Allow using backend", "backend", backend)
 	switch backend {
 	case BackendFirewalld:
 		err = allowFirewalld(ctx, scope)
@@ -111,8 +149,22 @@ func Allow(ctx context.Context, scope Scope) error {
 
 // Cleanup removes every rule tagged ManagedTag. Called on uninstall and on
 // agent shutdown via SIGTERM (best-effort).
-func Cleanup(ctx context.Context, wgIface string) error {
-	switch Detect() {
+// When direct is true and the active backend is firewalld or ufw, cleanup
+// targets nftables directly (no polkit prompt required when CAP_NET_ADMIN
+// is held), mirroring the same bypass used in Allow.
+func Cleanup(ctx context.Context, wgIface string, direct bool) error {
+	backend := Detect()
+	slog.Info("firewall: Cleanup called", "direct", direct, "detected_backend", backend)
+	if direct && (backend == BackendFirewalld || backend == BackendUFW) {
+		if findExe("nft") != "" {
+			backend = BackendNftables
+			slog.Info("firewall: Cleanup Direct mode — redirecting to nftables")
+		} else {
+			return nil
+		}
+	}
+	slog.Info("firewall: Cleanup using backend", "backend", backend)
+	switch backend {
 	case BackendFirewalld:
 		return cleanupFirewalldLegacy(ctx, wgIface)
 	case BackendUFW:
@@ -174,7 +226,11 @@ func cleanupFirewalld(ctx context.Context, scope Scope) error {
 }
 
 func firewalldTargetZones(ctx context.Context) []string {
-	out, err := exec.CommandContext(ctx, "firewall-cmd", "--get-active-zones").Output()
+	fwCmd := findExe("firewall-cmd")
+	if fwCmd == "" {
+		return []string{""}
+	}
+	out, err := exec.CommandContext(ctx, fwCmd, "--get-active-zones").Output()
 	if err == nil {
 		zones := make([]string, 0)
 		seen := make(map[string]struct{})
@@ -195,7 +251,7 @@ func firewalldTargetZones(ctx context.Context) []string {
 		}
 	}
 
-	if out, err := exec.CommandContext(ctx, "firewall-cmd", "--get-default-zone").Output(); err == nil {
+	if out, err := exec.CommandContext(ctx, fwCmd, "--get-default-zone").Output(); err == nil {
 		zone := strings.TrimSpace(string(out))
 		if zone != "" {
 			return []string{zone}
@@ -234,8 +290,12 @@ func allowUFW(ctx context.Context, scope Scope) error {
 }
 
 func cleanupUFW(ctx context.Context, tag string) error {
+	ufwCmd := findExe("ufw")
+	if ufwCmd == "" {
+		return nil
+	}
 	// Iterate numbered rules and delete those whose "# comment" contains the tag.
-	out, err := exec.CommandContext(ctx, "ufw", "status", "numbered").Output()
+	out, err := exec.CommandContext(ctx, ufwCmd, "status", "numbered").Output()
 	if err != nil {
 		return err
 	}
@@ -261,27 +321,41 @@ func cleanupUFW(ctx context.Context, tag string) error {
 // ─── nftables (manual / Arch) ───────────────────────────────────────────────
 
 func allowNftables(ctx context.Context, scope Scope) error {
-	// Create a dedicated table+set so cleanup is a single drop.
+	// Create a dedicated table+chain so cleanup is a single drop.
+	// Use individual nft subcommands rather than "nft -f -" (stdin batch mode),
+	// because batch mode triggers a full netlink cache init that fails when the
+	// process runs with file capabilities instead of full root privileges.
 	table := nftTableName(scope.Name)
 	_ = cleanupNftables(ctx, table)
-	var b strings.Builder
-	fmt.Fprintf(&b, "add table inet %s\n", table)
-	fmt.Fprintf(&b, "add chain inet %s input { type filter hook input priority 0; policy accept; }\n", table)
-	fmt.Fprintf(&b, "add rule inet %s input iifname \"lo\" ip saddr 127.0.0.1 ip daddr 127.0.0.1 tcp dport %d accept\n", table, scope.RPCPort)
+
+	if err := run(ctx, "nft", "add", "table", "inet", table); err != nil {
+		return fmt.Errorf("nft add table: %w", err)
+	}
+	if err := run(ctx, "nft", "add", "chain", "inet", table, "input",
+		"{ type filter hook input priority 0 ; policy accept ; }"); err != nil {
+		return fmt.Errorf("nft add chain: %w", err)
+	}
+	if err := run(ctx, "nft", "add", "rule", "inet", table, "input",
+		"iifname", "lo",
+		"ip", "saddr", "127.0.0.1", "ip", "daddr", "127.0.0.1",
+		"tcp", "dport", fmt.Sprint(scope.RPCPort), "accept"); err != nil {
+		return fmt.Errorf("nft add rpc rule: %w", err)
+	}
 	for _, peerIP := range scope.MeshPeerIPs {
 		family := nftFamily(peerIP)
-		fmt.Fprintf(&b, "add rule inet %s input iifname \"%s\" %s saddr %s %s daddr %s",
-			table, scope.Interface, family, peerIP, family, scope.MeshDestinationIP)
-		if scope.MeshProxyPort > 0 {
-			fmt.Fprintf(&b, " tcp dport %d", scope.MeshProxyPort)
+		args := []string{
+			"add", "rule", "inet", table, "input",
+			"iifname", scope.Interface,
+			family, "saddr", peerIP,
+			family, "daddr", scope.MeshDestinationIP,
 		}
-		b.WriteString(" accept\n")
-	}
-
-	cmd := exec.CommandContext(ctx, "nft", "-f", "-")
-	cmd.Stdin = strings.NewReader(b.String())
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("nft load: %w (%s)", err, strings.TrimSpace(string(out)))
+		if scope.MeshProxyPort > 0 {
+			args = append(args, "tcp", "dport", fmt.Sprint(scope.MeshProxyPort))
+		}
+		args = append(args, "accept")
+		if err := run(ctx, "nft", args...); err != nil {
+			return fmt.Errorf("nft add mesh peer rule: %w", err)
+		}
 	}
 	return nil
 }
@@ -385,7 +459,11 @@ func sanitizeName(name string) string {
 }
 
 func run(ctx context.Context, name string, args ...string) error {
-	cmd := exec.CommandContext(ctx, name, args...)
+	exe := findExe(name)
+	if exe == "" {
+		return fmt.Errorf("%s: command not found", name)
+	}
+	cmd := exec.CommandContext(ctx, exe, args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s %s: %w (%s)", name, strings.Join(args, " "),

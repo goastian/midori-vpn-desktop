@@ -13,7 +13,7 @@
         <div>
           <div style="font-size:15px;font-weight:600;">{{ t('mesh.networkTitle') }}</div>
           <div class="label" style="margin-top:4px;">
-            {{ mesh.enabled ? t('mesh.ipAddress', { ip: mesh.meshIp }) : t('mesh.joinHint') }}
+            {{ mesh.enabled ? t('mesh.enabledHint') : t('mesh.joinHint') }}
           </div>
         </div>
         <button

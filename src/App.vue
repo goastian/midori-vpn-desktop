@@ -187,12 +187,13 @@ onMounted(async () => {
   })
 
   // Listen for agent supervisor status changes from Rust.
+  // On 'running' the SSE relay reconnects and the agent re-sends the full
+  // snapshot, so we don't poll loadSnapshot here (avoids racing the SSE
+  // snapshot with a stale HTTP GET that can overwrite mesh state).
   listen<{ status: string }>('agent://status', async (ev) => {
     const s = ev.payload.status
     if (s === 'running') {
-      // Rust rotates the private RPC token on restart; the WebView only reloads state.
       await initAgentToken()
-      await loadSnapshot(10)
       agentStatus.value = 'running'
     } else if (s === 'restarting') {
       agentStatus.value = 'restarting'

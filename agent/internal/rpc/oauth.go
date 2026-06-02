@@ -17,6 +17,7 @@ import (
 
 	"github.com/goastian/midorivpn-agent/internal/auth"
 	"github.com/goastian/midorivpn-agent/internal/caps"
+	"github.com/goastian/midorivpn-agent/internal/logredact"
 )
 
 // oauthCallbackURI is the localhost redirect_uri the agent listens on. The
@@ -54,6 +55,30 @@ func pkceChallenge(verifier string) string {
 	return base64.RawURLEncoding.EncodeToString(h[:])
 }
 
+// pendingOAuthEntry tracks a single in-flight authorization request.
+type pendingOAuthEntry struct {
+	verifier  string
+	expiresAt time.Time
+}
+
+// pendingOAuthTTL bounds how long an issued OAuth state remains valid for the
+// callback. Authentik's own session is much longer; we only need to cover the
+// browser round-trip.
+const pendingOAuthTTL = 10 * time.Minute
+
+// maxPendingOAuth bounds the in-memory state map so that a misbehaving or
+// malicious client cannot grow it without limit by spamming /oauth/start.
+const maxPendingOAuth = 64
+
+// purgePendingOAuthLocked removes expired entries. Caller must hold oauthMu.
+func (s *Server) purgePendingOAuthLocked(now time.Time) {
+	for state, entry := range s.pendingOAuth {
+		if now.After(entry.expiresAt) {
+			delete(s.pendingOAuth, state)
+		}
+	}
+}
+
 // handleOAuthStart generates a PKCE pair, stores the state→verifier mapping
 // and returns the Authentik authorization URL for the frontend to open in the
 // system browser.
@@ -71,17 +96,19 @@ func (s *Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	now := time.Now()
 	s.oauthMu.Lock()
-	s.pendingOAuth[oauthState] = verifier
-	s.oauthMu.Unlock()
-
-	// Auto-expire stale entries after 10 minutes.
-	go func() {
-		time.Sleep(10 * time.Minute)
-		s.oauthMu.Lock()
-		delete(s.pendingOAuth, oauthState)
+	s.purgePendingOAuthLocked(now)
+	if len(s.pendingOAuth) >= maxPendingOAuth {
 		s.oauthMu.Unlock()
-	}()
+		writeError(w, http.StatusTooManyRequests, "too many pending oauth requests")
+		return
+	}
+	s.pendingOAuth[oauthState] = pendingOAuthEntry{
+		verifier:  verifier,
+		expiresAt: now.Add(pendingOAuthTTL),
+	}
+	s.oauthMu.Unlock()
 
 	params := url.Values{
 		"response_type":         {"code"},
@@ -107,16 +134,19 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	oauthState := r.URL.Query().Get("state")
 
 	s.oauthMu.Lock()
-	verifier, ok := s.pendingOAuth[oauthState]
+	now := time.Now()
+	s.purgePendingOAuthLocked(now)
+	entry, ok := s.pendingOAuth[oauthState]
 	if ok {
 		delete(s.pendingOAuth, oauthState)
 	}
 	s.oauthMu.Unlock()
 
-	if !ok || code == "" {
+	if !ok || code == "" || now.After(entry.expiresAt) {
 		http.Error(w, "invalid state or missing code", http.StatusBadRequest)
 		return
 	}
+	verifier := entry.verifier
 
 	// Exchange code + PKCE verifier for tokens.
 	tokenURL := s.authentikTokenURL
@@ -150,7 +180,7 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 
 	if resp.StatusCode != http.StatusOK {
-		slog.Warn("oauth: token exchange non-200", "status", resp.StatusCode, "body", string(body))
+		slog.Warn("oauth: token exchange non-200", "status", resp.StatusCode, "body", logredact.Body(body))
 		http.Error(w, fmt.Sprintf("token exchange: %d", resp.StatusCode), http.StatusBadGateway)
 		return
 	}
@@ -178,7 +208,7 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt:    time.Now().Add(time.Duration(tok.ExpiresIn) * time.Second).Unix(),
 		Username:     username,
 	})
-	slog.Info("oauth: login successful", "user", username)
+	slog.Info("oauth: login successful", "user", logredact.User(username))
 	go s.refreshServersCache(context.Background())
 
 	// Trigger mesh activation in background unless the user opted out.
@@ -197,117 +227,13 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// Return a styled success page with auto-close functionality.
-	// The desktop app receives auth state through the local agent event relay;
-	// this page auto-closes after 2 seconds to provide a smooth UX.
+	// Reply with a blank page that immediately closes itself. The desktop app
+	// learns of the new auth state through the SSE relay, so the browser tab
+	// has no further purpose. If the browser refuses programmatic close
+	// (common for tabs the user opened), the page stays visually blank.
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
-	fmt.Fprint(w, `<!DOCTYPE html>
-<html lang="en">
-<head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>MidoriVPN login complete</title>
-	<style>
-		* {
-			margin: 0;
-			padding: 0;
-			box-sizing: border-box;
-		}
-		body {
-			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-			min-height: 100vh;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-		}
-		.container {
-			background: white;
-			border-radius: 8px;
-			box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-			padding: 40px;
-			text-align: center;
-			max-width: 500px;
-			animation: slideUp 0.4s ease-out;
-		}
-		@keyframes slideUp {
-			from {
-				opacity: 0;
-				transform: translateY(20px);
-			}
-			to {
-				opacity: 1;
-				transform: translateY(0);
-			}
-		}
-		h1 {
-			color: #22c55e;
-			font-size: 28px;
-			margin-bottom: 12px;
-		}
-		.success-icon {
-			font-size: 64px;
-			margin-bottom: 20px;
-			animation: scaleIn 0.5s ease-out;
-		}
-		@keyframes scaleIn {
-			from {
-				opacity: 0;
-				transform: scale(0.8);
-			}
-			to {
-				opacity: 1;
-				transform: scale(1);
-			}
-		}
-		p {
-			color: #666;
-			font-size: 16px;
-			line-height: 1.5;
-			margin-bottom: 24px;
-		}
-		.countdown {
-			color: #999;
-			font-size: 14px;
-			margin-top: 20px;
-			padding-top: 20px;
-			border-top: 1px solid #eee;
-		}
-	</style>
-</head>
-<body>
-	<div class="container">
-		<div class="success-icon">✓</div>
-		<h1>Login successful</h1>
-		<p>You're now logged in to MidoriVPN.</p>
-		<p>This window will close automatically in <span id="countdown">2</span> seconds...</p>
-		<div class="countdown">or you can close this tab manually</div>
-	</div>
-	<script>
-		let seconds = 2;
-		const countdownEl = document.getElementById('countdown');
-		function tryCloseWindow() {
-			window.close();
-			window.open('', '_self');
-			window.close();
-			setTimeout(() => {
-				if (!window.closed) {
-					document.querySelector('.countdown').textContent = 'Your browser blocked auto-close. You can close this tab manually.';
-				}
-			}, 200);
-		}
-		const interval = setInterval(() => {
-			seconds--;
-			countdownEl.textContent = seconds;
-			if (seconds <= 0) {
-				clearInterval(interval);
-				tryCloseWindow();
-			}
-		}, 1000);
-	</script>
-</body>
-</html>`)
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
+	fmt.Fprint(w, `<!DOCTYPE html><html><head><meta charset="utf-8"><title></title></head><body><script>window.close();</script></body></html>`)
 }
 
 // jwtEmail extracts email / preferred_username / sub from the id_token payload.

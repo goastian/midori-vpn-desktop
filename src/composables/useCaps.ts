@@ -67,13 +67,43 @@ export function useCaps() {
     }
   }
 
+  /**
+   * Single-prompt grant. On Linux we always request the extended cap set so
+   * the agent can manage DNS regardless of the host's resolver (systemd-
+   * resolved or plain /etc/resolv.conf). This makes the post-login UX a
+   * single polkit dialog and avoids the "permission denied" on /etc/resolv.conf
+   * that surfaces when only the minimal caps are applied on resolvconf hosts.
+   */
+  async function grantCapsSmart(): Promise<boolean> {
+    capsGranting.value = true
+    capsError.value = ''
+    try {
+      const ok = await invoke<boolean>('grant_dns_protection_caps')
+      if (!ok) {
+        capsError.value = 'No se pudo aplicar. Ejecuta el comando manualmente como root.'
+        return false
+      }
+      try {
+        await invoke('restart_agent_cmd')
+      } catch {
+        // Non-fatal: surfaced via runtime errors.
+      }
+      capsGranted.value = await invoke<boolean>('agent_has_caps')
+      if (!capsGranted.value) {
+        capsError.value = 'Permisos aplicados, pero no se pudieron verificar en el agente.'
+        return false
+      }
+      return true
+    } catch (e) {
+      capsError.value = String(e)
+      return false
+    } finally {
+      capsGranting.value = false
+    }
+  }
+
   /** True when user is authenticated but caps have not been granted yet. */
   const featuresLocked = computed(() => !capsGranted.value)
-
-  /**
-   * Revoke capabilities from the agent binary via pkexec setcap -r.
-   * On success, capsGranted is reset to false so the UI re-locks.
-   */
   async function revertCaps(): Promise<boolean> {
     capsGranting.value = true
     capsError.value = ''
@@ -101,6 +131,7 @@ export function useCaps() {
     featuresLocked,
     checkCaps,
     grantCaps,
+    grantCapsSmart,
     revertCaps,
   }
 }

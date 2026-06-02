@@ -8,6 +8,7 @@ use agent::AgentProcess;
 use agent::AgentSupervisorStop;
 use agent::AgentToken;
 use serde_json::Value;
+use std::ffi::OsStr;
 use std::sync::{Arc, Mutex};
 use tauri::AppHandle;
 use tauri::Manager;
@@ -35,6 +36,31 @@ fn configure_linux_appimage_graphics() {
 
 #[cfg(not(target_os = "linux"))]
 fn configure_linux_appimage_graphics() {}
+
+fn is_background_start_arg(arg: &str) -> bool {
+    matches!(arg, "--autostart" | "--minimized" | "--hidden")
+}
+
+fn is_background_start_os_arg(arg: &OsStr) -> bool {
+    arg.to_str().map(is_background_start_arg).unwrap_or(false)
+}
+
+fn is_background_launch() -> bool {
+    std::env::args_os().any(|arg| is_background_start_os_arg(&arg))
+}
+
+fn reveal_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+fn hide_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+}
 
 // ── Tauri commands ────────────────────────────────────────────────────────────
 
@@ -109,22 +135,27 @@ pub fn run() {
     configure_linux_appimage_graphics();
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            // When a second instance launches, focus the existing window.
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // Manual re-launch opens the UI; session autostart keeps running in tray.
+            if !args.iter().any(|arg| is_background_start_arg(arg)) {
+                reveal_main_window(app);
             }
         }))
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
-            Some(vec!["--minimized"]),
+            Some(vec!["--autostart"]),
         ))
         .manage(AgentProcess(Mutex::new(None)))
         .manage(AgentToken(Mutex::new(String::new())))
         .manage(AgentSupervisorStop(Arc::new(std::sync::atomic::AtomicBool::new(false))))
         .setup(|app| {
             tray::setup_tray(app)?;
+
+            if is_background_launch() {
+                hide_main_window(app.handle());
+            } else {
+                reveal_main_window(app.handle());
+            }
 
             // Start the agent supervisor (keeps the agent alive across crashes).
             let handle = app.handle().clone();
@@ -134,9 +165,13 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Hide instead of close to keep running in tray
+            // Hide instead of close to keep running in tray. Ignore hide()
+            // failures (e.g. window already destroyed during shutdown) — a
+            // panic here would tear down the whole Tauri event loop.
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                window.hide().unwrap();
+                if let Err(e) = window.hide() {
+                    eprintln!("window hide on close request failed: {e}");
+                }
                 api.prevent_close();
             }
         })
@@ -152,6 +187,7 @@ pub fn run() {
             open_oauth_url,
             agent::agent_has_caps,
             agent::grant_agent_permissions,
+            agent::grant_dns_protection_caps,
             agent::revert_agent_permissions,
             autostart::autostart_is_enabled,
             autostart::autostart_set,
@@ -175,7 +211,15 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::is_allowed_oauth_url;
+    use super::{is_allowed_oauth_url, is_background_start_arg};
+
+    #[test]
+    fn detects_background_start_flags() {
+        assert!(is_background_start_arg("--autostart"));
+        assert!(is_background_start_arg("--minimized"));
+        assert!(is_background_start_arg("--hidden"));
+        assert!(!is_background_start_arg("--help"));
+    }
 
     #[test]
     fn allows_only_astian_oauth_urls() {

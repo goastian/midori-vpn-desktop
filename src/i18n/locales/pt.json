@@ -92,6 +92,8 @@
     "networkTitle": "Rede Mesh",
     "ipAddress": "IP: {ip}",
     "joinHint": "Ingresse para habilitar o roteamento entre pares",
+    "enabledHint": "Conectado à rede mesh",
+
     "enabling": "Ativando mesh…",
     "disabling": "Desativando mesh…",
     "peers": "Peers Mesh",

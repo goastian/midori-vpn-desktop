@@ -8,28 +8,45 @@ package caps
 import (
 	"bufio"
 	"io"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
 )
 
-// CAP_NET_ADMIN is bit 12 of the capability bitmask (see capabilities(7)).
-const capNetAdmin = 12
+// Capability bit numbers from capabilities(7).
+const (
+	capDacOverride    = 1
+	capLinuxImmutable = 9
+	capNetAdmin       = 12
+)
 
 // HasNetAdmin reports whether the current process has CAP_NET_ADMIN in its
 // effective capability set. Returns false on any parsing error so callers
 // fail closed (do not auto-enable privileged features).
-func HasNetAdmin() bool {
+func HasNetAdmin() bool { return hasCap(capNetAdmin) }
+
+// HasDacOverride reports whether CAP_DAC_OVERRIDE is in the effective set.
+// Needed by the resolvconf DNS backend to write /etc/resolv.conf.
+func HasDacOverride() bool { return hasCap(capDacOverride) }
+
+// HasLinuxImmutable reports whether CAP_LINUX_IMMUTABLE is in the effective
+// set. Needed by the resolvconf DNS backend to chattr +i /etc/resolv.conf.
+func HasLinuxImmutable() bool { return hasCap(capLinuxImmutable) }
+
+func hasCap(bit uint) bool {
 	f, err := os.Open("/proc/self/status")
 	if err != nil {
 		return false
 	}
 	defer f.Close()
-
-	return hasNetAdminFromStatus(f)
+	return hasCapFromStatus(f, bit)
 }
 
-func hasNetAdminFromStatus(r io.Reader) bool {
+// hasNetAdminFromStatus is kept for backwards-compat with existing tests.
+func hasNetAdminFromStatus(r io.Reader) bool { return hasCapFromStatus(r, capNetAdmin) }
+
+func hasCapFromStatus(r io.Reader, bit uint) bool {
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -39,9 +56,13 @@ func hasNetAdminFromStatus(r io.Reader) bool {
 		hex := strings.TrimSpace(strings.TrimPrefix(line, "CapEff:"))
 		mask, err := strconv.ParseUint(hex, 16, 64)
 		if err != nil {
+			slog.Info("caps: failed to parse CapEff", "hex", hex, "err", err)
 			return false
 		}
-		return mask&(1<<capNetAdmin) != 0
+		result := mask&(1<<bit) != 0
+		slog.Info("caps: checked capability", "capeff_hex", hex, "bit", bit, "result", result)
+		return result
 	}
+	slog.Info("caps: CapEff line not found in /proc/self/status")
 	return false
 }

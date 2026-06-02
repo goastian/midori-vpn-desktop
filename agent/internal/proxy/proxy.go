@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/goastian/midorivpn-agent/internal/logredact"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jwt"
 )
@@ -109,7 +110,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	sub, err := s.authenticate(r)
 	if err != nil {
-		slog.Info("proxy auth failed", "remote", r.RemoteAddr, "target", r.Host, "err", err)
+		slog.Info("proxy auth failed", "remote", logredact.HostPort(r.RemoteAddr), "target", logredact.HostPort(r.Host), "err", err)
 		w.Header().Set("Proxy-Authenticate", `Basic realm="midorivpn"`)
 		http.Error(w, "proxy authentication required", http.StatusProxyAuthRequired)
 		return
@@ -152,7 +153,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	clientConn.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
 
-	slog.Info("proxy tunnel established", "user", sub, "target", r.Host)
+	slog.Info("proxy tunnel established", "user", logredact.User(sub), "target", logredact.HostPort(r.Host))
 
 	var (
 		wg        sync.WaitGroup
@@ -182,8 +183,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	wg.Wait()
 
 	slog.Info("proxy tunnel closed",
-		"user", sub,
-		"target", r.Host,
+		"user", logredact.User(sub),
+		"target", logredact.HostPort(r.Host),
 		"duration_s", int(time.Since(start).Seconds()),
 		"bytes_up", bytesUp,
 		"bytes_down", bytesDown,

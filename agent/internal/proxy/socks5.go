@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/goastian/midorivpn-agent/internal/logredact"
 )
 
 type SOCKS5Server struct {
@@ -101,7 +103,7 @@ func (s *SOCKS5Server) Start(ctx context.Context) error {
 			return err
 		}
 		if !s.allowConn(conn) {
-			slog.Warn("mesh socks5 rejected remote source", "remote", conn.RemoteAddr().String())
+			slog.Warn("mesh socks5 rejected remote source", "remote", logredact.HostPort(conn.RemoteAddr().String()))
 			_ = conn.Close()
 			continue
 		}
@@ -112,7 +114,7 @@ func (s *SOCKS5Server) Start(ctx context.Context) error {
 				s.handle(ctx, conn)
 			}()
 		default:
-			slog.Warn("mesh socks5 rejected connection: limit reached", "remote", conn.RemoteAddr().String())
+			slog.Warn("mesh socks5 rejected connection: limit reached", "remote", logredact.HostPort(conn.RemoteAddr().String()))
 			_ = conn.Close()
 		}
 	}
@@ -216,7 +218,7 @@ func (s *SOCKS5Server) handleUDPAssociate(ctx context.Context, control net.Conn)
 			}
 		}
 		if !s.allowIP(clientAddr.IP) {
-			slog.Warn("mesh socks5 rejected UDP source", "remote", clientAddr.String())
+			slog.Warn("mesh socks5 rejected UDP source", "remote", logredact.HostPort(clientAddr.String()))
 			continue
 		}
 		target, payload, err := parseUDPRequest(buf[:n])

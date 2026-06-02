@@ -23,6 +23,7 @@ import (
 	"github.com/goastian/midorivpn-agent/internal/apiClient"
 	"github.com/goastian/midorivpn-agent/internal/auth"
 	"github.com/goastian/midorivpn-agent/internal/caps"
+	"github.com/goastian/midorivpn-agent/internal/logredact"
 	"github.com/goastian/midorivpn-agent/internal/config"
 	"github.com/goastian/midorivpn-agent/internal/firewall"
 	"github.com/goastian/midorivpn-agent/internal/mesh"
@@ -81,7 +82,7 @@ type Server struct {
 
 	// OAuth / PKCE state store.
 	oauthMu               sync.Mutex
-	pendingOAuth          map[string]string // state → PKCE verifier
+	pendingOAuth          map[string]pendingOAuthEntry // state → PKCE verifier + expiry
 	authentikIssuer       string
 	authentikClientID     string
 	authentikClientSecret string
@@ -103,6 +104,10 @@ type Server struct {
 	connectMu     sync.Mutex
 	connectCancel context.CancelFunc
 	connectSeq    uint64
+
+	// meshMu serializes concurrent enableMesh calls so AutoEnableMesh and the
+	// frontend cannot race and double-activate the mesh node.
+	meshMu sync.Mutex
 
 	allowMissingAgentTokenForDev bool
 }
@@ -128,7 +133,7 @@ func NewServer(ag *state.Agent, port int) *Server {
 		apiURL:   cfg.APIURL,
 		jwksURL:  cfg.AuthentikJWKSURL,
 
-		pendingOAuth:          make(map[string]string),
+		pendingOAuth:          make(map[string]pendingOAuthEntry),
 		authentikIssuer:       cfg.AuthentikIssuer,
 		authentikClientID:     cfg.AuthentikClientID,
 		authentikClientSecret: cfg.AuthentikClientSecret,
@@ -420,6 +425,10 @@ func (s *Server) Start(ctx context.Context) error {
 	// Utility: check current public IP (routes through WireGuard tunnel if connected).
 	mux.Handle("GET /public-ip", wrap(http.HandlerFunc(s.handlePublicIP)))
 
+	// DNS backend introspection — lets the UI decide whether the extra
+	// CAP_DAC_OVERRIDE + CAP_LINUX_IMMUTABLE prompt is needed.
+	mux.Handle("GET /dns/status", wrap(http.HandlerFunc(s.handleDNSStatus)))
+
 	// OAuth 2.0 PKCE login flow.
 	// /oauth/start is called from Tauri (has token); /oauth/callback is reached
 	// by the system browser (exempt from token+Origin check).
@@ -471,6 +480,8 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"active": s.guard.Active(),
 	}
 	snap["dns_protected"] = s.wgMgr.DNSProtected()
+	snap["dns_backend"] = s.wgMgr.DNSBackendKind().String()
+	snap["dns_needs_extra_caps"] = s.wgMgr.DNSBackendKind().NeedsExtraCaps()
 	authBackend := "unknown"
 	if s.authMgr != nil {
 		authBackend = s.authMgr.Backend()
@@ -482,7 +493,30 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, snap)
 }
 
-// ----- SSE -----
+// ----- DNS backend introspection -----
+
+// handleDNSStatus reports the active DNS backend so the UI can decide whether
+// to prompt the user for the extra CAP_DAC_OVERRIDE + CAP_LINUX_IMMUTABLE
+// capabilities required by the resolvconf backend.
+func (s *Server) handleDNSStatus(w http.ResponseWriter, r *http.Request) {
+	kind := s.wgMgr.DNSBackendKind()
+	needsExtra := kind.NeedsExtraCaps()
+	missing := []string{}
+	if needsExtra {
+		if !caps.HasDacOverride() {
+			missing = append(missing, "cap_dac_override")
+		}
+		if !caps.HasLinuxImmutable() {
+			missing = append(missing, "cap_linux_immutable")
+		}
+	}
+	writeJSON(w, map[string]any{
+		"backend":          kind.String(),
+		"needs_extra_caps": needsExtra,
+		"caps_missing":     missing,
+		"caps_ok":          len(missing) == 0,
+	})
+}
 
 func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
@@ -926,7 +960,7 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 	// Use DNS provided by the server; fall back to Cloudflare if the server
 	// doesn't specify one, so that full-tunnel mode doesn't break DNS.
 	dnsServers := splitCSV(connCfg.DNS)
-	slog.Info("vpn connect: parsed DNS", "raw", connCfg.DNS, "parsed", dnsServers, "count", len(dnsServers))
+	slog.Info("vpn connect: parsed DNS", "raw", logredact.Generic(connCfg.DNS), "parsed", logredact.IPs(dnsServers), "count", len(dnsServers))
 	if len(dnsServers) == 0 {
 		dnsServers = []string{"1.1.1.1", "1.0.0.1"}
 		slog.Info("vpn connect: using Cloudflare DNS fallback", "servers", dnsServers)
@@ -1040,40 +1074,22 @@ func (s *Server) handleMeshEnable(w http.ResponseWriter, r *http.Request) {
 	}
 	snap := s.agent.Snapshot()
 	meshState, _ := snap["mesh"].(state.MeshStatus)
-	// Apply host firewall rules for mesh traffic + local RPC.
-	// Mesh activation still succeeds if this fails, but we return a warning
-	// so the UI/user can verify why no firewalld delta is visible.
-	firewallWarning := ""
-	fwCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	iface := "wg0"
-	if s.wgMgr != nil && s.wgMgr.InterfaceName() != "" {
-		iface = s.wgMgr.InterfaceName()
-	}
-	if err := firewall.Allow(fwCtx, firewall.Scope{
-		Name:              "mesh",
-		Interface:         iface,
-		RPCPort:           s.port,
-		MeshDestinationIP: meshState.MeshIP,
-		MeshPeerIPs:       peerMeshIPs(meshState.Peers),
-		MeshProxyPort:     meshState.ExitNodePort,
-	}); err != nil {
-		firewallWarning = err.Error()
-		slog.Warn("firewall allow failed (mesh still up)", "err", err)
-	}
 	writeJSON(w, map[string]any{
 		"ok":               true,
 		"mesh_ip":          meshState.MeshIP,
 		"proxy_port":       meshState.ExitNodePort,
 		"local_proxy_port": localFwdPort,
 		"peers":            meshState.Peers,
-		"firewall_warning": firewallWarning,
+		"firewall_warning": "",
 	})
 }
 
 // enableMesh activates this node as a mesh member + exit node.
 // It is idempotent: calling it when mesh is already active is a no-op.
 func (s *Server) enableMesh(ctx context.Context) error {
+	s.meshMu.Lock()
+	defer s.meshMu.Unlock()
+
 	// Already active — nothing to do.
 	if snap := s.agent.Snapshot(); func() bool {
 		m, _ := snap["mesh"].(state.MeshStatus)
@@ -1135,7 +1151,30 @@ func (s *Server) enableMesh(ctx context.Context) error {
 
 	s.refreshGuardForCurrentVPN()
 
-	slog.Info("mesh enabled", "mesh_ip", node.MeshIP, "peers", len(node.Peers))
+	// Apply host firewall rules for mesh traffic + local RPC.
+	// This runs inside the mutex to prevent double-application on concurrent
+	// enable requests. We use a 2-minute timeout for polkit interactive auth.
+	{
+		fwCtx, fwCancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer fwCancel()
+		iface := "wg0"
+		if s.wgMgr != nil && s.wgMgr.InterfaceName() != "" {
+			iface = s.wgMgr.InterfaceName()
+		}
+		if err := firewall.Allow(fwCtx, firewall.Scope{
+			Name:              "mesh",
+			Interface:         iface,
+			RPCPort:           s.port,
+			MeshDestinationIP: node.MeshIP,
+			MeshPeerIPs:       peerMeshIPs(node.Peers),
+			MeshProxyPort:     proxyPort,
+			Direct:            caps.HasNetAdmin(),
+		}); err != nil {
+			slog.Warn("firewall allow failed (mesh still up)", "err", err)
+		}
+	}
+
+	slog.Info("mesh enabled", "mesh_ip", logredact.IP(node.MeshIP), "peers", len(node.Peers))
 	return nil
 }
 
@@ -1172,7 +1211,7 @@ func (s *Server) handleMeshDisable(w http.ResponseWriter, r *http.Request) {
 			iface = s.wgMgr.InterfaceName()
 		}
 		sysstate.Global.RevertByPrefix(fwCtx, "firewall:mesh:")
-		if err := firewall.Cleanup(fwCtx, iface); err != nil {
+		if err := firewall.Cleanup(fwCtx, iface, caps.HasNetAdmin()); err != nil {
 			slog.Debug("firewall cleanup failed", "err", err)
 		}
 	}()
