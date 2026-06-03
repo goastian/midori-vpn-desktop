@@ -2,6 +2,27 @@
 
 All notable MidoriVPN Desktop changes are documented here.
 
+## v1.1.0 - MidoriVPN Desktop 1.1.0
+
+Release centrado en permisos, proteccion DNS y limpieza del dashboard.
+
+### Features
+
+- Nuevo `PermissionsTriggerCard` para solicitar permisos desde la UI de forma guiada.
+- Nuevo `DnsProtectionCard` para mostrar estado/capacidades del backend DNS y su control desde dashboard.
+- Nueva composable `useDnsProtection` para encapsular estado y operaciones de proteccion DNS.
+- Dashboard refactorizado para usar componentes dedicados y mejorar organizacion del codigo.
+
+### Tests
+
+- Agregados tests unitarios para `PermissionsTriggerCard`.
+- Agregados tests para la utilidad `formatBytes`.
+
+### Improvements
+
+- Actualizados textos i18n para cadenas nuevas de permisos y proteccion DNS.
+- Mejorado lazy-loading de rutas y chunking de dependencias para optimizar el build.
+
 ## v1.0.2 - MidoriVPN Desktop 1.0.2
 
 Mini patch para corregir el AppImage en escritorios Linux donde `v1.0.1` seguia fallando en maquinas sin instalacion previa del agente.
