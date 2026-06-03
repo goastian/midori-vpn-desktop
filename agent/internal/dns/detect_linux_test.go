@@ -49,10 +49,10 @@ func TestDetectReturnsBackend(t *testing.T) {
 
 func TestTrimSpace(t *testing.T) {
 	cases := map[string]string{
-		"  hi  ":  "hi",
+		"  hi  ":      "hi",
 		"\t1.1.1.1\n": "1.1.1.1",
-		"":          "",
-		"x":         "x",
+		"":            "",
+		"x":           "x",
 	}
 	for in, want := range cases {
 		if got := trimSpace(in); got != want {

@@ -8,6 +8,6 @@ func Detect() Backend { return noopBackend{} }
 
 type noopBackend struct{}
 
-func (noopBackend) Kind() Kind                          { return KindNone }
-func (noopBackend) Apply(string, []string) error        { return nil }
-func (noopBackend) Restore() error                      { return nil }
+func (noopBackend) Kind() Kind                   { return KindNone }
+func (noopBackend) Apply(string, []string) error { return nil }
+func (noopBackend) Restore() error               { return nil }

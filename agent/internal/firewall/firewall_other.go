@@ -20,6 +20,6 @@ const (
 	ManagedTag          = "midorivpn-managed"
 )
 
-func Detect() Backend                                    { return BackendNone }
-func Allow(_ context.Context, _ Scope) error             { return nil }
-func Cleanup(_ context.Context, _ string, _ bool) error  { return nil }
+func Detect() Backend                                   { return BackendNone }
+func Allow(_ context.Context, _ Scope) error            { return nil }
+func Cleanup(_ context.Context, _ string, _ bool) error { return nil }
