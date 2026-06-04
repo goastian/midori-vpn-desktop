@@ -200,7 +200,7 @@ jobs:
             asset-id: macos-arm64
 
           - label: macOS Intel
-            runner: macos-15-intel
+            runner: macos-13
             os: macos
             rust-target: x86_64-apple-darwin
             agent-target: darwin-amd64
@@ -209,7 +209,7 @@ jobs:
             asset-id: macos-x86_64
 
           - label: Windows x86_64
-            runner: windows-2025
+            runner: windows-2022
             os: windows
             rust-target: x86_64-pc-windows-msvc
             agent-target: windows-amd64
