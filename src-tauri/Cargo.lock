@@ -2144,7 +2144,7 @@ dependencies = [
 name = "midorivpn-desktop"
 version = "1.0.2"
 dependencies = [
- "getrandom 0.3.4",
+ "getrandom 0.4.2",
  "open",
  "reqwest",
  "serde",
