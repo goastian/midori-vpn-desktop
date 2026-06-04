@@ -2,6 +2,26 @@
 
 All notable MidoriVPN Desktop changes are documented here.
 
+## v1.1.1 - MidoriVPN Desktop 1.1.1
+
+Patch de mantenimiento sobre `v1.1.0` para alinear el versionado del desktop, actualizar dependencias y recoger los commits recientes.
+
+### Fixes
+
+- Version de la aplicacion actualizada a `1.1.1` en npm, Cargo y Tauri.
+- Managers DNS de macOS y Windows ahora exponen `DNSBackendKind`, manteniendo consistente la identificacion del backend DNS entre plataformas.
+- Imports DNS reorganizados en el agent para mantener builds multiplataforma mas limpios.
+
+### Dependencies
+
+- `getrandom` actualizado de `0.3.4` a `0.4.2` en Tauri/Rust.
+- GitHub Actions actualizadas: `actions/checkout` v6, `actions/setup-node` v6, `actions/upload-artifact` v7 y `actions/download-artifact` v8.
+
+### Build
+
+- Fallback del script local de AppImage actualizado para buscar `MidoriVPN_1.1.1_amd64.AppImage`.
+- Ejemplos de artefactos en README actualizados a la version `1.1.1`.
+
 ## v1.1.0 - MidoriVPN Desktop 1.1.0
 
 Release centrado en permisos, proteccion DNS y limpieza del dashboard.
