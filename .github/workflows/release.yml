@@ -200,7 +200,7 @@ jobs:
             asset-id: macos-arm64
 
           - label: macOS Intel
-            runner: macos-13
+            runner: macos-15-intel
             os: macos
             rust-target: x86_64-apple-darwin
             agent-target: darwin-amd64
