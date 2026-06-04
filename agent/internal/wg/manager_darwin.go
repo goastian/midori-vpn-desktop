@@ -3,7 +3,11 @@
 // Package wg — stub for macOS until a platform-specific WireGuard manager is implemented.
 package wg
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/goastian/midorivpn-agent/internal/dns"
+)
 
 type Config struct {
 	PrivateKey string
@@ -29,6 +33,8 @@ func (m *Manager) IsConnected() bool { return false }
 func (m *Manager) DNSProtected() bool { return false }
 
 func (m *Manager) InterfaceName() string { return "" }
+
+func (m *Manager) DNSBackendKind() dns.Kind { return dns.KindNone }
 
 func (m *Manager) ByteCounters() (tx int64, rx int64, ok bool) {
 	return 0, 0, false

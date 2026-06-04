@@ -13,6 +13,7 @@ type Scope struct {
 	MeshDestinationIP string
 	MeshPeerIPs       []string
 	MeshProxyPort     int
+	Direct            bool
 }
 
 const (
