@@ -1,8 +1,12 @@
 package rpc
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/goastian/midorivpn-agent/internal/proxy"
 )
 
 // ---------------------------------------------------------------------------
@@ -48,6 +52,125 @@ func TestConstantTimeTokenEqual(t *testing.T) {
 	}
 	if constantTimeTokenEqual("secret", "secret-with-extra-bytes") {
 		t.Fatal("expected different length tokens not to match")
+	}
+}
+
+func TestRequireLocalAuthAllowsLoopbackOriginAndHeaderToken(t *testing.T) {
+	h := requireLocalAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+	}), "secret", false)
+
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/status", nil)
+	req.RemoteAddr = "127.0.0.1:54321"
+	req.Header.Set("Origin", "tauri://localhost")
+	req.Header.Set("X-Agent-Token", "secret")
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected accepted request, got %d", rec.Code)
+	}
+}
+
+func TestRequireLocalAuthRejectsNonLoopbackRemote(t *testing.T) {
+	h := requireLocalAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+	}), "secret", false)
+
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/status", nil)
+	req.RemoteAddr = "192.0.2.10:54321"
+	req.Header.Set("Origin", "tauri://localhost")
+	req.Header.Set("X-Agent-Token", "secret")
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected forbidden request, got %d", rec.Code)
+	}
+}
+
+func TestRequireLocalAuthRejectsUnknownOrigin(t *testing.T) {
+	h := requireLocalAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+	}), "secret", false)
+
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/status", nil)
+	req.RemoteAddr = "127.0.0.1:54321"
+	req.Header.Set("Origin", "https://evil.example")
+	req.Header.Set("X-Agent-Token", "secret")
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected forbidden request, got %d", rec.Code)
+	}
+}
+
+func TestRequireLocalAuthAllowsSSEQueryToken(t *testing.T) {
+	h := requireLocalAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+	}), "secret", true)
+
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/events?token=secret", nil)
+	req.RemoteAddr = "127.0.0.1:54321"
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected accepted SSE request, got %d", rec.Code)
+	}
+}
+
+func TestRequireLocalAuthRejectsQueryTokenWhenNotAllowed(t *testing.T) {
+	h := requireLocalAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+	}), "secret", false)
+
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/status?token=secret", nil)
+	req.RemoteAddr = "127.0.0.1:54321"
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected forbidden request, got %d", rec.Code)
+	}
+}
+
+func TestWithLocalCORSRejectsUnknownPreflightOrigin(t *testing.T) {
+	h := withLocalCORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+	}))
+
+	req := httptest.NewRequest(http.MethodOptions, "http://127.0.0.1/status", nil)
+	req.Header.Set("Origin", "https://evil.example")
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected forbidden preflight, got %d", rec.Code)
+	}
+}
+
+func TestOAuthCallbackRouteIsAuthExempt(t *testing.T) {
+	s := &Server{
+		localFwd:         proxy.NewLocalForwarder("127.0.0.1:0"),
+		pendingOAuth:     map[string]pendingOAuthEntry{},
+		authentikAuthURL: "https://accounts.astian.org/application/o/authorize/",
+	}
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/oauth/callback", nil)
+	req.RemoteAddr = "192.0.2.10:54321"
+	rec := httptest.NewRecorder()
+
+	s.newMux("secret").ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusForbidden {
+		t.Fatal("expected oauth callback to bypass local token/origin gate")
 	}
 }
 
