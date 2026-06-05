@@ -319,7 +319,7 @@ jobs:
       - name: Build Tauri packages
         id: build_tauri
         continue-on-error: true
-        uses: tauri-apps/tauri-action@v0.5
+        uses: tauri-apps/tauri-action@v0.6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
