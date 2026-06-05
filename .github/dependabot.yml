@@ -23,3 +23,8 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    ignore:
+      # glib is pinned by Tauri/wry's current GTK/WebKitGTK stack. Dependabot
+      # cannot update it independently to the patched 0.20.x line until the
+      # upstream stack moves off gtk-rs 0.18.
+      - dependency-name: "glib"
