@@ -12,6 +12,7 @@
     <select
       class="lang-select"
       :value="currentLocale"
+      :disabled="isChanging"
       :aria-label="t('settings.language')"
       @change="onLocaleChange"
     >
@@ -26,7 +27,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getLocale, setLocale, type Locale } from '../i18n'
 
@@ -36,10 +37,20 @@ defineProps<{
 
 const { t } = useI18n()
 
-const currentLocale = computed(() => getLocale())
+const currentLocale = ref(getLocale())
+const isChanging = ref(false)
 
-function onLocaleChange(e: Event) {
-  setLocale((e.target as HTMLSelectElement).value as Locale)
+async function onLocaleChange(e: Event) {
+  const nextLocale = (e.target as HTMLSelectElement).value as Locale
+  if (nextLocale === currentLocale.value || isChanging.value) return
+
+  isChanging.value = true
+  try {
+    await setLocale(nextLocale)
+    currentLocale.value = getLocale()
+  } finally {
+    isChanging.value = false
+  }
 }
 </script>
 
@@ -86,6 +97,11 @@ function onLocaleChange(e: Event) {
 
 .lang-select:hover {
   border-color: var(--midori-500);
+}
+
+.lang-select:disabled {
+  cursor: wait;
+  opacity: .72;
 }
 
 .lang-select:focus {
