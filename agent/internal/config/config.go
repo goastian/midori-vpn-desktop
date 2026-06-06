@@ -21,6 +21,8 @@ import (
 
 // Config is the resolved runtime configuration.
 type Config struct {
+	// APIURL is the vpn-core base URL. Its origin is also sent as the Origin
+	// header for vpn-core CSRF validation.
 	APIURL                string
 	AccountURL            string
 	AuthentikIssuer       string
