@@ -36,7 +36,7 @@
       </div>
       <div class="row">
         <div class="label">{{ t('settings.proxyPort') }}</div>
-        <div class="value">8888</div>
+        <div class="value">8889</div>
       </div>
       <div class="row" style="margin-top:12px;">
         <div class="label">{{ t('settings.tokenStore') }}</div>
@@ -49,7 +49,7 @@
       <div class="section-title">{{ t('settings.sectionAbout') }}</div>
       <div class="row">
         <div class="label">{{ t('settings.version') }}</div>
-        <div class="value">1.0.0</div>
+        <div class="value">{{ appVersion }}</div>
       </div>
     </div>
 
@@ -92,6 +92,7 @@ import LanguageSelect from '../components/LanguageSelect.vue'
 import QuitButton from '../components/QuitButton.vue'
 
 const { t } = useI18n()
+const appVersion = __APP_VERSION__
 
 const autostart = ref(false)
 const meshAutoStart = ref(true)

@@ -92,7 +92,7 @@
 
       <!-- Stats when connected -->
       <div v-if="activeConnected" class="conn-stats">
-        <template v-if="connectionType === 'vpn'">
+        <template v-if="activeConnectionType === 'vpn'">
           <div class="stat-cell">
             <div class="label">{{ t('stats.server') }}</div>
             <div class="value">{{ vpn.serverPublicIp || activeServerEndpoint || '—' }}</div>
@@ -106,7 +106,7 @@
             <div class="value">{{ formatBytes(vpn.bytesDown) }}</div>
           </div>
         </template>
-        <template v-else-if="connectionType === 'mesh'">
+        <template v-else-if="activeConnectionType === 'mesh'">
           <div class="stat-cell">
             <div class="label">{{ t('stats.exitNode') }}</div>
             <div class="value">{{ activeMeshExitIp || '—' }}</div>
@@ -229,6 +229,12 @@ const activeConnected = computed(() =>
   vpn.connected || (mesh.enabled && mesh.fullTunnel)
 )
 
+const activeConnectionType = computed<'vpn' | 'mesh' | ''>(() => {
+  if (vpn.connected) return 'vpn'
+  if (mesh.enabled && mesh.fullTunnel) return 'mesh'
+  return connectionType.value
+})
+
 const connectDisabled = computed(() => {
   if (vpn.loading || toggleInProgress.value) return true
   if (activeConnected.value) return false
@@ -237,8 +243,8 @@ const connectDisabled = computed(() => {
 
 function isActive(key: string): boolean {
   if (!activeConnected.value) return false
-  if (connectionType.value === 'vpn') return key === `vpn:${vpn.serverIp}`
-  if (connectionType.value === 'mesh') return key.startsWith(`mesh:${activeMeshExitIp.value}:`)
+  if (activeConnectionType.value === 'vpn') return key === `vpn:${vpn.serverIp}`
+  if (activeConnectionType.value === 'mesh') return key.startsWith(`mesh:${activeMeshExitIp.value}:`)
   return false
 }
 

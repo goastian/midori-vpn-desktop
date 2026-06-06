@@ -73,6 +73,7 @@ import brandIcon from './assets/midori-mv.png'
 import { useVpnStore } from './stores/vpn'
 import { useMeshStore } from './stores/mesh'
 import { useAuthStore } from './stores/auth'
+import { isAuthOriginRejected } from './lib/error'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -132,9 +133,11 @@ function sleep(ms: number) {
 
 function isTransientAgentError(e: unknown) {
   const message = String(e)
-  return message.includes('auth_expired: 403') ||
+  return !isAuthOriginRejected(message) && (
+    message.includes('auth_expired: 403') ||
     message.includes('Connection refused') ||
     message.includes('error sending request')
+  )
 }
 
 // Load a snapshot, retrying during startup while the supervisor is still

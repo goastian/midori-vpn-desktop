@@ -26,6 +26,7 @@ export interface VPNStatus {
   connected: boolean
   server_name: string
   server_id: string
+  peer_id?: string
   assigned_ip: string
   server_public_ip: string
   mesh_ip: string

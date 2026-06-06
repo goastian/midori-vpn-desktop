@@ -25,6 +25,7 @@ export default [
       globals: {
         ...globals.browser,
         ...globals.es2024,
+        __APP_VERSION__: 'readonly',
       },
       parserOptions: {
         parser: tseslint.parser,
