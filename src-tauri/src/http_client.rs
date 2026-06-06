@@ -74,20 +74,26 @@ async fn read_json_response(resp: reqwest::Response) -> Result<Value, String> {
     let body = resp.text().await.map_err(|e| e.to_string())?;
 
     if !status.is_success() {
-        // Mark auth failures with a stable prefix so the frontend can
-        // distinguish them from generic agent errors.
-        if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
-            return Err(format!("auth_expired: {} {}", status, body));
-        }
-        let message = if body.is_empty() {
-            status.to_string()
-        } else {
-            format!("{}: {}", status, body)
-        };
-        return Err(message);
+        return Err(classify_http_error(status, &body));
     }
 
     serde_json::from_str(&body).map_err(|e| e.to_string())
+}
+
+fn classify_http_error(status: reqwest::StatusCode, body: &str) -> String {
+    if status == reqwest::StatusCode::FORBIDDEN && body.contains("origin not allowed") {
+        return format!("auth_origin_rejected: {} {}", status, body);
+    }
+    // Mark auth failures with a stable prefix so the frontend can
+    // distinguish them from generic agent errors.
+    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+        return format!("auth_expired: {} {}", status, body);
+    }
+    if body.is_empty() {
+        status.to_string()
+    } else {
+        format!("{}: {}", status, body)
+    }
 }
 
 /// Send a request using the given closure. On transient network errors
@@ -169,7 +175,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{is_allowed_agent_path, AgentMethod};
+    use super::{classify_http_error, is_allowed_agent_path, AgentMethod};
 
     #[test]
     fn allows_only_known_agent_routes() {
@@ -186,5 +192,16 @@ mod tests {
         assert!(!is_allowed_agent_path(AgentMethod::Get, "../status"));
         assert!(!is_allowed_agent_path(AgentMethod::Post, "servers"));
         assert!(!is_allowed_agent_path(AgentMethod::Delete, "settings"));
+    }
+
+    #[test]
+    fn classifies_origin_rejected_separately_from_expired_auth() {
+        let msg = classify_http_error(
+            reqwest::StatusCode::FORBIDDEN,
+            "{\"ok\":false,\"error\":\"origin not allowed\"}",
+        );
+
+        assert!(msg.starts_with("auth_origin_rejected: 403 Forbidden"));
+        assert!(!msg.starts_with("auth_expired:"));
     }
 }
