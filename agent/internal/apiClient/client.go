@@ -7,13 +7,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 )
 
 // Client is the vpn-core API client.
 type Client struct {
 	baseURL     string
+	origin      string
 	httpClient  *http.Client
 	tokenFunc   func() string // returns the current access token
 	refreshFunc func(context.Context) error
@@ -21,12 +25,29 @@ type Client struct {
 
 // New creates a new Client.
 func New(baseURL string, tokenFunc func() string, refreshFunc func(context.Context) error) *Client {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	origin, err := originFromBaseURL(baseURL)
+	if err != nil {
+		slog.Warn("api client: API_URL cannot be used as CSRF origin", "api_url", baseURL, "err", err)
+	}
 	return &Client{
 		baseURL:     baseURL,
+		origin:      origin,
 		tokenFunc:   tokenFunc,
 		refreshFunc: refreshFunc,
 		httpClient:  &http.Client{Timeout: 30 * time.Second},
 	}
+}
+
+func originFromBaseURL(baseURL string) (string, error) {
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		return "", err
+	}
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return "", fmt.Errorf("missing scheme or host")
+	}
+	return parsed.Scheme + "://" + parsed.Host, nil
 }
 
 // ----- Data types -----
@@ -291,9 +312,11 @@ func (c *Client) doOnce(ctx context.Context, method, path string, body, out any,
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	// CSRF check on vpn-core requires an Origin header. Use a static allowed
-	// value — the backend permits all *.astian.org origins by default.
-	req.Header.Set("Origin", "https://app.astian.org")
+	// vpn-core's auth endpoints use the Origin header for CSRF checks. Keep it
+	// aligned with API_URL so desktop deployments need one backend origin.
+	if c.origin != "" {
+		req.Header.Set("Origin", c.origin)
+	}
 	if auth {
 		if token := c.tokenFunc(); token != "" {
 			req.Header.Set("Authorization", "Bearer "+token)
