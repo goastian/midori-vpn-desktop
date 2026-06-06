@@ -73,6 +73,11 @@ func (m *Manager) Connect(cfg *Config) error {
 	// Tear down existing connection.
 	m.shutdownLocked()
 
+	resolvedEndpoint, _, err := resolveEndpoint(cfg.Endpoint, net.LookupIP)
+	if err != nil {
+		return err
+	}
+
 	tdev, err := tun.CreateTUN("wg0", device.DefaultMTU)
 	if err != nil {
 		return fmt.Errorf("create TUN: %w", err)
@@ -100,7 +105,7 @@ func (m *Manager) Connect(cfg *Config) error {
 	var uapiBuilder strings.Builder
 	fmt.Fprintf(&uapiBuilder, "private_key=%x\n", privKeyBytes)
 	fmt.Fprintf(&uapiBuilder, "public_key=%x\n", serverPubKeyBytes)
-	fmt.Fprintf(&uapiBuilder, "endpoint=%s\n", cfg.Endpoint)
+	fmt.Fprintf(&uapiBuilder, "endpoint=%s\n", resolvedEndpoint)
 	fmt.Fprintf(&uapiBuilder, "persistent_keepalive_interval=25\n")
 	fmt.Fprintf(&uapiBuilder, "allowed_ip=0.0.0.0/0\n")
 	fmt.Fprintf(&uapiBuilder, "allowed_ip=::/0\n")
@@ -144,8 +149,9 @@ func (m *Manager) Connect(cfg *Config) error {
 	m.dev = dev
 	m.tunDev = tdev
 	m.cfg = cfg
+	m.cfg.Endpoint = resolvedEndpoint
 
-	slog.Info("wg: interface up", "assigned_ip", logredact.IP(cfg.AssignedIP), "endpoint", logredact.HostPort(cfg.Endpoint))
+	slog.Info("wg: interface up", "assigned_ip", logredact.IP(cfg.AssignedIP), "endpoint", logredact.HostPort(resolvedEndpoint))
 	return nil
 }
 
@@ -346,23 +352,9 @@ func (m *Manager) applyDNS(iface string, servers []string) error {
 }
 
 func (m *Manager) pinEndpointRoute(endpoint string) error {
-	host, _, err := net.SplitHostPort(endpoint)
+	_, endpointIP, err := resolveEndpoint(endpoint, net.LookupIP)
 	if err != nil {
-		host = endpoint
-	}
-	ips, err := net.LookupIP(host)
-	if err != nil || len(ips) == 0 {
-		return fmt.Errorf("resolve endpoint %q: %w", host, err)
-	}
-	var endpointIP net.IP
-	for _, ip := range ips {
-		if ip4 := ip.To4(); ip4 != nil {
-			endpointIP = ip4
-			break
-		}
-	}
-	if endpointIP == nil {
-		return fmt.Errorf("endpoint %q has no IPv4 address", host)
+		return err
 	}
 
 	route, err := outputIP("route", "get", endpointIP.String())
@@ -389,6 +381,36 @@ func (m *Manager) pinEndpointRoute(endpoint string) error {
 	}
 	args = append(args, "dev", dev)
 	return runIP(args...)
+}
+
+func resolveEndpoint(endpoint string, lookupIP func(string) ([]net.IP, error)) (string, net.IP, error) {
+	host, port, err := net.SplitHostPort(strings.TrimSpace(endpoint))
+	if err != nil {
+		return "", nil, fmt.Errorf("parse endpoint %q: %w", endpoint, err)
+	}
+
+	host = strings.Trim(strings.TrimSpace(host), "[]")
+	if host == "" {
+		return "", nil, fmt.Errorf("parse endpoint %q: empty host", endpoint)
+	}
+
+	if ip := net.ParseIP(host); ip != nil {
+		if ip4 := ip.To4(); ip4 != nil {
+			return net.JoinHostPort(ip4.String(), port), ip4, nil
+		}
+		return "", nil, fmt.Errorf("endpoint %q has no IPv4 address", host)
+	}
+
+	ips, err := lookupIP(host)
+	if err != nil {
+		return "", nil, fmt.Errorf("resolve endpoint %q: %w", host, err)
+	}
+	for _, ip := range ips {
+		if ip4 := ip.To4(); ip4 != nil {
+			return net.JoinHostPort(ip4.String(), port), ip4, nil
+		}
+	}
+	return "", nil, fmt.Errorf("endpoint %q has no IPv4 address", host)
 }
 
 func (m *Manager) restoreSystemTunnel() {
