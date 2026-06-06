@@ -6,6 +6,8 @@ PKG_CONFIG_DIR="${TMPDIR:-/tmp}/midorivpn-pkgconfig"
 AYATANA_PC_SOURCE="/usr/lib64/pkgconfig/ayatana-appindicator3-0.1.pc"
 AYATANA_PC_LOCAL="$PKG_CONFIG_DIR/ayatana-appindicator3-0.1.pc"
 APPIMAGE_RUNTIME="${APPIMAGE_RUNTIME:-${TMPDIR:-/tmp}/runtime-x86_64}"
+APPIMAGETOOL_PATH="${APPIMAGETOOL_PATH:-${TMPDIR:-/tmp}/appimagetool-x86_64.AppImage}"
+APPIMAGETOOL_URL="${APPIMAGETOOL_URL:-https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage}"
 
 cd "$ROOT_DIR"
 
@@ -26,6 +28,16 @@ find_appimagetool() {
       return 0
     fi
   done < <(find /tmp -type f -name appimagetool -perm -111 2>/dev/null | sort)
+
+  if [[ ! -x "$APPIMAGETOOL_PATH" ]]; then
+    curl -L "$APPIMAGETOOL_URL" -o "$APPIMAGETOOL_PATH" >/dev/null 2>&1 || return 1
+    chmod +x "$APPIMAGETOOL_PATH"
+  fi
+
+  if "$APPIMAGETOOL_PATH" --version >/dev/null 2>&1; then
+    printf '%s\n' "$APPIMAGETOOL_PATH"
+    return 0
+  fi
 }
 
 ensure_appimage_runtime() {

@@ -20,7 +20,7 @@ if [[ ! -x "$RELEASE_BIN" ]]; then
 fi
 
 if [[ -z "$APPIMAGE_PATH" ]]; then
-  APPIMAGE_PATH="$ROOT_DIR/src-tauri/target/release/bundle/appimage/MidoriVPN_1.1.1_amd64.AppImage"
+  APPIMAGE_PATH="$ROOT_DIR/src-tauri/target/release/bundle/appimage/MidoriVPN_1.1.2_amd64.AppImage"
 fi
 
 export APPIMAGE="$APPIMAGE_PATH"

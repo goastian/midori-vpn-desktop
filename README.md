@@ -85,6 +85,8 @@ bash scripts/build-agent.sh host
 
 Genera `agent/target/release/agent` (o `agent.exe` en Windows) — binario estático, stripped, listo para que Tauri lo empaquete como recurso.
 
+El script local de AppImage puede descargar `appimagetool` y el runtime necesarios si no estan instalados en el sistema, para poder reempaquetar el `AppDir` generado por Tauri.
+
 > Para compilar para otras plataformas, usa uno de los targets disponibles: `linux-amd64`, `linux-arm64`, `darwin-arm64`, `darwin-amd64`, `windows-amd64` o `all`.
 
 ### 3. Modo desarrollo (HMR)
@@ -113,13 +115,13 @@ Los artefactos quedan en `src-tauri/target/release/bundle/`:
 
 | Plataforma | Formato    | Ruta de ejemplo |
 |------------|------------|-----------------|
-| Linux      | Debian     | `bundle/deb/MidoriVPN_1.1.1_amd64.deb` |
-| Linux      | AppImage   | `bundle/appimage/MidoriVPN_1.1.1_amd64.AppImage` |
-| Linux      | RPM        | `bundle/rpm/MidoriVPN-1.1.1-1.x86_64.rpm` |
-| macOS      | DMG        | `bundle/dmg/MidoriVPN_1.1.1_aarch64.dmg` |
+| Linux      | Debian     | `bundle/deb/MidoriVPN_1.1.2_amd64.deb` |
+| Linux      | AppImage   | `bundle/appimage/MidoriVPN_1.1.2_amd64.AppImage` |
+| Linux      | RPM        | `bundle/rpm/MidoriVPN-1.1.2-1.x86_64.rpm` |
+| macOS      | DMG        | `bundle/dmg/MidoriVPN_1.1.2_aarch64.dmg` |
 | macOS      | APP        | `bundle/macos/MidoriVPN.app` |
-| Windows    | MSI        | `bundle/msi/MidoriVPN_1.1.1_x64_en-US.msi` |
-| Windows    | NSIS       | `bundle/nsis/MidoriVPN_1.1.1_x64-setup.exe` |
+| Windows    | MSI        | `bundle/msi/MidoriVPN_1.1.2_x64_en-US.msi` |
+| Windows    | NSIS       | `bundle/nsis/MidoriVPN_1.1.2_x64-setup.exe` |
 
 ### 6. Instalar el paquete en Linux (incluye post-install)
 
@@ -170,6 +172,8 @@ El agente lee variables de entorno en este orden (la última tiene precedencia):
 4. Variables del proceso.
 
 Variables soportadas: `API_URL`, `AUTHENTIK_ISSUER`, `AUTHENTIK_CLIENT_ID`, `AUTHENTIK_AUTH_URL`, `AUTHENTIK_TOKEN_URL`, `AUTHENTIK_USERINFO_URL`, `AUTHENTIK_JWKS_URL`, `AUTHENTIK_REDIRECT_URI`, `ACCOUNT_URL`.
+
+El agente usa el origin de `API_URL` como header `Origin` cuando llama a `vpn-core`. El despliegue de `vpn-core` debe incluir ese origin en `CORS_ALLOWED_ORIGINS`; durante la transición de clientes antiguos conviene mantener también `https://app.astian.org`.
 
 ## Datos del usuario
 
