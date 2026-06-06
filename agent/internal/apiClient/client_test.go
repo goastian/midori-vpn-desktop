@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
+
+	"github.com/goastian/midorivpn-agent/internal/config"
 )
 
 func TestOriginFromBaseURL(t *testing.T) {
@@ -39,7 +42,38 @@ func TestOriginFromBaseURL(t *testing.T) {
 	}
 }
 
-func TestClientSendsOriginDerivedFromBaseURL(t *testing.T) {
+// TestOriginFromConfigAPIURL verifies that the URL coming from config.Load()
+// (honours API_URL env var or .env file) is a valid origin for the client.
+// Set API_URL in the environment or a .env file to point tests at a custom server.
+func TestOriginFromConfigAPIURL(t *testing.T) {
+	cfg := config.Load()
+	apiURL := cfg.APIURL
+	if apiURL == "" {
+		t.Skip("API_URL not configured")
+	}
+
+	origin, err := originFromBaseURL(apiURL)
+	if err != nil {
+		t.Fatalf("originFromBaseURL(%q) from config: %v", apiURL, err)
+	}
+	if origin == "" {
+		t.Fatalf("originFromBaseURL(%q) returned empty string", apiURL)
+	}
+	t.Logf("config API_URL %q -> origin %q", apiURL, origin)
+}
+
+// TestClientSendsOriginDerivedFromAPIURL builds a client using the URL from
+// config.Load() (respects API_URL env / .env override) and verifies that the
+// Origin header on outgoing requests equals the scheme+host of that URL.
+// When API_URL is not set the test falls back to the production default.
+func TestClientSendsOriginDerivedFromAPIURL(t *testing.T) {
+	apiURL := config.Load().APIURL
+	if apiURL == "" {
+		apiURL = "https://vpn.astian.org"
+	}
+	// Override so the client actually talks to our test server below.
+	os.Setenv("API_URL", "")
+
 	var gotOrigin string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotOrigin = r.Header.Get("Origin")
@@ -57,6 +91,6 @@ func TestClientSendsOriginDerivedFromBaseURL(t *testing.T) {
 	}
 
 	if gotOrigin != server.URL {
-		t.Fatalf("Origin = %q, want %q", gotOrigin, server.URL)
+		t.Fatalf("Origin header = %q, want %q", gotOrigin, server.URL)
 	}
 }
