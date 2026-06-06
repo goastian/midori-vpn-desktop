@@ -17,12 +17,10 @@ export const useVpnStore = defineStore('vpn', () => {
   const servers = ref<Server[]>([])
 
   function applyStatus(s: VPNStatus) {
-    // Field-by-field mapping. NOTE: `serverIp` historically holds `server_id`
-    // (the WireGuard server identifier, not an IP). Renaming would be a
-    // breaking change for templates; documented here so future readers don't
-    // get misled.
     connected.value = s.connected
     serverName.value = s.server_name
+    // Historical name kept for template compatibility; this is the backend
+    // VPN server id, not an IP address.
     serverIp.value = s.server_id
     assignedIp.value = s.assigned_ip
     serverPublicIp.value = s.server_public_ip ?? ''
