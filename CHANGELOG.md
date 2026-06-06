@@ -2,6 +2,36 @@
 
 All notable MidoriVPN Desktop changes are documented here.
 
+## v1.1.3 - MidoriVPN Desktop 1.1.3
+
+Patch release focused on desktop safety, DNS protection visibility, and
+release metadata alignment.
+
+### Fixes
+
+- **tauri/bridge** — Allowed `GET /dns/status` through the local RPC
+  allowlist so the DNS protection UI can read the agent status endpoint.
+- **build-agent** — `scripts/build-agent.sh` now preserves MidoriVPN user
+  data by default. Local tokens, keystore data, and settings are removed only
+  when `RESET_MIDORIVPN_USER_DATA=1` is set explicitly.
+- **frontend/protection** — Added a protection store and Dashboard status
+  card for kill switch and DNS protection state from agent snapshots and SSE
+  events.
+- **settings** — Mesh settings load/save errors are rendered in Settings
+  instead of being swallowed silently.
+
+### Improvements
+
+- Moved permission and mesh firewall warning strings into i18n.
+- Added missing DNS protection and protection status translations for
+  supported locales.
+- Updated release artifact examples to `1.1.3`.
+
+### Tests
+
+- Added frontend coverage for DNS status bridge calls and the protection store.
+- Extended the Tauri bridge allowlist test for `dns/status`.
+
 ## v1.1.2 - MidoriVPN Desktop 1.1.2
 
 Stability and hardening patch focused on VPN connection reliability,

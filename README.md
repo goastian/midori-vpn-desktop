@@ -85,6 +85,12 @@ bash scripts/build-agent.sh host
 
 Genera `agent/target/release/agent` (o `agent.exe` en Windows) — binario estático, stripped, listo para que Tauri lo empaquete como recurso.
 
+The agent build preserves MidoriVPN user data by default. For a clean local test that removes tokens, keystore data, and settings, run:
+
+```bash
+RESET_MIDORIVPN_USER_DATA=1 bash scripts/build-agent.sh host
+```
+
 El script local de AppImage puede descargar `appimagetool` y el runtime necesarios si no estan instalados en el sistema, para poder reempaquetar el `AppDir` generado por Tauri.
 
 > Para compilar para otras plataformas, usa uno de los targets disponibles: `linux-amd64`, `linux-arm64`, `darwin-arm64`, `darwin-amd64`, `windows-amd64` o `all`.
@@ -115,13 +121,13 @@ Los artefactos quedan en `src-tauri/target/release/bundle/`:
 
 | Plataforma | Formato    | Ruta de ejemplo |
 |------------|------------|-----------------|
-| Linux      | Debian     | `bundle/deb/MidoriVPN_1.1.2_amd64.deb` |
-| Linux      | AppImage   | `bundle/appimage/MidoriVPN_1.1.2_amd64.AppImage` |
-| Linux      | RPM        | `bundle/rpm/MidoriVPN-1.1.2-1.x86_64.rpm` |
-| macOS      | DMG        | `bundle/dmg/MidoriVPN_1.1.2_aarch64.dmg` |
+| Linux      | Debian     | `bundle/deb/MidoriVPN_1.1.3_amd64.deb` |
+| Linux      | AppImage   | `bundle/appimage/MidoriVPN_1.1.3_amd64.AppImage` |
+| Linux      | RPM        | `bundle/rpm/MidoriVPN-1.1.3-1.x86_64.rpm` |
+| macOS      | DMG        | `bundle/dmg/MidoriVPN_1.1.3_aarch64.dmg` |
 | macOS      | APP        | `bundle/macos/MidoriVPN.app` |
-| Windows    | MSI        | `bundle/msi/MidoriVPN_1.1.2_x64_en-US.msi` |
-| Windows    | NSIS       | `bundle/nsis/MidoriVPN_1.1.2_x64-setup.exe` |
+| Windows    | MSI        | `bundle/msi/MidoriVPN_1.1.3_x64_en-US.msi` |
+| Windows    | NSIS       | `bundle/nsis/MidoriVPN_1.1.3_x64-setup.exe` |
 
 ### 6. Instalar el paquete en Linux (incluye post-install)
 
