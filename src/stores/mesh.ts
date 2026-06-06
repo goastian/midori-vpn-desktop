@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { onScopeDispose, ref } from 'vue'
 import { agent, type ExitNode, type MeshStatus } from '../lib/agent'
 import { toErrorMessage } from '../lib/error'
+import { text } from '../lib/i18nText'
 import { isValidMeshIp, isValidPort, isValidProxyScheme } from '../lib/meshValidation'
 
 /** Mesh operation state machine.
@@ -81,7 +82,7 @@ export const useMeshStore = defineStore('mesh', () => {
     try {
       const res = await agent.mesh.enable()
       if (res.firewall_warning) {
-        error.value = `Mesh activo, pero falló la configuración de firewall: ${res.firewall_warning}`
+        error.value = text('errors.meshFirewallWarning', { warning: res.firewall_warning })
       }
       // SSE will fire mesh_status → applyStatus reconciles state to 'enabled'.
     } catch (e) {

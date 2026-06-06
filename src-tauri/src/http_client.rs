@@ -53,6 +53,7 @@ fn is_allowed_agent_path(method: AgentMethod, path: &str) -> bool {
             | (AgentMethod::Get, "settings")
             | (AgentMethod::Get, "mesh/exit-nodes")
             | (AgentMethod::Get, "public-ip")
+            | (AgentMethod::Get, "dns/status")
             | (AgentMethod::Post, "auth/set-tokens")
             | (AgentMethod::Post, "auth/refresh")
             | (AgentMethod::Post, "vpn/connect")
@@ -180,6 +181,7 @@ mod tests {
     #[test]
     fn allows_only_known_agent_routes() {
         assert!(is_allowed_agent_path(AgentMethod::Get, "status"));
+        assert!(is_allowed_agent_path(AgentMethod::Get, "dns/status"));
         assert!(is_allowed_agent_path(AgentMethod::Post, "vpn/connect"));
         assert!(is_allowed_agent_path(AgentMethod::Delete, "mesh/exit-node"));
 

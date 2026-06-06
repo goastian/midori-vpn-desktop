@@ -79,4 +79,19 @@ describe('agent event relay client', () => {
     cleanup()
     expect(mocks.unlisten).toHaveBeenCalledOnce()
   })
+
+  it('requests DNS status through the Tauri bridge allowlisted path', async () => {
+    mocks.invoke.mockResolvedValueOnce({
+      backend: 'resolvconf',
+      needs_extra_caps: true,
+      caps_missing: ['cap_dac_override'],
+      caps_ok: false,
+    })
+
+    const status = await agent.dns.status()
+
+    expect(mocks.invoke).toHaveBeenCalledWith('agent_get', { path: 'dns/status' })
+    expect(status.backend).toBe('resolvconf')
+    expect(status.caps_ok).toBe(false)
+  })
 })

@@ -14,6 +14,7 @@
         </div>
         <button class="toggle" :class="{ on: meshAutoStart }" :disabled="featuresLocked" @click="toggleMeshAutoStart"></button>
       </div>
+      <div v-if="meshSettingsError" class="error" style="margin-top:8px;">{{ meshSettingsError }}</div>
     </div>
 
     <div class="card">

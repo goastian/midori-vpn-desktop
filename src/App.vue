@@ -73,6 +73,7 @@ import brandIcon from './assets/midori-mv.png'
 import { useVpnStore } from './stores/vpn'
 import { useMeshStore } from './stores/mesh'
 import { useAuthStore } from './stores/auth'
+import { useProtectionStore } from './stores/protection'
 import { isAuthOriginRejected } from './lib/error'
 
 const { t } = useI18n()
@@ -84,6 +85,7 @@ interface SecurityIssue { id: string; title: string; detail: string; fix_cmd: st
 const vpnStore = useVpnStore()
 const meshStore = useMeshStore()
 const authStore = useAuthStore()
+const protectionStore = useProtectionStore()
 const securityIssues = ref<SecurityIssue[]>([])
 
 /** Status emitted by the Rust agent supervisor: "running" | "restarting" | "failed" */
@@ -149,6 +151,7 @@ async function loadSnapshot(retries = 0) {
       vpnStore.applyStatus(snap.vpn)
       meshStore.applyStatus(snap.mesh)
       authStore.applyStatus(snap.auth)
+      protectionStore.applyStatus(snap.protection)
       return
     } catch (e) {
       if (attempt >= retries || !isTransientAgentError(e)) {
@@ -187,6 +190,7 @@ onMounted(async () => {
     if (event.type === 'vpn_status') vpnStore.applyStatus(event.data)
     else if (event.type === 'mesh_status') meshStore.applyStatus(event.data)
     else if (event.type === 'auth_status') authStore.applyStatus(event.data)
+    else if (event.type === 'protection_status') protectionStore.applyStatus(event.data)
   })
 
   // Listen for agent supervisor status changes from Rust.

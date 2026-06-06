@@ -10,6 +10,7 @@
 
 import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { text } from '../lib/i18nText'
 
 const capsGranted = ref(false)   // default false — assume not granted until checked
 const capsGranting = ref(false)
@@ -51,12 +52,12 @@ export function useCaps() {
 
         capsGranted.value = await invoke<boolean>('agent_has_caps')
         if (!capsGranted.value) {
-          capsError.value = 'Permisos aplicados, pero no se pudieron verificar en el agente.'
+          capsError.value = text('errors.capsVerifyFailed')
           return false
         }
         return true
       } else {
-        capsError.value = 'No se pudo aplicar. Ejecuta el comando manualmente como root.'
+        capsError.value = text('errors.capsApplyFailed')
         return false
       }
     } catch (e) {
@@ -80,7 +81,7 @@ export function useCaps() {
     try {
       const ok = await invoke<boolean>('grant_dns_protection_caps')
       if (!ok) {
-        capsError.value = 'No se pudo aplicar. Ejecuta el comando manualmente como root.'
+        capsError.value = text('errors.capsApplyFailed')
         return false
       }
       try {
@@ -90,7 +91,7 @@ export function useCaps() {
       }
       capsGranted.value = await invoke<boolean>('agent_has_caps')
       if (!capsGranted.value) {
-        capsError.value = 'Permisos aplicados, pero no se pudieron verificar en el agente.'
+        capsError.value = text('errors.capsVerifyFailed')
         return false
       }
       return true
@@ -113,7 +114,7 @@ export function useCaps() {
         capsGranted.value = false
         return true
       } else {
-        capsError.value = 'No se pudo revertir. Ejecuta "sudo setcap -r /usr/local/bin/midorivpn-agent" manualmente.'
+        capsError.value = text('errors.capsRevertFailed')
         return false
       }
     } catch (e) {

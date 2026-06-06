@@ -15,6 +15,20 @@
   "security": {
     "copyAndClose": "Скопировать и закрыть"
   },
+  "protection": {
+    "title": "Защита от утечек",
+    "killSwitchOn": "Аварийный выключатель активен",
+    "killSwitchOff": "Аварийный выключатель неактивен",
+    "dnsOn": "DNS защищён",
+    "dnsOff": "DNS не защищён",
+    "mode": "Режим: {mode}"
+  },
+  "errors": {
+    "capsApplyFailed": "Не удалось применить разрешения. Выполните команду вручную от root.",
+    "capsVerifyFailed": "Разрешения применены, но агент не смог их проверить.",
+    "capsRevertFailed": "Не удалось отозвать разрешения. Выполните \"sudo setcap -r /usr/local/bin/midorivpn-agent\" вручную.",
+    "meshFirewallWarning": "Mesh активен, но настройка брандмауэра не удалась: {warning}"
+  },
   "server": {
     "switching": "Смена сервера…",
     "loading": "Загрузка серверов…",
@@ -68,6 +82,12 @@
     },
     "cancel": "Отмена",
     "accept": "Принять и применить"
+  },
+  "dnsProtection": {
+    "title": "Защита от утечек DNS требует дополнительных разрешений",
+    "body": "Эта система не использует systemd-resolved, поэтому агенту нужны cap_dac_override и cap_linux_immutable для защиты /etc/resolv.conf от утечек DNS.",
+    "enable": "Предоставить разрешения для защиты DNS",
+    "applying": "Применение…"
   },
   "auth": {
     "signIn": "Войти",

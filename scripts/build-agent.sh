@@ -11,10 +11,10 @@ export GOCACHE
 
 mkdir -p "$OUT_DIR"
 
-# When rebuilding, wipe the user-scoped state (tokens, keystore, settings).
-# Avoids stale credentials / mesh keys leaking across iterations. Honour
-# KEEP_USER_DATA=1 if a caller needs to preserve the directory.
-if [ "${KEEP_USER_DATA:-0}" != "1" ]; then
+# Rebuilding must be non-destructive by default: this script is used by normal
+# local and CI package builds. Use RESET_MIDORIVPN_USER_DATA=1 for an explicit
+# clean-room dev run that wipes user-scoped state (tokens, keystore, settings).
+if [ "${RESET_MIDORIVPN_USER_DATA:-0}" = "1" ]; then
   for dir in \
     "${XDG_CONFIG_HOME:-$HOME/.config}/midorivpn" \
     "${XDG_DATA_HOME:-$HOME/.local/share}/midorivpn" \
@@ -51,6 +51,9 @@ Targets:
   darwin-amd64   Build macOS Intel as agent
   windows-amd64  Build Windows x86_64 as agent.exe
   all            Build every supported target
+
+Environment:
+  RESET_MIDORIVPN_USER_DATA=1  Wipe local MidoriVPN user state before building
 EOF
 }
 

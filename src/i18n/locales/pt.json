@@ -15,6 +15,20 @@
   "security": {
     "copyAndClose": "Copiar e fechar"
   },
+  "protection": {
+    "title": "Proteção contra vazamentos",
+    "killSwitchOn": "Kill switch ativo",
+    "killSwitchOff": "Kill switch inativo",
+    "dnsOn": "DNS protegido",
+    "dnsOff": "DNS sem proteção",
+    "mode": "Modo: {mode}"
+  },
+  "errors": {
+    "capsApplyFailed": "Não foi possível aplicar. Execute o comando manualmente como root.",
+    "capsVerifyFailed": "Permissões aplicadas, mas o agente não conseguiu verificá-las.",
+    "capsRevertFailed": "Não foi possível revogar. Execute \"sudo setcap -r /usr/local/bin/midorivpn-agent\" manualmente.",
+    "meshFirewallWarning": "Mesh ativo, mas a configuração do firewall falhou: {warning}"
+  },
   "server": {
     "switching": "Trocando servidor…",
     "loading": "Carregando servidores…",
@@ -68,6 +82,12 @@
     },
     "cancel": "Cancelar",
     "accept": "Aceitar e aplicar"
+  },
+  "dnsProtection": {
+    "title": "A proteção contra vazamentos de DNS requer permissões extras",
+    "body": "Este sistema não usa systemd-resolved, então o agente precisa de cap_dac_override e cap_linux_immutable para proteger /etc/resolv.conf contra vazamentos de DNS.",
+    "enable": "Conceder permissões de proteção DNS",
+    "applying": "Aplicando…"
   },
   "auth": {
     "signIn": "Entrar",

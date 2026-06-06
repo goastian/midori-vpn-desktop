@@ -15,6 +15,20 @@
   "security": {
     "copyAndClose": "Copiar y cerrar"
   },
+  "protection": {
+    "title": "Protección contra fugas",
+    "killSwitchOn": "Kill switch activo",
+    "killSwitchOff": "Kill switch inactivo",
+    "dnsOn": "DNS protegido",
+    "dnsOff": "DNS sin proteger",
+    "mode": "Modo: {mode}"
+  },
+  "errors": {
+    "capsApplyFailed": "No se pudo aplicar. Ejecuta el comando manualmente como root.",
+    "capsVerifyFailed": "Permisos aplicados, pero no se pudieron verificar en el agente.",
+    "capsRevertFailed": "No se pudo revertir. Ejecuta \"sudo setcap -r /usr/local/bin/midorivpn-agent\" manualmente.",
+    "meshFirewallWarning": "Mesh activo, pero falló la configuración de firewall: {warning}"
+  },
   "server": {
     "switching": "Cambiando servidor…",
     "loading": "Cargando servidores…",

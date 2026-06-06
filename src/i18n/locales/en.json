@@ -15,6 +15,20 @@
   "security": {
     "copyAndClose": "Copy and dismiss"
   },
+  "protection": {
+    "title": "Leak protection",
+    "killSwitchOn": "Kill switch active",
+    "killSwitchOff": "Kill switch idle",
+    "dnsOn": "DNS protected",
+    "dnsOff": "DNS not protected",
+    "mode": "Mode: {mode}"
+  },
+  "errors": {
+    "capsApplyFailed": "Could not apply permissions. Run the command manually as root.",
+    "capsVerifyFailed": "Permissions were applied, but the agent could not verify them.",
+    "capsRevertFailed": "Could not revoke permissions. Run \"sudo setcap -r /usr/local/bin/midorivpn-agent\" manually.",
+    "meshFirewallWarning": "Mesh is active, but firewall configuration failed: {warning}"
+  },
   "server": {
     "switching": "Switching server…",
     "loading": "Loading servers…",

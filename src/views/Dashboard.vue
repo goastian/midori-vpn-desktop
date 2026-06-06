@@ -117,6 +117,26 @@
       <div v-if="vpn.error" class="error">{{ vpn.error }}</div>
     </div>
 
+    <div v-if="activeConnected || protection.hasSignal" class="card protection-card">
+      <div class="section-title">{{ t('protection.title') }}</div>
+      <div class="protection-grid">
+        <div class="protection-item" :class="{ active: protection.killSwitchActive }">
+          <span class="protection-dot"></span>
+          <span>{{ t(protection.killSwitchActive ? 'protection.killSwitchOn' : 'protection.killSwitchOff') }}</span>
+        </div>
+        <div class="protection-item" :class="{ active: protection.dnsProtected }">
+          <span class="protection-dot"></span>
+          <span>{{ t(protection.dnsProtected ? 'protection.dnsOn' : 'protection.dnsOff') }}</span>
+        </div>
+      </div>
+      <div v-if="protection.mode" class="label protection-mode">
+        {{ t('protection.mode', { mode: protection.mode }) }}
+      </div>
+      <div v-if="protection.lastError" class="error protection-error">
+        {{ protection.lastError }}
+      </div>
+    </div>
+
     <!-- Permissions trigger: shown after login until caps are granted -->
     <PermissionsTriggerCard
       :caps-granted="capsGranted"
@@ -139,6 +159,7 @@ import { useI18n } from 'vue-i18n'
 import { useVpnStore } from '../stores/vpn'
 import { useAuthStore } from '../stores/auth'
 import { useMeshStore } from '../stores/mesh'
+import { useProtectionStore } from '../stores/protection'
 import { useCaps } from '../composables/useCaps'
 import { formatBytes } from '../lib/format'
 import LanguageSelect from '../components/LanguageSelect.vue'
@@ -150,6 +171,7 @@ const vpn = useVpnStore()
 const { t } = useI18n()
 const auth = useAuthStore()
 const mesh = useMeshStore()
+const protection = useProtectionStore()
 
 const selectedServer = ref('')
 const serversLoading = ref(false)
@@ -572,6 +594,50 @@ async function toggleConnection() {
   color: var(--muted);
   margin-bottom: 14px;
   line-height: 1.5;
+}
+
+.protection-card {
+  border-color: rgba(22, 163, 74, .18);
+}
+.protection-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.protection-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 0;
+}
+.protection-item.active {
+  border-color: rgba(22, 163, 74, .24);
+  background: var(--midori-50);
+  color: var(--midori-700);
+}
+.protection-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border-2);
+  flex-shrink: 0;
+}
+.protection-item.active .protection-dot {
+  background: var(--midori-500);
+}
+.protection-mode {
+  margin-top: 8px;
+  font-size: 12px;
+}
+.protection-error {
+  margin-top: 8px;
+  font-size: 12px;
 }
 
 /* Login wait hint */

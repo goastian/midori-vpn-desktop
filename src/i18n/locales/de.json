@@ -15,6 +15,20 @@
   "security": {
     "copyAndClose": "Kopieren und schließen"
   },
+  "protection": {
+    "title": "Leak-Schutz",
+    "killSwitchOn": "Kill-Switch aktiv",
+    "killSwitchOff": "Kill-Switch inaktiv",
+    "dnsOn": "DNS geschützt",
+    "dnsOff": "DNS nicht geschützt",
+    "mode": "Modus: {mode}"
+  },
+  "errors": {
+    "capsApplyFailed": "Konnte nicht angewendet werden. Führe den Befehl manuell als root aus.",
+    "capsVerifyFailed": "Berechtigungen wurden angewendet, konnten aber vom Agent nicht verifiziert werden.",
+    "capsRevertFailed": "Konnte nicht widerrufen werden. Führe \"sudo setcap -r /usr/local/bin/midorivpn-agent\" manuell aus.",
+    "meshFirewallWarning": "Mesh ist aktiv, aber die Firewall-Konfiguration ist fehlgeschlagen: {warning}"
+  },
   "server": {
     "switching": "Server wird gewechselt…",
     "loading": "Server werden geladen…",
@@ -68,6 +82,12 @@
     },
     "cancel": "Abbrechen",
     "accept": "Akzeptieren und anwenden"
+  },
+  "dnsProtection": {
+    "title": "DNS-Leak-Schutz benötigt zusätzliche Berechtigungen",
+    "body": "Dieses System verwendet kein systemd-resolved, daher benötigt der Agent cap_dac_override und cap_linux_immutable, um /etc/resolv.conf vor DNS-Leaks zu schützen.",
+    "enable": "DNS-Schutzberechtigungen erteilen",
+    "applying": "Wird angewendet…"
   },
   "auth": {
     "signIn": "Anmelden",

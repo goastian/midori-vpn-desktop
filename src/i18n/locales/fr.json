@@ -15,6 +15,20 @@
   "security": {
     "copyAndClose": "Copier et fermer"
   },
+  "protection": {
+    "title": "Protection contre les fuites",
+    "killSwitchOn": "Coupe-circuit actif",
+    "killSwitchOff": "Coupe-circuit inactif",
+    "dnsOn": "DNS protégé",
+    "dnsOff": "DNS non protégé",
+    "mode": "Mode : {mode}"
+  },
+  "errors": {
+    "capsApplyFailed": "Impossible d'appliquer les autorisations. Exécutez la commande manuellement en root.",
+    "capsVerifyFailed": "Les autorisations ont été appliquées, mais l'agent n'a pas pu les vérifier.",
+    "capsRevertFailed": "Impossible de révoquer les autorisations. Exécutez \"sudo setcap -r /usr/local/bin/midorivpn-agent\" manuellement.",
+    "meshFirewallWarning": "Mesh est actif, mais la configuration du pare-feu a échoué : {warning}"
+  },
   "server": {
     "switching": "Changement de serveur…",
     "loading": "Chargement des serveurs…",
@@ -68,6 +82,12 @@
     },
     "cancel": "Annuler",
     "accept": "Accepter et appliquer"
+  },
+  "dnsProtection": {
+    "title": "La protection contre les fuites DNS nécessite des autorisations supplémentaires",
+    "body": "Ce système n'utilise pas systemd-resolved, l'agent a donc besoin de cap_dac_override et cap_linux_immutable pour protéger /etc/resolv.conf contre les fuites DNS.",
+    "enable": "Accorder les autorisations de protection DNS",
+    "applying": "Application…"
   },
   "auth": {
     "signIn": "Se connecter",
