@@ -13,6 +13,7 @@ type VPNStatus struct {
 	Connected      bool   `json:"connected"`
 	ServerName     string `json:"server_name"`
 	ServerID       string `json:"server_id"`
+	PeerID         string `json:"peer_id,omitempty"`
 	AssignedIP     string `json:"assigned_ip"`
 	ServerPublicIP string `json:"server_public_ip"`
 	ServerEndpoint string `json:"server_endpoint,omitempty"`

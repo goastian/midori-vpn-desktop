@@ -210,7 +210,8 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 	s.agent.SetVPN(state.VPNStatus{
 		Connected:      true,
 		ServerName:     server.Name,
-		ServerID:       connCfg.PeerID,
+		ServerID:       req.ServerID,
+		PeerID:         connCfg.PeerID,
 		AssignedIP:     assignedIP,
 		ServerPublicIP: serverPublicIP,
 		ServerEndpoint: serverEndpoint,
@@ -232,9 +233,9 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleVPNDisconnect(w http.ResponseWriter, r *http.Request) {
 	s.stopVPNStatsLoop()
 	snap := s.agent.Snapshot()
-	serverID := ""
+	peerID := ""
 	if vpn, ok := snap["vpn"].(state.VPNStatus); ok {
-		serverID = vpn.ServerID
+		peerID = vpn.PeerID
 	}
 	// Disconnect locally and respond immediately — don't block on cloud API.
 	s.wgMgr.Disconnect()
@@ -243,11 +244,11 @@ func (s *Server) handleVPNDisconnect(w http.ResponseWriter, r *http.Request) {
 	s.agent.SetProtection(state.ProtectionStatus{})
 	writeJSON(w, map[string]bool{"ok": true})
 	// Deregister peer from backend in the background.
-	if serverID != "" {
+	if peerID != "" {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			_ = s.apiClient.DeleteConnection(ctx, serverID)
+			_ = s.apiClient.DeleteConnection(ctx, peerID)
 		}()
 	}
 }

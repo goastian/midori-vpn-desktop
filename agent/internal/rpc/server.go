@@ -318,7 +318,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if s.wgMgr.IsConnected() {
 		snap := s.agent.Snapshot()
 		if vpn, ok := snap["vpn"].(state.VPNStatus); ok && vpn.Connected {
-			_ = s.apiClient.DeleteConnection(ctx, vpn.ServerID)
+			_ = s.apiClient.DeleteConnection(ctx, vpn.PeerID)
 		}
 		s.wgMgr.Disconnect()
 		_ = s.guard.Disable()
