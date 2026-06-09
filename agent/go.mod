@@ -5,7 +5,7 @@ go 1.26.4
 require (
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/lestrrat-go/jwx/v2 v2.1.6
-	golang.org/x/sys v0.45.0
+	golang.org/x/sys v0.46.0
 	golang.zx2c4.com/wireguard v0.0.0-20260522210424-ecfc5a8d5446
 )
 
