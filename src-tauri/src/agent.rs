@@ -11,14 +11,16 @@ pub use token::{AgentProcess, AgentSupervisorStop, AgentToken};
 
 pub(crate) use token::lock_safe;
 
-/// Returns true if the agent binary already has CAP_NET_ADMIN set.
+/// Returns true if the agent binary has the complete capability set needed by
+/// the desktop system-wide tunnel, including DNS protection on resolvconf
+/// hosts.
 #[tauri::command]
 pub fn agent_has_caps() -> bool {
     permissions::agent_has_caps()
 }
 
-/// Attempts to grant the agent binary the minimal Linux capabilities
-/// (CAP_NET_ADMIN + CAP_NET_RAW) via `pkexec setcap`. Returns true on success.
+/// Attempts to grant the agent binary all Linux capabilities required by the
+/// desktop system-wide tunnel via `pkexec setcap`.
 #[tauri::command]
 pub fn grant_agent_permissions() -> bool {
     permissions::grant_agent_permissions()
