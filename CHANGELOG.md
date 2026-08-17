@@ -2,7 +2,7 @@
 
 All notable MidoriVPN Desktop changes are documented here.
 
-## v1.1.4 - MidoriVPN Desktop 1.1.4
+## v1.1.5 - MidoriVPN Desktop 1.1.5
 
 Patch release for Linux desktop permission recovery and release-pipeline
 reliability.
@@ -19,7 +19,7 @@ reliability.
 
 ### Build
 
-- Aligned desktop package metadata with release version `1.1.4`.
+- Aligned desktop package metadata with release version `1.1.5`.
 - Updated the Go toolchain requirement to `1.26.6` for the agent security
   fixes.
 
