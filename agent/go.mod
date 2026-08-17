@@ -1,6 +1,6 @@
 module github.com/goastian/midorivpn-agent
 
-go 1.26.4
+go 1.26.6
 
 require (
 	github.com/godbus/dbus/v5 v5.2.2
