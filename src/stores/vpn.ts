@@ -12,6 +12,8 @@ export const useVpnStore = defineStore('vpn', () => {
   const bytesUp = ref(0)
   const bytesDown = ref(0)
   const connectedAt = ref<string | null>(null)
+  const activeProtocol = ref<'wireguard' | 'obfs_tls' | 'openvpn_dco' | 'masque_h3'>('wireguard')
+  const fallbackReason = ref<string | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
   const servers = ref<Server[]>([])
@@ -19,13 +21,13 @@ export const useVpnStore = defineStore('vpn', () => {
   function applyStatus(s: VPNStatus) {
     connected.value = s.connected
     serverName.value = s.server_name
-    // Historical name kept for template compatibility; this is the backend
-    // VPN server id, not an IP address.
     serverIp.value = s.server_id
     assignedIp.value = s.assigned_ip
     serverPublicIp.value = s.server_public_ip ?? ''
     bytesUp.value = s.bytes_sent
     bytesDown.value = s.bytes_recv
+    activeProtocol.value = s.active_protocol || 'wireguard'
+    fallbackReason.value = s.fallback_reason || null
     connectedAt.value = null
   }
 
@@ -78,7 +80,8 @@ export const useVpnStore = defineStore('vpn', () => {
 
   return {
     connected, serverName, serverIp, assignedIp, serverPublicIp,
-    bytesUp, bytesDown, connectedAt, loading, error, servers,
+    bytesUp, bytesDown, connectedAt, activeProtocol, fallbackReason,
+    loading, error, servers,
     applyStatus, fetchServers, connect, disconnect, clearServers,
   }
 })

@@ -18,6 +18,24 @@
     </div>
 
     <div class="card">
+      <div class="section-title">Protocolo de Conexión (Smart Protocol)</div>
+      <div class="row" style="flex-direction:column; align-items:flex-start; gap:8px;">
+        <div>
+          <div style="font-size:14px;">Estrategia de Selección</div>
+          <div class="label" style="margin-top:4px;">
+            Smart Auto prueba UDP directo y conmuta automáticamente a túneles TLS 443 si detecta bloqueo de red.
+          </div>
+        </div>
+        <select v-model="selectedProtocolPolicy" class="select-field" @change="saveProtocolPolicy">
+          <option value="smart_auto">Smart Auto (Recomendado)</option>
+          <option value="wireguard">Forzar WireGuard (UDP 51820)</option>
+          <option value="obfs_tls">Forzar Transporte Ofuscado (TLS 443)</option>
+          <option value="openvpn_dco">Forzar OpenVPN DCO (Kernel)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="section-title">{{ t('settings.sectionAutoStart') }}</div>
       <div class="row">
         <div>
@@ -97,6 +115,7 @@ const appVersion = __APP_VERSION__
 
 const autostart = ref(false)
 const meshAutoStart = ref(true)
+const selectedProtocolPolicy = ref('smart_auto')
 const autostartError = ref<string | null>(null)
 const meshSettingsError = ref<string | null>(null)
 const tokenStoreLabel = ref('—')
@@ -106,6 +125,10 @@ const revertResult = ref<'idle' | 'ok' | 'err'>('idle')
 const tokenStoreDisplay = computed(() =>
   tokenStoreLabel.value === 'unknown' ? t('settings.unknown') : tokenStoreLabel.value
 )
+
+function saveProtocolPolicy() {
+  localStorage.setItem('midori_protocol_policy', selectedProtocolPolicy.value)
+}
 
 async function handleRevertCaps() {
   revertResult.value = 'idle'
@@ -167,3 +190,22 @@ async function toggleMeshAutoStart() {
   }
 }
 </script>
+
+<style scoped>
+.select-field {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.select-field:focus {
+  border-color: var(--midori-500);
+}
+</style>

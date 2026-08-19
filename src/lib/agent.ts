@@ -32,6 +32,8 @@ export interface VPNStatus {
   mesh_ip: string
   bytes_sent: number
   bytes_recv: number
+  active_protocol?: 'wireguard' | 'obfs_tls' | 'openvpn_dco' | 'masque_h3'
+  fallback_reason?: string
 }
 
 export interface MeshStatus {
