@@ -1,0 +1,30 @@
+FROM rust:1.84-bookworm
+
+# Install Debian packages required for Tauri 2 Linux builds + Node 22 + Go
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+      libwebkit2gtk-4.1-dev \
+      libssl-dev \
+      libgtk-3-dev \
+      libayatana-appindicator3-dev \
+      librsvg2-dev \
+      policykit-1 \
+      curl \
+      wget \
+      file \
+      build-essential \
+      pkg-config \
+      golang-go && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 22
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Cargo tools
+RUN cargo install cargo-audit --locked || true
+
+WORKDIR /workspace
+
+CMD ["cargo", "--version"]
