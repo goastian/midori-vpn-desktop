@@ -14,6 +14,7 @@ src-tauri/target/
 # ── Go agent build artefacts ─────────────────────────────────────────────────
 agent/target/
 agent/coverage.out
+src-tauri/binaries/
 
 # ── Tauri generated (mobile targets) ─────────────────────────────────────────
 src-tauri/gen/

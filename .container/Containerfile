@@ -1,6 +1,17 @@
-FROM rust:1.84-bookworm
+FROM docker.io/library/golang:alpine AS go-toolchain
+FROM docker.io/library/node:22-bookworm AS node-toolchain
 
-# Install Debian packages required for Tauri 2 Linux builds + Node + Go
+FROM docker.io/library/rust:bookworm
+
+# Install latest Go 1.26 from official image
+COPY --from=go-toolchain /usr/local/go /usr/local/go
+ENV PATH="/usr/local/go/bin:${PATH}"
+
+# Install Node.js 22 from official image
+COPY --from=node-toolchain /usr/local/bin /usr/local/bin
+COPY --from=node-toolchain /usr/local/lib/node_modules /usr/local/lib/node_modules
+
+# Install Debian packages required for Tauri 2 Linux builds
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
       libwebkit2gtk-4.1-dev \
@@ -13,14 +24,8 @@ RUN apt-get update -qq && \
       wget \
       file \
       build-essential \
-      pkg-config \
-      nodejs \
-      npm \
-      golang-go && \
+      pkg-config && \
     rm -rf /var/lib/apt/lists/*
-
-# Install Cargo tools
-RUN cargo install cargo-audit --locked || true
 
 WORKDIR /workspace
 
