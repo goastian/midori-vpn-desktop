@@ -4,6 +4,37 @@
 
 Desktop client for the **MidoriVPN** private network (mesh + full-tunnel VPN), built with **Tauri 2 + Vue 3** and a native **Go 1.26** background agent that manages WireGuard, obfuscated WSS TLS tunnels, and local proxy routing.
 
+> [!IMPORTANT]
+> ### 📦 Quick Installation & GPG Signature Verification (Linux RPM)
+> Official MidoriVPN packages are **cryptographically signed using OpenPGP Ed25519 (EdDSA Curve25519)** and package the public key internally at `/etc/pki/rpm-gpg/RPM-GPG-KEY-midorivpn` with post-installation auto-import.
+>
+> #### 1️⃣ Import the Official Public Key (Recommended):
+> ```bash
+> sudo rpm --import https://vpn.dorrejo.com/RPM-GPG-KEY-midorivpn
+> # Or locally if you already downloaded the key:
+> sudo rpm --import RPM-GPG-KEY-midorivpn
+> ```
+>
+> #### 2️⃣ Install for Your Distribution:
+> - **openSUSE / SUSE (`zypper`)** *(using `--no-recommends` to prevent optional multimedia packages)*:
+>   ```bash
+>   sudo zypper in --no-recommends ./dist-packages/MidoriVPN-2.0.0-1.x86_64.rpm
+>   ```
+> - **Fedora / RHEL / CentOS / Rocky (`dnf`)**:
+>   ```bash
+>   sudo dnf install ./dist-packages/MidoriVPN-2.0.0-1.x86_64.rpm
+>   ```
+> - **Debian / Ubuntu (`apt`)**:
+>   ```bash
+>   sudo apt install --no-install-recommends ./dist-packages/MidoriVPN_2.0.0_amd64.deb
+>   ```
+>
+> #### 3️⃣ Verify Package Authenticity:
+> ```bash
+> rpm -Kv ./dist-packages/MidoriVPN-2.0.0-1.x86_64.rpm
+> # Expected Output: Header OpenPGP V4 EdDSA/SHA256 signature, key fingerprint: ... OK
+> ```
+
 ---
 
 ## Features

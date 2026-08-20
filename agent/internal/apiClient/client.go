@@ -257,7 +257,10 @@ func (c *Client) ClearExitNode(ctx context.Context) error {
 
 // RefreshToken exchanges a refresh_token for new tokens.
 func (c *Client) RefreshToken(ctx context.Context, refreshToken string) (accessToken, newRefreshToken string, expiresIn int, err error) {
-	body := map[string]string{"refresh_token": refreshToken}
+	body := map[string]string{
+		"refresh_token": refreshToken,
+		"client_id":     "60mBgw8BHTvKRPYVhDTJGoKEt30QYG3b7Sv0RFNd",
+	}
 	var result struct {
 		AccessToken  string `json:"access_token"`
 		RefreshToken string `json:"refresh_token"`

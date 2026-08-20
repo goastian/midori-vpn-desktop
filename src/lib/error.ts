@@ -1,6 +1,4 @@
-/**
- * Shared error helpers and classification used by Pinia stores and UI components.
- */
+import { i18n } from '../i18n'
 
 export const AUTH_ORIGIN_REJECTED_MESSAGE =
   'The desktop app could not refresh your session because the server rejected its allowed origin. Check API_URL and CORS_ALLOWED_ORIGINS.'
@@ -25,13 +23,49 @@ export interface ParsedError {
   action?: 'grant_caps' | 'retry' | 'relogin'
 }
 
+/** Extracts clean error message from API JSON envelopes and localizes known backend keys. */
+export function extractErrorMessage(raw: string): string {
+  if (!raw) return ''
+  let cleaned = raw.trim()
+
+  const jsonMatch = cleaned.match(/\{.*"error"\s*:\s*"([^"]+)".*\}/)
+  if (jsonMatch && jsonMatch[1]) {
+    cleaned = jsonMatch[1]
+  } else {
+    cleaned = cleaned.replace(/^api error \d+:\s*/i, '')
+  }
+
+  const lower = cleaned.toLowerCase()
+
+  if (lower.includes('device_name_already_active') || lower.includes('ya tienes un dispositivo activo') || lower.includes('device with this name')) {
+    return i18n.global.t('errors.deviceNameActive')
+  }
+  if (lower.includes('device limit reached') || lower.includes('device_limit_reached') || lower.includes('límite de dispositivos')) {
+    return i18n.global.t('errors.deviceLimitReached')
+  }
+  if (lower.includes('too many connection requests') || lower.includes('too_many_requests') || lower.includes('demasiadas solicitudes')) {
+    return i18n.global.t('errors.tooManyRequests')
+  }
+  if (lower.includes('server is full') || lower.includes('server_full') || lower.includes('servidor seleccionado está lleno')) {
+    return i18n.global.t('errors.serverFull')
+  }
+
+  return cleaned
+}
+
 /** Converts any caught value to a human-readable string. */
 export function toErrorMessage(e: unknown): string {
-  const message = typeof e === 'string'
+  const raw = typeof e === 'string'
     ? e
     : e instanceof Error
       ? e.message
       : String(e)
+
+  if (isAuthOriginRejected(raw)) return AUTH_ORIGIN_REJECTED_MESSAGE
+  if (isVPNServerUnavailable(raw)) return VPN_SERVER_UNAVAILABLE_MESSAGE
+  if (isDNSPermissionDenied(raw)) return VPN_DNS_PERMISSION_MESSAGE
+
+  const message = extractErrorMessage(raw)
 
   if (isAuthOriginRejected(message)) return AUTH_ORIGIN_REJECTED_MESSAGE
   if (isVPNServerUnavailable(message)) return VPN_SERVER_UNAVAILABLE_MESSAGE

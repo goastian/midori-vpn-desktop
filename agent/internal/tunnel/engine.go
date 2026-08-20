@@ -21,6 +21,7 @@ const (
 	ProtocolObfsTLS   Protocol = "obfs_tls"
 	ProtocolMASQUE    Protocol = "masque_h3"
 	ProtocolOpenVPN   Protocol = "openvpn_dco"
+	ProtocolIKEv2     Protocol = "ikev2"
 )
 
 type DriverCapabilities struct {

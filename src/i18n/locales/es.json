@@ -27,6 +27,10 @@
     "capsApplyFailed": "No se pudo aplicar. Ejecuta el comando manualmente como root.",
     "capsVerifyFailed": "Permisos aplicados, pero no se pudieron verificar en el agente.",
     "capsRevertFailed": "No se pudo revertir. Ejecuta \"sudo setcap -r /usr/local/bin/midorivpn-agent\" manualmente.",
+    "deviceNameActive": "Ya tienes un dispositivo con este nombre conectado.",
+    "deviceLimitReached": "Límite de dispositivos alcanzado para tu cuenta.",
+    "tooManyRequests": "Demasiadas solicitudes de conexión. Espera un momento.",
+    "serverFull": "El servidor seleccionado está lleno o inactivo.",
     "meshFirewallWarning": "Mesh activo, pero falló la configuración de firewall: {warning}",
     "dnsPermission": {
       "title": "Permisos de DNS requeridos",

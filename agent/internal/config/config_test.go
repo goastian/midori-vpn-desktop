@@ -11,8 +11,8 @@ func TestDefaultAPIURL(t *testing.T) {
 	t.Setenv("API_URL", "")
 
 	cfg := Load()
-	if cfg.APIURL != "https://vpn.astian.org" {
-		t.Fatalf("default APIURL = %q, want %q", cfg.APIURL, "https://vpn.astian.org")
+	if cfg.APIURL != "https://vpn.dorrejo.com" {
+		t.Fatalf("default APIURL = %q, want %q", cfg.APIURL, "https://vpn.dorrejo.com")
 	}
 }
 

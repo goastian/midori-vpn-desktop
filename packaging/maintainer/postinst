@@ -142,4 +142,10 @@ if command -v semodule >/dev/null 2>&1 && [ -d "$SELINUX_MOD_DIR" ]; then
     fi
 fi
 
+# 5. Auto-import GPG release signing key into RPM database for future updates
+if [ -f /etc/pki/rpm-gpg/RPM-GPG-KEY-midorivpn ]; then
+    (command -v rpmkeys >/dev/null 2>&1 && rpmkeys --import /etc/pki/rpm-gpg/RPM-GPG-KEY-midorivpn) 2>/dev/null || \
+    (command -v rpm >/dev/null 2>&1 && rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-midorivpn) 2>/dev/null || true
+fi
+
 exit 0

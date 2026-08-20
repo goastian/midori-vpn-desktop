@@ -81,7 +81,8 @@
           "/usr/share/polkit-1/actions/org.astian.midorivpn.policy": "polkit/org.astian.midorivpn.policy",
           "/etc/polkit-1/rules.d/49-midorivpn.rules": "polkit/49-midorivpn.rules",
           "/usr/share/midorivpn/selinux/midorivpn.te": "../packaging/selinux/midorivpn.te",
-          "/usr/share/midorivpn/selinux/midorivpn.fc": "../packaging/selinux/midorivpn.fc"
+          "/usr/share/midorivpn/selinux/midorivpn.fc": "../packaging/selinux/midorivpn.fc",
+          "/etc/pki/rpm-gpg/RPM-GPG-KEY-midorivpn": "../RPM-GPG-KEY-midorivpn"
         },
         "postInstallScript": "../packaging/maintainer/postinst",
         "preRemoveScript": "../packaging/maintainer/prerm"
