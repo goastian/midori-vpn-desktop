@@ -172,12 +172,17 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 	if err := s.wgMgr.Connect(wgCfg); err != nil {
 		// Clean up peer on failure; use cleanupCtx so it runs even if ctx was cancelled.
 		_ = s.apiClient.DeleteConnection(cleanupCtx, connCfg.PeerID)
-		if isTunPermissionError(err) {
-			writeError(w, http.StatusForbidden,
-				"wg connect: permisos insuficientes para crear TUN. Reaplica permisos en MidoriVPN o ejecuta: sudo setcap cap_net_admin,cap_net_raw,cap_dac_override,cap_linux_immutable=ep /usr/local/bin/midorivpn-agent")
+		if isDNSPermissionError(err) {
+			writeStructuredError(w, http.StatusForbidden, "ERR_DNS_PERMISSION_DENIED",
+				"Permisos insuficientes para configurar DNS en /etc/resolv.conf. Habilita los permisos del sistema en MidoriVPN.")
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "wg connect: "+err.Error())
+		if isTunPermissionError(err) {
+			writeStructuredError(w, http.StatusForbidden, "ERR_TUN_PERMISSION_DENIED",
+				"Permisos insuficientes para crear la interfaz WireGuard (TUN). Habilita los permisos del sistema en MidoriVPN.")
+			return
+		}
+		writeStructuredError(w, http.StatusInternalServerError, "ERR_VPN_CONNECT_FAILED", "wg connect: "+err.Error())
 		return
 	}
 	if err := s.guard.Enable(s.netguardScope(serverEndpoint, assignedIP)); err != nil {

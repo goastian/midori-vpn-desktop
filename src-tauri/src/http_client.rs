@@ -82,12 +82,33 @@ async fn read_json_response(resp: reqwest::Response) -> Result<Value, String> {
 }
 
 fn classify_http_error(status: reqwest::StatusCode, body: &str) -> String {
+    if let Ok(parsed) = serde_json::from_str::<Value>(body) {
+        if let Some(code) = parsed.get("code").and_then(|c| c.as_str()) {
+            let msg = parsed
+                .get("error")
+                .and_then(|e| e.as_str())
+                .unwrap_or(body);
+            match code {
+                "ERR_DNS_PERMISSION_DENIED" => return format!("dns_permission_denied: {}", msg),
+                "ERR_TUN_PERMISSION_DENIED" => return format!("tun_permission_denied: {}", msg),
+                _ => return format!("{}: {}", code, msg),
+            }
+        }
+        if let Some(err_str) = parsed.get("error").and_then(|e| e.as_str()) {
+            if err_str.contains("origin not allowed") {
+                return format!("auth_origin_rejected: {} {}", status, err_str);
+            }
+            if status == reqwest::StatusCode::UNAUTHORIZED {
+                return format!("auth_expired: {} {}", status, err_str);
+            }
+            return err_str.to_string();
+        }
+    }
+
     if status == reqwest::StatusCode::FORBIDDEN && body.contains("origin not allowed") {
         return format!("auth_origin_rejected: {} {}", status, body);
     }
-    // Mark auth failures with a stable prefix so the frontend can
-    // distinguish them from generic agent errors.
-    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+    if status == reqwest::StatusCode::UNAUTHORIZED {
         return format!("auth_expired: {} {}", status, body);
     }
     if body.is_empty() {
@@ -205,5 +226,20 @@ mod tests {
 
         assert!(msg.starts_with("auth_origin_rejected: 403 Forbidden"));
         assert!(!msg.starts_with("auth_expired:"));
+    }
+
+    #[test]
+    fn classifies_structured_permission_errors() {
+        let dns_err = classify_http_error(
+            reqwest::StatusCode::FORBIDDEN,
+            "{\"code\":\"ERR_DNS_PERMISSION_DENIED\",\"error\":\"dns apply failed\"}",
+        );
+        assert_eq!(dns_err, "dns_permission_denied: dns apply failed");
+
+        let tun_err = classify_http_error(
+            reqwest::StatusCode::FORBIDDEN,
+            "{\"code\":\"ERR_TUN_PERMISSION_DENIED\",\"error\":\"tun create failed\"}",
+        );
+        assert_eq!(tun_err, "tun_permission_denied: tun create failed");
     }
 }

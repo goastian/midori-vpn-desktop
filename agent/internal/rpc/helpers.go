@@ -12,15 +12,28 @@ import (
 	"github.com/goastian/midorivpn-agent/internal/state"
 )
 
+type RPCError struct {
+	Error   string `json:"error"`
+	Code    string `json:"code,omitempty"`
+	Details string `json:"details,omitempty"`
+}
+
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(v)
 }
 
 func writeError(w http.ResponseWriter, code int, msg string) {
+	writeStructuredError(w, code, "", msg)
+}
+
+func writeStructuredError(w http.ResponseWriter, httpStatus int, errCode string, msg string) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+	w.WriteHeader(httpStatus)
+	json.NewEncoder(w).Encode(RPCError{
+		Error: msg,
+		Code:  errCode,
+	})
 }
 
 func splitHost(hostPort string) string {
@@ -104,7 +117,14 @@ func sanitizeDNS(servers []string) []string {
 
 func isTunPermissionError(err error) bool {
 	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "create tun") && strings.Contains(msg, "operation not permitted")
+	return (strings.Contains(msg, "create tun") || strings.Contains(msg, "wireguard")) &&
+		(strings.Contains(msg, "operation not permitted") || strings.Contains(msg, "permission denied"))
+}
+
+func isDNSPermissionError(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return (strings.Contains(msg, "dns apply") || strings.Contains(msg, "resolv.conf") || strings.Contains(msg, "resolvconf")) &&
+		(strings.Contains(msg, "permission denied") || strings.Contains(msg, "operation not permitted"))
 }
 
 func (s *Server) netguardScope(endpoint, assignedIP string) netguard.Scope {

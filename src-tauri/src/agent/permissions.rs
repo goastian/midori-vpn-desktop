@@ -56,13 +56,24 @@ const DESKTOP_CAPS: [&str; 4] = [
     "cap_linux_immutable",
 ];
 
+#[cfg(target_os = "linux")]
+fn find_agent_installed_path() -> &'static str {
+    if std::path::Path::new("/usr/local/bin/midorivpn-agent").exists() {
+        "/usr/local/bin/midorivpn-agent"
+    } else if std::path::Path::new("/usr/bin/midorivpn-agent").exists() {
+        "/usr/bin/midorivpn-agent"
+    } else {
+        AGENT_INSTALLED_PATH
+    }
+}
+
 /// Returns true if the agent binary has any network capability. This is used
 /// solely when revoking permissions, including the minimal set used by older
 /// versions of the desktop client.
 #[cfg(target_os = "linux")]
 fn agent_has_any_network_cap() -> bool {
     Command::new("getcap")
-        .arg(AGENT_INSTALLED_PATH)
+        .arg(find_agent_installed_path())
         .output()
         .map(|out| {
             let text = String::from_utf8_lossy(&out.stdout);
@@ -83,7 +94,7 @@ fn agent_has_any_network_cap() -> bool {
 #[cfg(target_os = "linux")]
 fn agent_has_required_caps() -> bool {
     Command::new("getcap")
-        .arg(AGENT_INSTALLED_PATH)
+        .arg(find_agent_installed_path())
         .output()
         .map(|out| has_required_caps(&String::from_utf8_lossy(&out.stdout)))
         .unwrap_or(false)
@@ -123,10 +134,12 @@ fn try_install_caps(extended: bool) -> bool {
         "cap_net_admin,cap_net_raw=ep"
     };
 
+    let target_binary = find_agent_installed_path();
+
     let status = Command::new("pkexec")
         .arg(setcap)
         .arg(cap_set)
-        .arg(AGENT_INSTALLED_PATH)
+        .arg(target_binary)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -201,7 +214,7 @@ pub fn revert_agent_permissions() -> bool {
         let status = Command::new("pkexec")
             .arg(setcap)
             .arg("-r")
-            .arg(AGENT_INSTALLED_PATH)
+            .arg(find_agent_installed_path())
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
