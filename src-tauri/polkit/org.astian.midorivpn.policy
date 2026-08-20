@@ -70,6 +70,22 @@
     <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
 
+  <!-- Same action for distros that place setcap under /usr/bin. -->
+  <action id="org.astian.midorivpn.manage-caps-usrbin">
+    <description>Authorize MidoriVPN system permissions</description>
+    <description xml:lang="es">Autorizar permisos del sistema para MidoriVPN</description>
+    <message>Authenticate to apply MidoriVPN network permissions on this device.</message>
+    <message xml:lang="es">Autentica para aplicar los permisos de red de MidoriVPN en este equipo.</message>
+    <icon_name>network-vpn</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/setcap</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
   <!--
     Firewall configuration: allows the agent helper to add/remove rules
     in firewalld / ufw / nftables for the WireGuard mesh interface and

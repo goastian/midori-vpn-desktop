@@ -50,7 +50,8 @@ const visible = computed(() => auth.authenticated && !props.capsGranted)
 
 <style scoped>
 .perms-trigger-card {
-  border-color: var(--midori-300, #fde68a);
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.06);
 }
 
 .perms-trigger-body {
@@ -69,14 +70,14 @@ const visible = computed(() => auth.authenticated && !props.capsGranted)
 .perms-trigger-text { flex: 1; min-width: 0; }
 
 .perms-trigger-title {
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 700;
-  color: var(--text, #e0e0e0);
+  color: #fbbf24;
   margin-bottom: 2px;
 }
 
 .perms-trigger-sub {
-  font-size: 11px;
-  color: var(--text-muted, #aaa);
+  font-size: 11.5px;
+  color: var(--muted, #94a3b8);
 }
 </style>

@@ -79,7 +79,20 @@ export function useCaps() {
     capsGranting.value = true
     capsError.value = ''
     try {
-      const ok = await invoke<boolean>('grant_dns_protection_caps')
+      let ok = false
+      try {
+        ok = await invoke<boolean>('grant_dns_protection_caps')
+      } catch {
+        ok = false
+      }
+      if (!ok) {
+        try {
+          ok = await invoke<boolean>('grant_agent_permissions')
+        } catch (err) {
+          capsError.value = String(err)
+          return false
+        }
+      }
       if (!ok) {
         capsError.value = text('errors.capsApplyFailed')
         return false

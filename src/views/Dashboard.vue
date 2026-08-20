@@ -27,7 +27,7 @@
           </template>
           <template v-else-if="selectedItem">
             <span class="cc-badge" :class="selectedItem.isMesh ? 'cc-mesh' : ''">
-              {{ selectedItem.isMesh ? '🔗' : selectedItem.cc }}
+              {{ selectedItem.isMesh ? '🔗' : selectedItem.flag }}
             </span>
             <span class="picker-text">
               <span class="picker-name">{{ selectedItem.name }}</span>
@@ -61,7 +61,7 @@
             @click="selectServer(item.key)"
           >
             <span class="cc-badge" :class="item.isMesh ? 'cc-mesh' : ''">
-              {{ item.isMesh ? '🔗' : item.cc }}
+              {{ item.isMesh ? '🔗' : item.flag }}
             </span>
             <span class="item-text">
               <span class="item-name">{{ item.name }}</span>
@@ -239,9 +239,17 @@ async function grantCapsSmart() {
 
 // ── Item model ─────────────────────────────────────────────────────────────
 
+function getCountryFlag(countryCode?: string): string {
+  if (!countryCode || countryCode.length !== 2) return '🌐'
+  const code = countryCode.toUpperCase()
+  const offset = 127397
+  return String.fromCodePoint(...[...code].map(c => c.charCodeAt(0) + offset))
+}
+
 interface ServerItem {
   key: string
   cc: string       // 2-letter country code (or empty for mesh)
+  flag: string
   isMesh: boolean
   name: string
   ip: string
@@ -249,16 +257,21 @@ interface ServerItem {
 
 const allItems = computed<ServerItem[]>(() => {
   const items: ServerItem[] = [
-    ...vpn.servers.map(s => ({
-      key: `vpn:${s.id}`,
-      cc: (s.country_code || '').toUpperCase().slice(0, 2) || '?',
-      isMesh: false,
-      name: `${s.name} — ${s.location}`,
-      ip: s.endpoint.split(':')[0] || s.host,
-    })),
+    ...vpn.servers.map(s => {
+      const code = (s.country_code || '').toUpperCase().slice(0, 2)
+      return {
+        key: `vpn:${s.id}`,
+        cc: code || '?',
+        flag: getCountryFlag(code),
+        isMesh: false,
+        name: `${s.name} — ${s.location}`,
+        ip: s.endpoint.split(':')[0] || s.host,
+      }
+    }),
     ...(mesh.enabled ? mesh.exitNodes.map(n => ({
       key: `mesh:${n.mesh_ip}:${n.proxy_port}:${n.proxy_scheme || 'socks5'}`,
       cc: '',
+      flag: '🔗',
       isMesh: true,
       name: t('server.meshName', { ip: n.mesh_ip }),
       ip: t('mesh.port', { n: n.proxy_port }),

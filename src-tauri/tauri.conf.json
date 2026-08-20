@@ -64,7 +64,7 @@
     },
     "linux": {
       "deb": {
-        "depends": ["libwebkit2gtk-4.1-0", "libssl3", "policykit-1"],
+        "depends": ["libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37"],
         "files": {
           "/usr/share/polkit-1/actions/org.astian.midorivpn.policy": "polkit/org.astian.midorivpn.policy",
           "/etc/polkit-1/rules.d/49-midorivpn.rules": "polkit/49-midorivpn.rules",
