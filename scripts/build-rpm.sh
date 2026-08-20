@@ -14,7 +14,8 @@ podman run --rm -v "$ROOT_DIR:/src:rw" midorivpn-rpm-builder bash -c "\
   npm run build && \
   npm run build-agent:host && \
   npm run tauri -- build --bundles rpm && \
-  mkdir -p /src/src-tauri/target/release/bundle/rpm && \
-  cp -r /app/src-tauri/target/release/bundle/rpm/* /src/src-tauri/target/release/bundle/rpm/"
+  mkdir -p /src/src-tauri/target/release/bundle/rpm /src/dist-packages && \
+  cp -r /app/src-tauri/target/release/bundle/rpm/* /src/src-tauri/target/release/bundle/rpm/ && \
+  cp -r /app/src-tauri/target/release/bundle/rpm/* /src/dist-packages/"
 
-echo "==> Paquete RPM generado con éxito en src-tauri/target/release/bundle/rpm/"
+echo "==> Paquete RPM generado con éxito en dist-packages/ y src-tauri/target/release/bundle/rpm/"
