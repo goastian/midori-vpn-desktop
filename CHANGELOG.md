@@ -2,6 +2,27 @@
 
 All notable MidoriVPN Desktop changes are documented here.
 
+## v1.1.5 - MidoriVPN Desktop 1.1.5
+
+Patch release for Linux desktop permission recovery and release-pipeline
+reliability.
+
+### Fixes
+
+- **agent permissions** — Require the full Linux capability set needed by
+  WireGuard, including DNS updates, and report incomplete legacy permissions
+  as actionable setup failures instead of allowing a connection to fail later.
+- **frontend/error** — Turn resolvconf permission-denied failures into a
+  clear desktop permission recovery message.
+- **dependencies** — Updated locked frontend, Go, and Rust transitive
+  dependencies to their supported security releases.
+
+### Build
+
+- Aligned desktop package metadata with release version `1.1.5`.
+- Updated the Go toolchain requirement to `1.26.6` for the agent security
+  fixes.
+
 ## v1.1.3 - MidoriVPN Desktop 1.1.3
 
 Patch release focused on desktop safety, DNS protection visibility, and

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   AUTH_ORIGIN_REJECTED_MESSAGE,
+  VPN_DNS_PERMISSION_MESSAGE,
   VPN_SERVER_UNAVAILABLE_MESSAGE,
   isAuthOriginRejected,
+  isDNSPermissionDenied,
   isVPNServerUnavailable,
   toErrorMessage,
 } from './error'
@@ -26,5 +28,12 @@ describe('error helpers', () => {
     expect(isVPNServerUnavailable(raw)).toBe(true)
     expect(toErrorMessage(raw)).toBe(VPN_SERVER_UNAVAILABLE_MESSAGE)
     expect(toErrorMessage(raw)).not.toContain('502 Bad Gateway')
+  })
+
+  it('routes the resolvconf capability failure to the desktop permission flow', () => {
+    const raw = '500 Internal Server Error: {"error":"wg connect: configure full tunnel: dns apply (resolvconf): write resolv.conf: open /etc/resolv.conf: permission denied"}'
+
+    expect(isDNSPermissionDenied(raw)).toBe(true)
+    expect(toErrorMessage(raw)).toBe(VPN_DNS_PERMISSION_MESSAGE)
   })
 })

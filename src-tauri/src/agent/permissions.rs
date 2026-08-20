@@ -42,8 +42,25 @@ pub(super) fn agent_command_path(app: &AppHandle) -> io::Result<PathBuf> {
     }
 }
 
+/// The capabilities required by the desktop's system-wide tunnel.
+///
+/// `cap_dac_override` and `cap_linux_immutable` are needed on hosts that use
+/// the resolvconf DNS backend (notably a number of Linux Mint installs). We
+/// grant this single, explicit set from the main consent flow so a package
+/// upgrade cannot leave an older, minimal capability set behind and then fail
+/// only after the user presses Connect.
+const DESKTOP_CAPS: [&str; 4] = [
+    "cap_net_admin",
+    "cap_net_raw",
+    "cap_dac_override",
+    "cap_linux_immutable",
+];
+
+/// Returns true if the agent binary has any network capability. This is used
+/// solely when revoking permissions, including the minimal set used by older
+/// versions of the desktop client.
 #[cfg(target_os = "linux")]
-fn agent_has_net_admin_cap() -> bool {
+fn agent_has_any_network_cap() -> bool {
     Command::new("getcap")
         .arg(AGENT_INSTALLED_PATH)
         .output()
@@ -55,8 +72,32 @@ fn agent_has_net_admin_cap() -> bool {
 }
 
 #[cfg(not(target_os = "linux"))]
-fn agent_has_net_admin_cap() -> bool {
+fn agent_has_any_network_cap() -> bool {
     true
+}
+
+/// Returns true only when the installed binary carries the entire capability
+/// set used by the desktop client. Checking only CAP_NET_ADMIN made upgrades
+/// from the pre-DNS-protection client look healthy even though their agent
+/// could not write /etc/resolv.conf on resolvconf hosts.
+#[cfg(target_os = "linux")]
+fn agent_has_required_caps() -> bool {
+    Command::new("getcap")
+        .arg(AGENT_INSTALLED_PATH)
+        .output()
+        .map(|out| has_required_caps(&String::from_utf8_lossy(&out.stdout)))
+        .unwrap_or(false)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn agent_has_required_caps() -> bool {
+    true
+}
+
+fn has_required_caps(getcap_output: &str) -> bool {
+    DESKTOP_CAPS
+        .iter()
+        .all(|capability| getcap_output.contains(capability))
 }
 
 /// One-shot install of capabilities on the agent binary.
@@ -91,7 +132,12 @@ fn try_install_caps(extended: bool) -> bool {
         .stderr(Stdio::null())
         .status();
 
-    matches!(status, Ok(s) if s.success()) && agent_has_net_admin_cap()
+    matches!(status, Ok(s) if s.success())
+        && if extended {
+            agent_has_required_caps()
+        } else {
+            agent_has_any_network_cap()
+        }
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -108,19 +154,20 @@ fn find_setcap_path() -> Option<&'static str> {
         .find(|p| std::path::Path::new(p).exists())
 }
 
-/// Returns true if the agent binary already has CAP_NET_ADMIN set.
+/// Returns true if the agent binary has all permissions required by the
+/// desktop full-tunnel flow.
 pub fn agent_has_caps() -> bool {
     #[cfg(target_os = "linux")]
-    return agent_has_net_admin_cap();
+    return agent_has_required_caps();
     #[cfg(not(target_os = "linux"))]
     return true;
 }
 
-/// Attempts to grant the agent binary the minimal Linux capabilities
-/// (CAP_NET_ADMIN + CAP_NET_RAW) via `pkexec setcap`. Returns true on success.
+/// Attempts to grant the agent binary the complete Linux capability set used
+/// by the desktop full-tunnel flow. Returns true only after verification.
 pub fn grant_agent_permissions() -> bool {
     #[cfg(target_os = "linux")]
-    return try_install_caps(false);
+    return try_install_caps(true);
     #[cfg(not(target_os = "linux"))]
     return true;
 }
@@ -143,7 +190,7 @@ pub fn revert_agent_permissions() -> bool {
     #[cfg(target_os = "linux")]
     {
         // Nothing to revoke: avoid triggering an unnecessary polkit prompt.
-        if !agent_has_net_admin_cap() {
+        if !agent_has_any_network_cap() {
             return true;
         }
 
@@ -161,7 +208,7 @@ pub fn revert_agent_permissions() -> bool {
             .status();
 
         // Verify caps were actually removed.
-        matches!(status, Ok(s) if s.success()) && !agent_has_net_admin_cap()
+        matches!(status, Ok(s) if s.success()) && !agent_has_any_network_cap()
     }
     #[cfg(not(target_os = "linux"))]
     return true;
@@ -170,3 +217,20 @@ pub fn revert_agent_permissions() -> bool {
 // Capabilities are granted at runtime via pkexec setcap (see
 // `try_install_caps`). The .deb postinst no longer applies them so users
 // always go through the explicit consent dialog on first launch.
+
+#[cfg(test)]
+mod tests {
+    use super::has_required_caps;
+
+    #[test]
+    fn required_caps_rejects_the_legacy_minimal_set() {
+        let output = "/usr/local/bin/midorivpn-agent cap_net_admin,cap_net_raw=ep\n";
+        assert!(!has_required_caps(output));
+    }
+
+    #[test]
+    fn required_caps_accepts_the_desktop_set_in_any_order() {
+        let output = "/usr/local/bin/midorivpn-agent cap_linux_immutable,cap_net_raw,cap_dac_override,cap_net_admin=ep\n";
+        assert!(has_required_caps(output));
+    }
+}
