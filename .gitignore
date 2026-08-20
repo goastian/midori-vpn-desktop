@@ -23,6 +23,7 @@ src-tauri/gen/
 # (kept out of VCS — produced by CI)
 *.deb
 *.rpm
+!packaging/Containerfile.rpm
 *.AppImage
 *.dmg
 *.msi

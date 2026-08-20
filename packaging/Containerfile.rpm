@@ -1,0 +1,9 @@
+FROM fedora:latest
+
+RUN dnf install -y --setopt=install_weak_deps=False \
+    rust cargo nodejs npm rpm-build \
+    webkit2gtk4.1-devel libayatana-appindicator3-devel \
+    openssl-devel gtk3-devel librsvg2-devel golang git file curl && \
+    dnf clean all
+
+WORKDIR /src
