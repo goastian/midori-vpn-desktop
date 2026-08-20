@@ -2,6 +2,16 @@
 
 All notable MidoriVPN Desktop changes are documented here.
 
+## v2.0.0 - 2026-08-20
+
+Major Release with unified WireGuard TLS architecture, native Go 1.26 agent, and hardened Linux RPM package.
+
+### Major Changes
+- **Go 1.26 Native Agent**: Compilación y ejecución nativa sobre Go 1.26 para la gestión del kernel WireGuard (`wg0`) y túneles ofuscados WSS.
+- **Tauri 2 Production Pipeline**: Arquitectura de interfaz ligera y reactiva con Vue 3.5.35 y Pinia.
+- **Empaquetado RPM Blindado para openSUSE Tumbleweed**: Scripts de post-instalación y desinstalación (`postinst`, `prerm`) estrictos con aislamiento Polkit y AppArmor en modo complain.
+- **Consolidación de Contratos de Red**: Soporte nativo para endpoints HTTPS/WSS puerto 443 con descubrimiento automático de servidores.
+
 ## v1.1.5 - MidoriVPN Desktop 1.1.5
 
 Patch release for Linux desktop permission recovery and release-pipeline
