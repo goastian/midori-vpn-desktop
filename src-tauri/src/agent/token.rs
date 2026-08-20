@@ -25,6 +25,6 @@ pub struct AgentToken(pub Mutex<String>);
 /// Generate a cryptographically random 32-byte hex token.
 pub(super) fn generate_token() -> io::Result<String> {
     let mut bytes = [0u8; 32];
-    getrandom::fill(&mut bytes).map_err(|e| io::Error::other(e.to_string()))?;
+    getrandom::getrandom(&mut bytes).map_err(|e| io::Error::other(e.to_string()))?;
     Ok(bytes.iter().map(|b| format!("{:02x}", b)).collect())
 }

@@ -14,6 +14,7 @@ src-tauri/target/
 # ── Go agent build artefacts ─────────────────────────────────────────────────
 agent/target/
 agent/coverage.out
+src-tauri/binaries/
 
 # ── Tauri generated (mobile targets) ─────────────────────────────────────────
 src-tauri/gen/
@@ -51,3 +52,27 @@ Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# ── Projects documentation & task tracking ───────────────────────────────────
+.projects/
+.projects*/
+.project
+.project/
+
+# ── Syncthing ─────────────────────────────────────────────────────────────────
+.stfolder/
+.stversions/
+*.syncthing*
+.syncthing.*
+.syncthing*.tmp
+
+# ── AI Assistants & LLM tools ─────────────────────────────────────────────────
+.gemini/
+.agents/
+.opencode/
+.claude/
+.cursor/
+.windsurf/
+*.prompt
+*.ai
+

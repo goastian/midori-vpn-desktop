@@ -114,6 +114,17 @@
         </template>
       </div>
 
+      <!-- Smart Protocol Badge & Fallback Info -->
+      <div v-if="activeConnected && activeConnectionType === 'vpn'" class="protocol-row">
+        <div class="protocol-badge">
+          <span class="protocol-dot"></span>
+          <span class="protocol-name">{{ formatProtocol(vpn.activeProtocol) }}</span>
+        </div>
+        <div v-if="vpn.fallbackReason" class="protocol-fallback">
+          <span>⚠️ {{ vpn.fallbackReason }}</span>
+        </div>
+      </div>
+
       <div v-if="vpn.error" class="error">{{ vpn.error }}</div>
     </div>
 
@@ -268,6 +279,20 @@ function isActive(key: string): boolean {
   if (activeConnectionType.value === 'vpn') return key === `vpn:${vpn.serverIp}`
   if (activeConnectionType.value === 'mesh') return key.startsWith(`mesh:${activeMeshExitIp.value}:`)
   return false
+}
+
+function formatProtocol(proto?: string): string {
+  switch (proto) {
+    case 'obfs_tls':
+      return 'Obfuscated TLS 443'
+    case 'openvpn_dco':
+      return 'OpenVPN DCO (Kernel)'
+    case 'masque_h3':
+      return 'MASQUE (HTTP/3)'
+    case 'wireguard':
+    default:
+      return 'WireGuard (UDP 51820)'
+  }
 }
 
 // ── Lifecycle ───────────────────────────────────────────────────────────────
@@ -720,5 +745,45 @@ async function toggleConnection() {
 .perms-trigger-sub {
   font-size: 11px;
   color: var(--text-muted, #aaa);
+}
+
+/* ── Smart Protocol & Fallback Styles ─────────────────────────────────────── */
+.protocol-row {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.protocol-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  padding: 4px 10px;
+  border-radius: 6px;
+  width: fit-content;
+}
+.protocol-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--midori-500, #22c55e);
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+}
+.protocol-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--midori-700, #15803d);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.protocol-fallback {
+  font-size: 11px;
+  color: #d97706;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  padding: 4px 8px;
+  border-radius: 6px;
 }
 </style>

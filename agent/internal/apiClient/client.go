@@ -91,6 +91,7 @@ type ConnectionConfig struct {
 	PeerIP          string `json:"peer_ip"`
 	ServerPublicKey string `json:"server_public_key"`
 	ServerEndpoint  string `json:"server_endpoint"`
+	PresharedKey    string `json:"preshared_key,omitempty"`
 	DNS             string `json:"dns"`
 	AllowedIPs      string `json:"allowed_ips"`
 }
