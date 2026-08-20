@@ -67,7 +67,7 @@ else
 fi
 
 # 1b. Stage the AppArmor profile in /etc when not already there (rpm).
-if [ -f "$APPARMOR_BUNDLED" ] && [ ! -e "$APPARMOR_PROFILE" ]; then
+if [ -f "$APPARMOR_BUNDLED" ] && [ -d /etc/apparmor.d ] && [ ! -e "$APPARMOR_PROFILE" ]; then
     install_root -m 0644 "$APPARMOR_BUNDLED" "$APPARMOR_PROFILE" || true
     ensure_root_owner "$APPARMOR_PROFILE"
 fi
