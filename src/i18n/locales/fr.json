@@ -27,7 +27,35 @@
     "capsApplyFailed": "Impossible d'appliquer les autorisations. Exécutez la commande manuellement en root.",
     "capsVerifyFailed": "Les autorisations ont été appliquées, mais l'agent n'a pas pu les vérifier.",
     "capsRevertFailed": "Impossible de révoquer les autorisations. Exécutez \"sudo setcap -r /usr/local/bin/midorivpn-agent\" manuellement.",
-    "meshFirewallWarning": "Mesh est actif, mais la configuration du pare-feu a échoué : {warning}"
+    "meshFirewallWarning": "Mesh est actif, mais la configuration du pare-feu a échoué : {warning}",
+    "dnsPermission": {
+      "title": "Autorisations DNS requises",
+      "desc": "MidoriVPN a besoin des autorisations administrateur pour protéger vos requêtes DNS contre les fuites et configurer le système.",
+      "action": "Accorder les autorisations"
+    },
+    "tunPermission": {
+      "title": "Autorisations réseau requises",
+      "desc": "Impossible de créer l'interface tunnel WireGuard. Des autorisations réseau sont requises.",
+      "action": "Accorder les autorisations"
+    },
+    "serverUnavailable": {
+      "title": "Serveur indisponible",
+      "desc": "Impossible d'établir une connexion avec le serveur VPN sélectionné. Vérifiez votre connexion ou choisissez un autre serveur.",
+      "action": "Réessayer"
+    },
+    "authOriginRejected": {
+      "title": "Origine non autorisée",
+      "desc": "Le serveur a rejeté la requête. Vérifiez la configuration de l'origine.",
+      "action": "Réessayer"
+    },
+    "authExpired": {
+      "title": "Session expirée",
+      "desc": "Votre session a expiré. Veuillez vous reconnecter.",
+      "action": "Se connecter"
+    },
+    "generic": {
+      "title": "Erreur de connexion"
+    }
   },
   "server": {
     "switching": "Changement de serveur…",

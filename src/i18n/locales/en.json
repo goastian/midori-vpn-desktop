@@ -27,7 +27,35 @@
     "capsApplyFailed": "Could not apply permissions. Run the command manually as root.",
     "capsVerifyFailed": "Permissions were applied, but the agent could not verify them.",
     "capsRevertFailed": "Could not revoke permissions. Run \"sudo setcap -r /usr/local/bin/midorivpn-agent\" manually.",
-    "meshFirewallWarning": "Mesh is active, but firewall configuration failed: {warning}"
+    "meshFirewallWarning": "Mesh is active, but firewall configuration failed: {warning}",
+    "dnsPermission": {
+      "title": "DNS permissions required",
+      "desc": "MidoriVPN needs administrator permissions to protect your DNS queries against leaks and configure the system.",
+      "action": "Grant permissions"
+    },
+    "tunPermission": {
+      "title": "Network permissions required",
+      "desc": "Could not create the WireGuard tunnel interface. System network permissions are required.",
+      "action": "Grant permissions"
+    },
+    "serverUnavailable": {
+      "title": "Server unavailable",
+      "desc": "Could not establish a connection to the selected VPN server. Check your connection or choose another server.",
+      "action": "Retry"
+    },
+    "authOriginRejected": {
+      "title": "Origin not allowed",
+      "desc": "The server rejected the connection request due to an origin mismatch. Verify configuration.",
+      "action": "Retry"
+    },
+    "authExpired": {
+      "title": "Session expired",
+      "desc": "Your session has expired. Please sign in again to continue.",
+      "action": "Sign in"
+    },
+    "generic": {
+      "title": "Connection error"
+    }
   },
   "server": {
     "switching": "Switching server…",

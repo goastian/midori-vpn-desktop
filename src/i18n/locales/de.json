@@ -27,7 +27,35 @@
     "capsApplyFailed": "Konnte nicht angewendet werden. Führe den Befehl manuell als root aus.",
     "capsVerifyFailed": "Berechtigungen wurden angewendet, konnten aber vom Agent nicht verifiziert werden.",
     "capsRevertFailed": "Konnte nicht widerrufen werden. Führe \"sudo setcap -r /usr/local/bin/midorivpn-agent\" manuell aus.",
-    "meshFirewallWarning": "Mesh ist aktiv, aber die Firewall-Konfiguration ist fehlgeschlagen: {warning}"
+    "meshFirewallWarning": "Mesh ist aktiv, aber die Firewall-Konfiguration ist fehlgeschlagen: {warning}",
+    "dnsPermission": {
+      "title": "DNS-Berechtigungen erforderlich",
+      "desc": "MidoriVPN benötigt Administratorrechte, um DNS-Anfragen vor Lecks zu schützen und das System zu konfigurieren.",
+      "action": "Berechtigungen erteilen"
+    },
+    "tunPermission": {
+      "title": "Netzwerkberechtigungen erforderlich",
+      "desc": "Die WireGuard-Tunnelschnittstelle konnte nicht erstellt werden. Systemnetzwerkberechtigungen sind erforderlich.",
+      "action": "Berechtigungen erteilen"
+    },
+    "serverUnavailable": {
+      "title": "Server nicht verfügbar",
+      "desc": "Verbindung zum ausgewählten VPN-Server fehlgeschlagen. Bitte Verbindung prüfen oder anderen Server wählen.",
+      "action": "Wiederholen"
+    },
+    "authOriginRejected": {
+      "title": "Ursprung nicht zulässig",
+      "desc": "Der Server hat die Anfrage abgelehnt. Bitte Konfiguration überprüfen.",
+      "action": "Wiederholen"
+    },
+    "authExpired": {
+      "title": "Sitzung abgelaufen",
+      "desc": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.",
+      "action": "Anmelden"
+    },
+    "generic": {
+      "title": "Verbindungsfehler"
+    }
   },
   "server": {
     "switching": "Server wird gewechselt…",

@@ -5,7 +5,9 @@ import {
   VPN_SERVER_UNAVAILABLE_MESSAGE,
   isAuthOriginRejected,
   isDNSPermissionDenied,
+  isTunPermissionDenied,
   isVPNServerUnavailable,
+  parseAppError,
   toErrorMessage,
 } from './error'
 
@@ -16,6 +18,10 @@ describe('error helpers', () => {
     expect(toErrorMessage(raw)).toBe(AUTH_ORIGIN_REJECTED_MESSAGE)
     expect(toErrorMessage(raw)).not.toContain('502 Bad Gateway')
     expect(toErrorMessage(raw)).not.toContain('{"ok":false')
+
+    const parsed = parseAppError(raw)
+    expect(parsed.category).toBe('auth_origin_rejected')
+    expect(parsed.titleKey).toBe('errors.authOriginRejected.title')
   })
 
   it('detects legacy origin rejection payloads', () => {
@@ -28,6 +34,10 @@ describe('error helpers', () => {
     expect(isVPNServerUnavailable(raw)).toBe(true)
     expect(toErrorMessage(raw)).toBe(VPN_SERVER_UNAVAILABLE_MESSAGE)
     expect(toErrorMessage(raw)).not.toContain('502 Bad Gateway')
+
+    const parsed = parseAppError(raw)
+    expect(parsed.category).toBe('server_unavailable')
+    expect(parsed.action).toBe('retry')
   })
 
   it('routes the resolvconf capability failure to the desktop permission flow', () => {
@@ -35,5 +45,27 @@ describe('error helpers', () => {
 
     expect(isDNSPermissionDenied(raw)).toBe(true)
     expect(toErrorMessage(raw)).toBe(VPN_DNS_PERMISSION_MESSAGE)
+
+    const parsed = parseAppError(raw)
+    expect(parsed.category).toBe('dns_permission')
+    expect(parsed.action).toBe('grant_caps')
+    expect(parsed.titleKey).toBe('errors.dnsPermission.title')
+    expect(parsed.descKey).toBe('errors.dnsPermission.desc')
+  })
+
+  it('correctly classifies structured dns_permission_denied error', () => {
+    const raw = 'dns_permission_denied: Permisos insuficientes para configurar DNS en /etc/resolv.conf'
+    const parsed = parseAppError(raw)
+    expect(parsed.category).toBe('dns_permission')
+    expect(parsed.action).toBe('grant_caps')
+  })
+
+  it('correctly classifies tun permission denied error', () => {
+    const raw = 'tun_permission_denied: permisos insuficientes para crear TUN'
+    expect(isTunPermissionDenied(raw)).toBe(true)
+
+    const parsed = parseAppError(raw)
+    expect(parsed.category).toBe('tun_permission')
+    expect(parsed.action).toBe('grant_caps')
   })
 })

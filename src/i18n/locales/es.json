@@ -27,7 +27,35 @@
     "capsApplyFailed": "No se pudo aplicar. Ejecuta el comando manualmente como root.",
     "capsVerifyFailed": "Permisos aplicados, pero no se pudieron verificar en el agente.",
     "capsRevertFailed": "No se pudo revertir. Ejecuta \"sudo setcap -r /usr/local/bin/midorivpn-agent\" manualmente.",
-    "meshFirewallWarning": "Mesh activo, pero falló la configuración de firewall: {warning}"
+    "meshFirewallWarning": "Mesh activo, pero falló la configuración de firewall: {warning}",
+    "dnsPermission": {
+      "title": "Permisos de DNS requeridos",
+      "desc": "MidoriVPN necesita permisos de administrador para proteger tus peticiones DNS contra fugas y configurar el sistema.",
+      "action": "Conceder permisos"
+    },
+    "tunPermission": {
+      "title": "Permisos de red requeridos",
+      "desc": "No se pudo crear la interfaz segura WireGuard. Se requieren permisos de red en el sistema.",
+      "action": "Conceder permisos"
+    },
+    "serverUnavailable": {
+      "title": "Servidor no disponible",
+      "desc": "No se pudo conectar al servidor VPN seleccionado. Comprueba tu conexión o intenta con otro servidor.",
+      "action": "Reintentar"
+    },
+    "authOriginRejected": {
+      "title": "Origen no permitido",
+      "desc": "El servidor rechazó la solicitud de conexión. Verifica la configuración de origen.",
+      "action": "Reintentar"
+    },
+    "authExpired": {
+      "title": "Sesión expirada",
+      "desc": "Tu sesión ha caducado. Por favor, vuelve a iniciar sesión.",
+      "action": "Iniciar sesión"
+    },
+    "generic": {
+      "title": "Error de conexión"
+    }
   },
   "server": {
     "switching": "Cambiando servidor…",

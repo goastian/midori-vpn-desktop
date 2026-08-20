@@ -125,7 +125,12 @@
         </div>
       </div>
 
-      <div v-if="vpn.error" class="error">{{ vpn.error }}</div>
+      <!-- Error alert with interactive resolution -->
+      <ErrorAlertCard
+        :error="parsedVpnError"
+        @action="handleErrorAction"
+        @dismiss="clearVpnError"
+      />
     </div>
 
     <div v-if="activeConnected || protection.hasSignal" class="card protection-card">
@@ -177,6 +182,8 @@ import LanguageSelect from '../components/LanguageSelect.vue'
 import AuthSection from '../components/dashboard/AuthSection.vue'
 import PermissionsTriggerCard from '../components/dashboard/PermissionsTriggerCard.vue'
 import DnsProtectionCard from '../components/dashboard/DnsProtectionCard.vue'
+import ErrorAlertCard from '../components/dashboard/ErrorAlertCard.vue'
+import { parseAppError, type ParsedError } from '../lib/error'
 
 const vpn = useVpnStore()
 const { t } = useI18n()
@@ -192,6 +199,25 @@ const switching = ref(false)        // true while auto-switching to another serv
 const pickerRef = ref<HTMLElement | null>(null)
 const connectionType = ref<'vpn' | 'mesh' | ''>('')
 const activeMeshExitIp = ref('')
+
+// ── Error handling ─────────────────────────────────────────────────────────
+const parsedVpnError = computed<ParsedError | null>(() => {
+  return vpn.error ? parseAppError(vpn.error) : null
+})
+
+async function handleErrorAction(action: string) {
+  if (action === 'grant_caps') {
+    await grantCapsSmart()
+  } else if (action === 'retry') {
+    await toggleConnection()
+  } else if (action === 'relogin') {
+    auth.logout()
+  }
+}
+
+function clearVpnError() {
+  vpn.error = null
+}
 
 // ── Permissions ─────────────────────────────────────────────────────────────
 const { capsGranted, capsGranting, capsError, featuresLocked, checkCaps, grantCapsSmart: grantCapsSmartRaw } = useCaps()
