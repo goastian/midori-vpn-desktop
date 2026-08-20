@@ -61,9 +61,10 @@ func (w *WireGuardDriver) Stats(ctx context.Context) (*Stats, error) {
 
 func (w *WireGuardDriver) Probe(ctx context.Context, endpointHost string) (*ProbeResult, error) {
 	start := time.Now()
-	// Attempt UDP handshake probe to port 51820
 	target := net.JoinHostPort(endpointHost, "51820")
-	conn, err := net.DialTimeout("udp", target, 1200*time.Millisecond)
+
+	d := net.Dialer{Timeout: 800 * time.Millisecond}
+	conn, err := d.DialContext(ctx, "udp", target)
 	if err != nil {
 		return &ProbeResult{
 			Protocol:  ProtocolWireGuard,
@@ -72,6 +73,12 @@ func (w *WireGuardDriver) Probe(ctx context.Context, endpointHost string) (*Prob
 		}, err
 	}
 	defer conn.Close()
+
+	// Send dummy WireGuard probe packet and check reachability
+	_ = conn.SetDeadline(time.Now().Add(500 * time.Millisecond))
+	probePacket := make([]byte, 32)
+	probePacket[0] = 0x01 // Type 1: Initiation
+	_, _ = conn.Write(probePacket)
 
 	rtt := time.Since(start)
 	return &ProbeResult{

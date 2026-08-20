@@ -122,6 +122,9 @@ const localizedDescription = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  cursor: text;
 }
 
 .error-alert--dns_permission,

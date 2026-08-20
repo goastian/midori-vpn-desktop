@@ -190,7 +190,8 @@ export const agent = {
   },
 
   vpn: {
-    connect: (server_id: string) => post<void>('vpn/connect', { server_id }),
+    connect: (server_id: string, protocol = 'smart_auto') =>
+      post<void>('vpn/connect', { server_id, protocol }),
     disconnect: () => post<void>('vpn/disconnect'),
   },
 

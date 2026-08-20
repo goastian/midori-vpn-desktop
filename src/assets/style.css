@@ -46,6 +46,13 @@ html, body {
   -webkit-user-select: none;
 }
 
+/* Allow text selection in errors, debug logs and selectable elements */
+.error, .error-card, .error-alert-card, .error-alert-body, .error-details, .protection-error, .select-text, pre, code, .value, .conn-stats {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  cursor: text;
+}
+
 button, input, select, textarea { font: inherit; }
 
 /* ── Shell layout ───────────────────────────────────────────────────── */

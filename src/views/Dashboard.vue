@@ -264,7 +264,7 @@ const allItems = computed<ServerItem[]>(() => {
         flag: getCountryFlag(code),
         isMesh: false,
         name: `${s.name} — ${s.location}`,
-        ip: s.endpoint.split(':')[0] || s.host,
+        ip: s.host || s.endpoint.split(':')[0],
       }
     }),
     ...(mesh.enabled ? mesh.exitNodes.map(n => ({
@@ -291,7 +291,7 @@ const selectedItem = computed(() =>
 
 const activeServerEndpoint = computed(() => {
   const s = vpn.servers.find(s => s.id === vpn.serverIp)
-  return s ? (s.endpoint.split(':')[0] || s.host) : ''
+  return s ? (s.host || s.endpoint.split(':')[0]) : ''
 })
 
 // ── Connection state ────────────────────────────────────────────────────────

@@ -20,6 +20,8 @@ type VPNStatus struct {
 	MeshIP         string `json:"mesh_ip"`
 	BytesSent      int64  `json:"bytes_sent"`
 	BytesRecv      int64  `json:"bytes_recv"`
+	ActiveProtocol string `json:"active_protocol,omitempty"`
+	FallbackReason string `json:"fallback_reason,omitempty"`
 }
 
 // MeshStatus represents the current mesh node state.

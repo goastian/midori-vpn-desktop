@@ -49,7 +49,8 @@ export const useVpnStore = defineStore('vpn', () => {
     loading.value = true
     error.value = null
     try {
-      await agent.vpn.connect(serverId)
+      const protocol = localStorage.getItem('midori_protocol_policy') || 'smart_auto'
+      await agent.vpn.connect(serverId, protocol)
     } catch (e) {
       error.value = toErrorMessage(e)
       // If the agent reported a definitive auth failure it already cleared the

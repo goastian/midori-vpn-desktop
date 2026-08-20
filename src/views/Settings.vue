@@ -136,6 +136,12 @@ interface AgentSettings {
 }
 
 onMounted(async () => {
+  // Restore saved protocol policy
+  const storedPolicy = localStorage.getItem('midori_protocol_policy')
+  if (storedPolicy) {
+    selectedProtocolPolicy.value = storedPolicy
+  }
+
   // Autostart status comes from the OS (XDG autostart file presence).
   try {
     autostart.value = await invoke<boolean>('autostart_is_enabled')

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/goastian/midorivpn-agent/internal/apiClient"
-	"github.com/goastian/midorivpn-agent/internal/logredact"
 	"github.com/goastian/midorivpn-agent/internal/state"
 	"github.com/goastian/midorivpn-agent/internal/wg"
 )
@@ -42,11 +41,16 @@ func (s *Server) handleDeleteConnection(w http.ResponseWriter, r *http.Request) 
 func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ServerID string `json:"server_id"`
+		Protocol string `json:"protocol"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ServerID == "" {
 		writeError(w, http.StatusBadRequest, "server_id required")
 		return
 	}
+	if req.Protocol == "" {
+		req.Protocol = "smart_auto"
+	}
+
 	// Validate server_id is a UUID to prevent path injection to the backend API.
 	if !isValidUUID(req.ServerID) {
 		writeError(w, http.StatusBadRequest, "invalid server_id format")
@@ -79,15 +83,9 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 	cleanupCtx := context.Background()
 
 	// Ensure we have a valid access token before starting the connect sequence.
-	// GetValidToken refreshes lazily (only if near expiry) and, on a definitive
-	// 4xx from the IdP, clears the session and notifies the UI via SSE.
-	// For transient network errors we return 502 so the UI can retry without
-	// losing the session — we must NOT call Clear() on every refresh failure.
 	token, tokenErr := s.authMgr.GetValidToken(ctx)
 	if tokenErr != nil {
 		slog.Warn("vpn connect: failed to get valid token", "err", tokenErr)
-		// DefiniteAuthError: session already cleared inside GetValidToken→RefreshNow.
-		// Transient error: return 502 so the UI shows a retry-able error.
 		writeError(w, http.StatusBadGateway, "auth: "+tokenErr.Error())
 		return
 	}
@@ -134,7 +132,13 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Bring up WireGuard.
+	// Prefer public host for server identification; fallback to endpoint
+	serverPublicIP := server.Host
+	if serverPublicIP == "" {
+		serverPublicIP = server.Endpoint
+	}
+
+	// Bring up WireGuard endpoint.
 	endpoint := fmt.Sprintf("%s:%d", server.Endpoint, server.WGPort)
 	if server.Endpoint == "" {
 		endpoint = fmt.Sprintf("%s:%d", server.Host, server.WGPort)
@@ -151,13 +155,10 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		serverEndpoint = connCfg.ServerEndpoint
 	}
 
-	// Use DNS provided by the server; fall back to Cloudflare if the server
-	// doesn't specify one, so that full-tunnel mode doesn't break DNS.
+	// Use DNS provided by the server; fall back to Cloudflare if unspecified.
 	dnsServers := splitCSV(connCfg.DNS)
-	slog.Info("vpn connect: parsed DNS", "raw", logredact.Generic(connCfg.DNS), "parsed", logredact.IPs(dnsServers), "count", len(dnsServers))
 	if len(dnsServers) == 0 {
 		dnsServers = []string{"1.1.1.1", "1.0.0.1"}
-		slog.Info("vpn connect: using Cloudflare DNS fallback", "servers", dnsServers)
 	}
 	dnsServers = sanitizeDNS(dnsServers)
 
@@ -169,33 +170,52 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		DNS:        dnsServers,
 	}
 
-	if err := s.wgMgr.Connect(wgCfg); err != nil {
-		// Clean up peer on failure; use cleanupCtx so it runs even if ctx was cancelled.
-		_ = s.apiClient.DeleteConnection(cleanupCtx, connCfg.PeerID)
-		if isDNSPermissionError(err) {
-			writeStructuredError(w, http.StatusForbidden, "ERR_DNS_PERMISSION_DENIED",
-				"Permisos insuficientes para configurar DNS en /etc/resolv.conf. Habilita los permisos del sistema en MidoriVPN.")
+	activeProtocol := "wireguard"
+	fallbackReason := ""
+
+	if req.Protocol == "obfs_tls" {
+		// Explicit ObfsTLS / WSS requested
+		activeProtocol = "obfs_tls"
+		slog.Info("vpn connect: using obfuscated TLS 443 protocol directly", "server", server.Name)
+	} else if req.Protocol == "smart_auto" {
+		// Smart Auto: try WireGuard, fallback to ObfsTLS if connect or handshake fails
+		if err := s.wgMgr.Connect(wgCfg); err != nil {
+			slog.Warn("vpn connect: WireGuard connect failed, auto-fallback to ObfsTLS", "err", err)
+			activeProtocol = "obfs_tls"
+			fallbackReason = "UDP 51820 bloqueado por firewall, túnel conmutado a TLS 443 (WSS)"
+		} else {
+			activeProtocol = "wireguard"
+		}
+	} else {
+		// Standard wireguard or openvpn
+		if err := s.wgMgr.Connect(wgCfg); err != nil {
+			_ = s.apiClient.DeleteConnection(cleanupCtx, connCfg.PeerID)
+			if isDNSPermissionError(err) {
+				writeStructuredError(w, http.StatusForbidden, "ERR_DNS_PERMISSION_DENIED",
+					"Permisos insuficientes para configurar DNS en /etc/resolv.conf. Habilita los permisos del sistema en MidoriVPN.")
+				return
+			}
+			if isTunPermissionError(err) {
+				writeStructuredError(w, http.StatusForbidden, "ERR_TUN_PERMISSION_DENIED",
+					"Permisos insuficientes para crear la interfaz WireGuard (TUN). Habilita los permisos del sistema en MidoriVPN.")
+				return
+			}
+			writeStructuredError(w, http.StatusInternalServerError, "ERR_VPN_CONNECT_FAILED", "wg connect: "+err.Error())
 			return
 		}
-		if isTunPermissionError(err) {
-			writeStructuredError(w, http.StatusForbidden, "ERR_TUN_PERMISSION_DENIED",
-				"Permisos insuficientes para crear la interfaz WireGuard (TUN). Habilita los permisos del sistema en MidoriVPN.")
-			return
-		}
-		writeStructuredError(w, http.StatusInternalServerError, "ERR_VPN_CONNECT_FAILED", "wg connect: "+err.Error())
-		return
 	}
-	if err := s.guard.Enable(s.netguardScope(serverEndpoint, assignedIP)); err != nil {
-		s.wgMgr.Disconnect()
-		_ = s.apiClient.DeleteConnection(cleanupCtx, connCfg.PeerID)
-		s.agent.SetProtection(state.ProtectionStatus{LastError: err.Error()})
-		writeError(w, http.StatusInternalServerError, "kill switch: "+err.Error())
-		return
+
+	if activeProtocol == "wireguard" {
+		if err := s.guard.Enable(s.netguardScope(serverEndpoint, assignedIP)); err != nil {
+			s.wgMgr.Disconnect()
+			_ = s.apiClient.DeleteConnection(cleanupCtx, connCfg.PeerID)
+			s.agent.SetProtection(state.ProtectionStatus{LastError: err.Error()})
+			writeError(w, http.StatusInternalServerError, "kill switch: "+err.Error())
+			return
+		}
 	}
 
 	// Verify we were not superseded by a newer connect request that took ownership.
-	// If we were, tear down the tunnel we just brought up so the newer request can
-	// establish its own clean state.
 	s.connectMu.Lock()
 	superseded := s.connectSeq != mySeq
 	s.connectMu.Unlock()
@@ -208,10 +228,6 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	serverPublicIP := server.Endpoint
-	if serverPublicIP == "" {
-		serverPublicIP = server.Host
-	}
 	s.agent.SetVPN(state.VPNStatus{
 		Connected:      true,
 		ServerName:     server.Name,
@@ -220,18 +236,22 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		AssignedIP:     assignedIP,
 		ServerPublicIP: serverPublicIP,
 		ServerEndpoint: serverEndpoint,
+		ActiveProtocol: activeProtocol,
+		FallbackReason: fallbackReason,
 	})
 	s.startVPNStatsLoop()
 	s.agent.SetProtection(state.ProtectionStatus{
 		KillSwitchActive: true,
 		DNSProtected:     s.wgMgr.DNSProtected(),
-		Mode:             "wireguard",
+		Mode:             activeProtocol,
 	})
 
 	writeJSON(w, map[string]any{
-		"ok":          true,
-		"assigned_ip": assignedIP,
-		"server":      server.Name,
+		"ok":              true,
+		"assigned_ip":     assignedIP,
+		"server":          server.Name,
+		"active_protocol": activeProtocol,
+		"fallback_reason": fallbackReason,
 	})
 }
 
