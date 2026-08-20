@@ -1,10 +1,5 @@
 <template>
   <div>
-    <!-- Language -->
-    <div class="card">
-      <LanguageSelect />
-    </div>
-
     <div class="card">
       <div class="section-title">{{ t('settings.sectionMesh') }}</div>
       <div class="row">
@@ -107,7 +102,6 @@ import { invoke } from '@tauri-apps/api/core'
 import { agent } from '../lib/agent'
 import { useCaps } from '../composables/useCaps'
 import { toErrorMessage } from '../lib/error'
-import LanguageSelect from '../components/LanguageSelect.vue'
 import QuitButton from '../components/QuitButton.vue'
 
 const { t } = useI18n()

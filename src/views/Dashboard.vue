@@ -229,12 +229,11 @@ const { capsGranted, capsGranting, capsError, featuresLocked, checkCaps, grantCa
  * path (which races with token rotation and SSE reconnect during restart).
  */
 async function grantCapsSmart() {
+  console.log('[Dashboard] User clicked Enable Required Permissions button')
   const ok = await grantCapsSmartRaw()
+  console.log('[Dashboard] grantCapsSmart result:', ok)
   if (!ok) return
   await loadServersAfterLogin()
-  // AutoEnableMesh in the agent handles mesh activation after the restart
-  // that accompanies the caps grant. Calling mesh.enable() here as well
-  // races with that goroutine and produces a redundant double activation.
 }
 
 // ── Item model ─────────────────────────────────────────────────────────────

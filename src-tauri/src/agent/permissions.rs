@@ -24,7 +24,8 @@ pub(super) fn agent_command_path(app: &AppHandle) -> io::Result<PathBuf> {
             }
         }
 
-        Ok(PathBuf::from(AGENT_INSTALLED_PATH))
+        let target = find_agent_installed_path();
+        Ok(PathBuf::from(target))
     }
 
     #[cfg(target_os = "windows")]
@@ -41,8 +42,6 @@ pub(super) fn agent_command_path(app: &AppHandle) -> io::Result<PathBuf> {
             .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))
     }
 }
-
-
 
 #[cfg(target_os = "linux")]
 fn find_agent_installed_path() -> &'static str {
@@ -64,8 +63,9 @@ fn find_agent_installed_path() -> &'static str {
 /// Returns true if the agent binary has any network capability.
 #[cfg(target_os = "linux")]
 fn agent_has_any_network_cap() -> bool {
+    let target = find_agent_installed_path();
     Command::new("getcap")
-        .arg(find_agent_installed_path())
+        .arg(target)
         .output()
         .map(|out| {
             let text = String::from_utf8_lossy(&out.stdout);
@@ -90,40 +90,64 @@ fn agent_has_required_caps() -> bool {
     true
 }
 
-/// One-shot install of capabilities on the agent binary with automatic fallback.
+/// One-shot install of capabilities on the agent binary with automatic fallback and informative logging.
 #[cfg(target_os = "linux")]
 fn try_install_caps(extended: bool) -> bool {
     let Some(setcap) = find_setcap_path() else {
+        eprintln!("[permissions] Error: setcap binary not found in standard paths (/usr/sbin, /sbin, /usr/bin, /bin)");
         return false;
     };
 
     let target_binary = find_agent_installed_path();
+    eprintln!("[permissions] Attempting to grant capabilities to '{}' using setcap '{}' (extended={})", target_binary, setcap, extended);
 
     if extended {
-        let status = Command::new("pkexec")
+        match Command::new("pkexec")
             .arg(setcap)
             .arg("cap_net_admin,cap_net_raw,cap_dac_override,cap_linux_immutable=ep")
             .arg(target_binary)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-
-        if matches!(status, Ok(s) if s.success()) && agent_has_required_caps() {
-            return true;
+            .output()
+        {
+            Ok(out) => {
+                if out.status.success() {
+                    eprintln!("[permissions] pkexec extended setcap succeeded");
+                    if agent_has_required_caps() {
+                        return true;
+                    }
+                } else {
+                    let err = String::from_utf8_lossy(&out.stderr);
+                    eprintln!("[permissions] pkexec extended setcap failed (exit code {:?}): {}", out.status.code(), err.trim());
+                }
+            }
+            Err(e) => {
+                eprintln!("[permissions] Error launching pkexec: {}", e);
+            }
         }
     }
 
-    let status = Command::new("pkexec")
+    eprintln!("[permissions] Applying standard capability set (cap_net_admin,cap_net_raw=ep) on '{}'", target_binary);
+    match Command::new("pkexec")
         .arg(setcap)
         .arg("cap_net_admin,cap_net_raw=ep")
         .arg(target_binary)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+        .output()
+    {
+        Ok(out) => {
+            if out.status.success() {
+                eprintln!("[permissions] pkexec standard setcap succeeded");
+            } else {
+                let err = String::from_utf8_lossy(&out.stderr);
+                eprintln!("[permissions] pkexec standard setcap failed (exit code {:?}): {}", out.status.code(), err.trim());
+            }
+        }
+        Err(e) => {
+            eprintln!("[permissions] Error executing pkexec standard setcap: {}", e);
+        }
+    }
 
-    matches!(status, Ok(s) if s.success()) && agent_has_required_caps()
+    let ok = agent_has_required_caps();
+    eprintln!("[permissions] Verification result for '{}': {}", target_binary, if ok { "GRANTED (CAP_NET_ADMIN active)" } else { "NOT GRANTED" });
+    ok
 }
 
 #[cfg(not(target_os = "linux"))]
