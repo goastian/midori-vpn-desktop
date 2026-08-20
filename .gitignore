@@ -21,6 +21,7 @@ src-tauri/gen/
 
 # ── Compiled installers / bundles ─────────────────────────────────────────────
 # (kept out of VCS — produced by CI)
+dist-packages/
 *.deb
 *.rpm
 !packaging/Containerfile.rpm
