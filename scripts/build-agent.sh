@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Build the Go agent into agent/target/release/.
-set -euo pipefail
+set -eu
+set -o pipefail 2>/dev/null || true
 
 AGENT_DIR="$(cd "$(dirname "$0")/../agent" && pwd)"
 OUT_DIR="$AGENT_DIR/target/release"
