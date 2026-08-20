@@ -94,7 +94,7 @@ fn agent_has_required_caps() -> bool {
 #[cfg(target_os = "linux")]
 fn try_install_caps(extended: bool) -> bool {
     let Some(setcap) = find_setcap_path() else {
-        eprintln!("[permissions] Error: setcap binary not found in standard paths (/usr/sbin, /sbin, /usr/bin, /bin)");
+        eprintln!("[permissions] Error: 'setcap' executable not found on system. Please install 'libcap-progs' (openSUSE: sudo zypper in libcap-progs / Fedora: sudo dnf in libcap-progs / Debian: sudo apt install libcap2-bin)");
         return false;
     };
 
