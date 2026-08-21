@@ -40,8 +40,8 @@ type Config struct {
 // so that misconfiguration in one place doesn't desync deployments.
 func defaults() Config {
 	return Config{
-		APIURL:                "https://vpn.dorrejo.com",
-		AccountURL:            "https://vpn.dorrejo.com",
+		APIURL:                "https://vpn.astian.org",
+		AccountURL:            "https://vpn.astian.org",
 		AuthentikIssuer:       "https://accounts.astian.org/application/o/midori-vpn/",
 		AuthentikClientID:     "60mBgw8BHTvKRPYVhDTJGoKEt30QYG3b7Sv0RFNd",
 		AuthentikClientSecret: "",
