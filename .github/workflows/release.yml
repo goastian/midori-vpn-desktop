@@ -10,17 +10,35 @@ permissions:
   contents: write
 
 jobs:
-  build-tauri:
+  release-matrix:
+    name: Build Desktop Release (${{ matrix.platform }}-${{ matrix.arch }})
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: 'linux'
-            os: 'ubuntu-22.04'
-          - platform: 'windows'
-            os: 'windows-latest'
-          - platform: 'macos'
-            os: 'macos-latest'
+          # Linux x86_64
+          - platform: linux
+            arch: x86_64
+            os: ubuntu-22.04
+            goos: linux
+            goarch: amd64
+            rust_target: x86_64-unknown-linux-gnu
+
+          # Windows x86_64
+          - platform: windows
+            arch: x86_64
+            os: windows-latest
+            goos: windows
+            goarch: amd64
+            rust_target: x86_64-pc-windows-msvc
+
+          # macOS Universal (Intel + Apple Silicon)
+          - platform: macos
+            arch: universal
+            os: macos-latest
+            goos: darwin
+            goarch: arm64
+            rust_target: aarch64-apple-darwin
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -36,38 +54,53 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26'
+          go-version: '1.24'
           cache-dependency-path: agent/go.sum
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
 
       - name: Install Linux dependencies
         if: matrix.platform == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev rpm gnupg
 
       - name: Install Node dependencies
         run: npm ci
 
       - name: Build Go Agent (Linux/macOS)
         if: matrix.platform != 'windows'
-        working-directory: agent
-        run: go build -trimpath -ldflags="-s -w" -o ../src-tauri/binaries/midorivpn-agent ./cmd/agent || true
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          mkdir -p agent/target/release bin
+          cd agent
+          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o ../agent/target/release/agent ./cmd/agent
+          cp ../agent/target/release/agent ../bin/midorivpn-agent
 
       - name: Build Go Agent (Windows)
         if: matrix.platform == 'windows'
-        working-directory: agent
-        run: go build -trimpath -ldflags="-s -w" -o ../src-tauri/binaries/midorivpn-agent.exe ./cmd/agent || true
+        env:
+          GOOS: windows
+          GOARCH: amd64
+        run: |
+          mkdir agent\target\release -ea 0
+          mkdir bin -ea 0
+          cd agent
+          go build -trimpath -ldflags="-s -w" -o ..\agent\target\release\agent.exe .\cmd\agent
+          Copy-Item ..\agent\target\release\agent.exe ..\bin\midorivpn-agent.exe
 
-      - name: Build Tauri Application
+      - name: Build Tauri Desktop Application
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Midori VPN Desktop ${{ github.ref_name }}'
-          releaseBody: 'Release ${{ github.ref_name }} of Midori VPN Desktop client.'
+          releaseBody: 'Release ${{ github.ref_name }} multi-platform desktop client.'
           releaseDraft: false
           prerelease: false
