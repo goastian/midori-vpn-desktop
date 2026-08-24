@@ -1,7 +1,10 @@
 [package]
 name = "midorivpn-desktop"
 version = "2.0.0"
+authors = ["Astian, Inc."]
+description = "Secure Midori VPN client for Linux"
 edition = "2021"
+license = "AGPL-3.0-or-later"
 
 [lib]
 name = "midorivpn_desktop_lib"

@@ -9,6 +9,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -18,6 +20,13 @@ var allowedDesktopOrigins = map[string]struct{}{
 }
 
 const defaultCORSOrigin = "tauri://localhost"
+
+func isAllowedDesktopOrigin(origin, host string) bool {
+	if _, ok := allowedDesktopOrigins[origin]; ok {
+		return true
+	}
+	return origin == "http://"+host
+}
 
 func constantTimeTokenEqual(incoming, expected string) bool {
 	incomingSum := sha256.Sum256([]byte(incoming))
@@ -32,9 +41,9 @@ func setLocalSecurityHeaders(w http.ResponseWriter) {
 	w.Header().Set("Referrer-Policy", "no-referrer")
 }
 
-func resolveAgentToken(allowMissingForDev bool) (string, error) {
+func resolveAgentToken() (string, error) {
 	token := os.Getenv("MIDORIVPN_AGENT_TOKEN")
-	if token == "" && !allowMissingForDev {
+	if token == "" {
 		return "", fmt.Errorf("MIDORIVPN_AGENT_TOKEN is required")
 	}
 	return token, nil
@@ -54,7 +63,7 @@ func withLocalCORS(h http.Handler) http.Handler {
 		setLocalSecurityHeaders(w)
 		corsOrigin := defaultCORSOrigin
 		if origin := r.Header.Get("Origin"); origin != "" {
-			if _, ok := allowedDesktopOrigins[origin]; ok {
+			if isAllowedDesktopOrigin(origin, r.Host) {
 				corsOrigin = origin
 			} else if r.Method == http.MethodOptions {
 				http.Error(w, "forbidden", http.StatusForbidden)
@@ -85,7 +94,7 @@ func requireLocalAuth(h http.Handler, agentToken string, allowQueryToken bool) h
 		}
 
 		if origin := r.Header.Get("Origin"); origin != "" {
-			if _, ok := allowedDesktopOrigins[origin]; !ok {
+			if !isAllowedDesktopOrigin(origin, r.Host) {
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
@@ -105,6 +114,17 @@ func requireLocalAuth(h http.Handler, agentToken string, allowQueryToken bool) h
 			}
 		}
 
+		h.ServeHTTP(w, r)
+	})
+}
+
+func requireLocalHost(h http.Handler, port int) http.Handler {
+	expected := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.EqualFold(r.Host, expected) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
 		h.ServeHTTP(w, r)
 	})
 }
@@ -146,21 +166,29 @@ func (s *Server) newMux(agentToken string) http.Handler {
 
 	mux.Handle("GET /public-ip", wrap(http.HandlerFunc(s.handlePublicIP)))
 	mux.Handle("GET /dns/status", wrap(http.HandlerFunc(s.handleDNSStatus)))
+	mux.Handle("GET /system/security", wrap(http.HandlerFunc(s.handleSystemSecurity)))
+	mux.Handle("GET /system/capabilities", wrap(http.HandlerFunc(s.handleCapabilitiesStatus)))
+	mux.Handle("POST /system/capabilities", wrap(http.HandlerFunc(s.handleCapabilitiesGrant)))
+	mux.Handle("DELETE /system/capabilities", wrap(http.HandlerFunc(s.handleCapabilitiesRevoke)))
+	mux.Handle("GET /system/autostart", wrap(http.HandlerFunc(s.handleAutostartStatus)))
+	mux.Handle("POST /system/autostart", wrap(http.HandlerFunc(s.handleAutostartSet)))
+	mux.Handle("POST /app/restart", wrap(http.HandlerFunc(s.handleAppRestart)))
+	mux.Handle("POST /app/quit", wrap(http.HandlerFunc(s.handleAppQuit)))
 
 	mux.Handle("POST /oauth/start", wrap(http.HandlerFunc(s.handleOAuthStart)))
 	mux.Handle("GET /oauth/callback", http.HandlerFunc(s.handleOAuthCallback))
+	if s.uiDir != "" {
+		mux.Handle("GET /", s.browserUIHandler())
+	}
 
-	return mux
+	return requireLocalHost(mux, s.port)
 }
 
 // Start begins serving. It blocks until ctx is cancelled.
 func (s *Server) Start(ctx context.Context) error {
-	agentToken, err := resolveAgentToken(s.allowMissingAgentTokenForDev)
+	agentToken, err := resolveAgentToken()
 	if err != nil {
 		return err
-	}
-	if agentToken == "" {
-		slog.Warn("MIDORIVPN_AGENT_TOKEN is not set; token enforcement disabled for development")
 	}
 
 	go func() {

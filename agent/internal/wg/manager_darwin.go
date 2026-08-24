@@ -10,12 +10,15 @@ import (
 )
 
 type Config struct {
-	PrivateKey string
-	PublicKey  string
-	Endpoint   string
-	AssignedIP string
-	DNS        []string
-	MeshIPs    []string
+	PrivateKey    string
+	PublicKey     string
+	PresharedKey  string
+	Endpoint      string
+	RouteEndpoint string
+	AssignedIP    string
+	DNS           []string
+	MeshIPs       []string
+	MTU           int
 }
 
 type Manager struct{}

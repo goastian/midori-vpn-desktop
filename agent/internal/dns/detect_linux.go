@@ -28,10 +28,7 @@ func resolvedActive() bool {
 			continue
 		}
 		cmd := exec.Command(path, "is-active", "--quiet", "systemd-resolved")
-		if cmd.Run() == nil {
-			return true
-		}
-		return false
+		return cmd.Run() == nil
 	}
 	return false
 }

@@ -69,12 +69,4 @@ yarn-error.log*
 .syncthing*.tmp
 
 # ── AI Assistants & LLM tools ─────────────────────────────────────────────────
-.gemini/
-.agents/
-.opencode/
-.claude/
-.cursor/
-.windsurf/
-*.prompt
-*.ai
-
+# Se excluyen manualmente al preparar commits; nunca se agregan metadatos locales.

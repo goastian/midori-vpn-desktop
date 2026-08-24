@@ -6,13 +6,14 @@ import (
 	"testing"
 )
 
-func TestDefaultAPIURL(t *testing.T) {
+func TestDefaultEmptyAPIURL(t *testing.T) {
 	// Ensure no stray env var overrides the test.
 	t.Setenv("API_URL", "")
 
-	cfg := Load()
-	if cfg.APIURL != "https://vpn.dorrejo.com" {
-		t.Fatalf("default APIURL = %q, want %q", cfg.APIURL, "https://vpn.dorrejo.com")
+	var cfg Config
+	applyEnv(&cfg)
+	if cfg.APIURL != "" {
+		t.Fatalf("unconfigured APIURL = %q, want empty", cfg.APIURL)
 	}
 }
 
@@ -37,7 +38,6 @@ func TestAPIURLFromDotEnvFile(t *testing.T) {
 	}
 
 	var cfg Config
-	cfg = defaults()
 	applyDotenv(&cfg, envFile)
 
 	if cfg.APIURL != "https://staging.vpn.example.com" {
@@ -56,7 +56,7 @@ func TestDotEnvIgnoresComments(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg := defaults()
+	var cfg Config
 	applyDotenv(&cfg, envFile)
 	if cfg.APIURL != "https://env.example.com" {
 		t.Fatalf("APIURL = %q, want %q", cfg.APIURL, "https://env.example.com")
@@ -72,7 +72,7 @@ func TestDotEnvQuotedValues(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg := defaults()
+	var cfg Config
 	applyDotenv(&cfg, envFile)
 	if cfg.APIURL != "https://quoted.example.com" {
 		t.Fatalf("APIURL from quoted dotenv = %q, want %q", cfg.APIURL, "https://quoted.example.com")
@@ -83,7 +83,8 @@ func TestDotEnvQuotedValues(t *testing.T) {
 }
 
 func TestDotEnvMissingFileIsNoop(t *testing.T) {
-	cfg := defaults()
+	var cfg Config
+	cfg.APIURL = "https://initial.example.com"
 	before := cfg.APIURL
 	applyDotenv(&cfg, "/nonexistent/path/config.env")
 	if cfg.APIURL != before {
@@ -100,8 +101,8 @@ func TestEnvVarTakesPrecedenceOverDotEnv(t *testing.T) {
 
 	t.Setenv("API_URL", "https://from-env.example.com")
 
-	// Simulate Load() resolution order: defaults → dotenv → env.
-	cfg := defaults()
+	// Simulate Load() resolution order: dotenv → env.
+	var cfg Config
 	applyDotenv(&cfg, envFile)
 	applyEnv(&cfg)
 
@@ -111,18 +112,50 @@ func TestEnvVarTakesPrecedenceOverDotEnv(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
-	t.Run("valid default config passes", func(t *testing.T) {
-		cfg := defaults()
+	t.Run("valid complete config passes", func(t *testing.T) {
+		cfg := Config{
+			APIURL:               "https://vpn.example.com",
+			AuthentikIssuer:      "https://auth.example.com/app/",
+			AuthentikClientID:    "test-client-id",
+			AuthentikAuthURL:     "https://auth.example.com/authorize/",
+			AuthentikTokenURL:    "https://auth.example.com/token/",
+			AuthentikUserinfoURL: "https://auth.example.com/userinfo/",
+			AuthentikJWKSURL:     "https://auth.example.com/app/jwks/",
+			AuthentikRedirectURI: "http://127.0.0.1:7071/oauth/callback",
+		}
 		if err := cfg.Validate(); err != nil {
-			t.Fatalf("Validate() on defaults failed: %v", err)
+			t.Fatalf("Validate() on complete config failed: %v", err)
 		}
 	})
 
 	t.Run("empty API_URL fails", func(t *testing.T) {
-		cfg := defaults()
-		cfg.APIURL = ""
+		cfg := Config{
+			AuthentikIssuer:      "https://auth.example.com/app/",
+			AuthentikClientID:    "test-client-id",
+			AuthentikAuthURL:     "https://auth.example.com/authorize/",
+			AuthentikTokenURL:    "https://auth.example.com/token/",
+			AuthentikUserinfoURL: "https://auth.example.com/userinfo/",
+			AuthentikJWKSURL:     "https://auth.example.com/app/jwks/",
+			AuthentikRedirectURI: "http://127.0.0.1:7071/oauth/callback",
+		}
 		if err := cfg.Validate(); err == nil {
 			t.Fatal("expected Validate() to fail with empty APIURL")
+		}
+	})
+
+	t.Run("public callback is rejected", func(t *testing.T) {
+		cfg := Config{
+			APIURL:               "https://vpn.example.com",
+			AuthentikIssuer:      "https://auth.example.com/app/",
+			AuthentikClientID:    "test-client-id",
+			AuthentikAuthURL:     "https://auth.example.com/authorize/",
+			AuthentikTokenURL:    "https://auth.example.com/token/",
+			AuthentikUserinfoURL: "https://auth.example.com/userinfo/",
+			AuthentikJWKSURL:     "https://auth.example.com/app/jwks/",
+			AuthentikRedirectURI: "https://vpn.example.com/auth/callback",
+		}
+		if err := cfg.Validate(); err == nil {
+			t.Fatal("expected Validate() to reject a non-loopback OAuth callback")
 		}
 	})
 }

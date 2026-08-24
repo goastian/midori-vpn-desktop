@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# RPM removes the files from the previous layout after the new package's
+# postinstall script. Remove only the now-empty compatibility directories;
+# unknown administrator content is preserved because rmdir refuses non-empty
+# directories.
+for old_dir in \
+  /usr/lib/MidoriVPN/apparmor \
+  /usr/lib/MidoriVPN/autostart \
+  /usr/lib/MidoriVPN/icons \
+  /usr/lib/MidoriVPN/launcher \
+  /usr/lib/MidoriVPN/polkit \
+  /usr/lib/MidoriVPN/selinux \
+  /usr/lib/MidoriVPN; do
+  rmdir -- "$old_dir" 2>/dev/null || true
+done
+
+exit 0

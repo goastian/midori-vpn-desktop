@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
+import type { AgentSnapshot } from './agent'
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -17,7 +18,15 @@ vi.mock('@tauri-apps/api/event', () => ({
   }),
 }))
 
-import { agent, initAgentToken, type AgentSnapshot } from './agent'
+let agent: typeof import('./agent').agent
+let initAgentToken: typeof import('./agent').initAgentToken
+
+beforeAll(async () => {
+  Object.defineProperty(window, '__TAURI_INTERNALS__', { value: {}, configurable: true })
+  const module = await import('./agent')
+  agent = module.agent
+  initAgentToken = module.initAgentToken
+})
 
 function snapshot(): AgentSnapshot {
   return {
@@ -68,7 +77,7 @@ describe('agent event relay client', () => {
     const cb = vi.fn()
     const cleanup = agent.subscribe(cb)
 
-    await Promise.resolve()
+    await vi.waitFor(() => expect(mocks.relayHandler).not.toBeNull())
     mocks.relayHandler?.({ payload: { event: 'snapshot', data: snapshot() } })
 
     expect(cb).toHaveBeenCalledWith({ type: 'vpn_status', data: expect.objectContaining({ connected: false }) })

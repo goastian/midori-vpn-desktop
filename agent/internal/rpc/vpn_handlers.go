@@ -5,11 +5,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/goastian/midorivpn-agent/internal/apiClient"
+	"github.com/goastian/midorivpn-agent/internal/crypto"
 	"github.com/goastian/midorivpn-agent/internal/state"
+	"github.com/goastian/midorivpn-agent/internal/tunnel"
 	"github.com/goastian/midorivpn-agent/internal/wg"
 )
 
@@ -94,18 +101,39 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate keypair.
-	kp, err := s.apiClient.GenerateKeypair(ctx)
+	// Generate WireGuard and ML-KEM-768 keypairs locally. Private key material
+	// never leaves the client process.
+	kp, err := crypto.GenerateWireGuardKeypair()
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "keypair: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "keypair: "+err.Error())
 		return
 	}
+	pqKeypair, pqErr := crypto.GenerateMLKEM768Keypair()
+	var pqEncKey string
+	if pqErr == nil && pqKeypair != nil {
+		pqEncKey = pqKeypair.EncapsulationKeyB64
+	}
 
-	// Create connection.
-	connCfg, err := s.apiClient.CreateConnection(ctx, req.ServerID, kp.PublicKey, "desktop")
+	// Create connection with optional PQ KEM encapsulation public key.
+	connCfg, err := s.apiClient.CreateConnection(ctx, req.ServerID, kp.PublicKey, "desktop", pqEncKey)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "connect: "+err.Error())
 		return
+	}
+
+	// If the server returned an ML-KEM-768 ciphertext, decapsulate the shared secret.
+	isPostQuantum := false
+	if connCfg.PQKEMCiphertext != "" && pqKeypair != nil {
+		sharedKey, decErr := crypto.DecapsulateSharedKey(pqKeypair.DecapsulationKey, connCfg.PQKEMCiphertext)
+		if decErr == nil && sharedKey != "" {
+			connCfg.PresharedKey = sharedKey
+			isPostQuantum = true
+			slog.Info("post-quantum ML-KEM-768 key exchange negotiated successfully")
+		} else {
+			slog.Warn("post-quantum decapsulation failed, using direct PSK", "err", decErr)
+		}
+	} else if connCfg.PresharedKey != "" {
+		isPostQuantum = true
 	}
 
 	// Get server details.
@@ -128,7 +156,13 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !server.SupportsWireGuard {
+		_ = s.apiClient.DeleteConnection(cleanupCtx, connCfg.PeerID)
 		writeError(w, http.StatusBadRequest, "server does not support WireGuard full tunnel")
+		return
+	}
+	if req.Protocol != "wireguard" && req.Protocol != "smart_auto" && req.Protocol != "wss" && req.Protocol != "masque" {
+		_ = s.apiClient.DeleteConnection(cleanupCtx, connCfg.PeerID)
+		writeStructuredError(w, http.StatusBadRequest, "ERR_TRANSPORT_UNAVAILABLE", "El transporte solicitado no está disponible en este servidor.")
 		return
 	}
 
@@ -138,81 +172,150 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		serverPublicIP = server.Endpoint
 	}
 
-	// Bring up WireGuard endpoint.
-	endpoint := fmt.Sprintf("%s:%d", server.Endpoint, server.WGPort)
-	if server.Endpoint == "" {
-		endpoint = fmt.Sprintf("%s:%d", server.Host, server.WGPort)
-	}
-	endpoint = splitHost(endpoint)
-	endpoint = fmt.Sprintf("%s:%d", endpoint, server.WGPort)
 	assignedIP := normalizeAssignedIP(connCfg.PeerIP)
 	serverPublicKey := server.PublicKey
 	if connCfg.ServerPublicKey != "" {
 		serverPublicKey = connCfg.ServerPublicKey
 	}
-	serverEndpoint := endpoint
-	if connCfg.ServerEndpoint != "" {
-		serverEndpoint = connCfg.ServerEndpoint
-	}
 
-	// Use DNS provided by the server; fall back to Cloudflare if unspecified.
+	// DNS is part of the authenticated connection contract. Guessing a public
+	// resolver would silently override administrator policy and can create a
+	// privacy leak, so an incomplete response is rejected.
 	dnsServers := splitCSV(connCfg.DNS)
 	if len(dnsServers) == 0 {
-		dnsServers = []string{"1.1.1.1", "1.0.0.1"}
+		_ = s.apiClient.DeleteConnection(cleanupCtx, connCfg.PeerID)
+		writeStructuredError(w, http.StatusBadGateway, "ERR_DNS_CONFIGURATION_MISSING", "El servidor no entregó una configuración DNS válida.")
+		return
 	}
 	dnsServers = sanitizeDNS(dnsServers)
-
-	wgCfg := &wg.Config{
-		PrivateKey: kp.PrivateKey,
-		PublicKey:  serverPublicKey,
-		Endpoint:   serverEndpoint,
-		AssignedIP: assignedIP,
-		DNS:        dnsServers,
+	if len(dnsServers) == 0 {
+		_ = s.apiClient.DeleteConnection(cleanupCtx, connCfg.PeerID)
+		writeStructuredError(w, http.StatusBadGateway, "ERR_DNS_CONFIGURATION_INVALID", "El servidor entregó una configuración DNS no permitida.")
+		return
 	}
 
-	activeProtocol := "wireguard"
+	baseWGConfig := wg.Config{
+		PrivateKey:   kp.PrivateKey,
+		PublicKey:    serverPublicKey,
+		PresharedKey: connCfg.PresharedKey,
+		AssignedIP:   assignedIP,
+		DNS:          dnsServers,
+		MTU:          1280,
+	}
+
+	candidates := selectTransportCandidates(server.Transports, req.Protocol)
+	if len(candidates) == 0 {
+		_ = s.apiClient.DeleteConnection(cleanupCtx, connCfg.PeerID)
+		writeStructuredError(w, http.StatusBadRequest, "ERR_TRANSPORT_UNAVAILABLE", "No hay transportes saludables disponibles en este servidor.")
+		return
+	}
+
+	activeProtocol := ""
 	fallbackReason := ""
-
-	if req.Protocol == "obfs_tls" {
-		// Explicit ObfsTLS / WSS requested
-		activeProtocol = "obfs_tls"
-		slog.Info("vpn connect: using obfuscated TLS 443 protocol directly", "server", server.Name)
-	} else if req.Protocol == "smart_auto" {
-		// Smart Auto: try WireGuard, fallback to ObfsTLS if connect or handshake fails
-		if err := s.wgMgr.Connect(wgCfg); err != nil {
-			slog.Warn("vpn connect: WireGuard connect failed, auto-fallback to ObfsTLS", "err", err)
-			activeProtocol = "obfs_tls"
-			fallbackReason = "UDP 51820 bloqueado por firewall, túnel conmutado a TLS 443 (WSS)"
-		} else {
-			activeProtocol = "wireguard"
-		}
-	} else {
-		// Standard wireguard or openvpn
-		if err := s.wgMgr.Connect(wgCfg); err != nil {
-			_ = s.apiClient.DeleteConnection(cleanupCtx, connCfg.PeerID)
-			if isDNSPermissionError(err) {
-				writeStructuredError(w, http.StatusForbidden, "ERR_DNS_PERMISSION_DENIED",
-					"Permisos insuficientes para configurar DNS en /etc/resolv.conf. Habilita los permisos del sistema en MidoriVPN.")
-				return
+	var relay interface{ Close() }
+	netguardEndpoint := ""
+	serverEndpoint := ""
+	connectionStarted := time.Now()
+	var connectionErr error
+	for index, candidate := range candidates {
+		candidateEndpoint := net.JoinHostPort(candidate.host, strconv.Itoa(candidate.port))
+		wgConfig := baseWGConfig
+		wgConfig.Endpoint = candidateEndpoint
+		wgConfig.RouteEndpoint = candidateEndpoint
+		var candidateRelay interface{ Close() }
+		if candidate.protocol == "wss" {
+			credentials, credentialErr := s.apiClient.TunnelCredentials(ctx, connCfg.PeerID)
+			if credentialErr != nil || credentials.TunnelToken == "" {
+				connectionErr = fmt.Errorf("WSS tunnel credentials unavailable")
+				continue
 			}
-			if isTunPermissionError(err) {
-				writeStructuredError(w, http.StatusForbidden, "ERR_TUN_PERMISSION_DENIED",
-					"Permisos insuficientes para crear la interfaz WireGuard (TUN). Habilita los permisos del sistema en MidoriVPN.")
-				return
+			wssURL := (&url.URL{Scheme: "wss", Host: candidateEndpoint, Path: "/api/v1/tunnel/ws"}).String()
+			dialCtx, dialCancel := context.WithTimeout(ctx, 15*time.Second)
+			var localEndpoint string
+			candidateRelay, localEndpoint, connectionErr = tunnel.StartWSSRelay(dialCtx, wssURL, credentials.TunnelToken)
+			dialCancel()
+			if connectionErr != nil {
+				continue
 			}
-			writeStructuredError(w, http.StatusInternalServerError, "ERR_VPN_CONNECT_FAILED", "wg connect: "+err.Error())
-			return
+			wgConfig.Endpoint = localEndpoint
+		} else if candidate.protocol == "masque" {
+			credentials, credentialErr := s.apiClient.TunnelCredentials(ctx, connCfg.PeerID)
+			if credentialErr != nil || credentials.TunnelToken == "" {
+				connectionErr = fmt.Errorf("MASQUE tunnel credentials unavailable")
+				continue
+			}
+			uriTemplate, templateOK := metadataString(candidate.metadata, "uri_template")
+			target, targetOK := metadataString(candidate.metadata, "target")
+			if !templateOK || !targetOK {
+				connectionErr = fmt.Errorf("MASQUE transport metadata is incomplete")
+				continue
+			}
+			if target != net.JoinHostPort("127.0.0.1", strconv.Itoa(server.WGPort)) {
+				connectionErr = fmt.Errorf("MASQUE target does not match the server WireGuard socket")
+				continue
+			}
+			dialCtx, dialCancel := context.WithTimeout(ctx, 15*time.Second)
+			var localEndpoint string
+			candidateRelay, localEndpoint, connectionErr = tunnel.StartMasqueRelay(dialCtx, uriTemplate, target, credentials.TunnelToken)
+			dialCancel()
+			if connectionErr != nil {
+				continue
+			}
+			wgConfig.Endpoint = localEndpoint
+			wgConfig.MTU = 1180
 		}
-	}
 
-	if activeProtocol == "wireguard" {
-		if err := s.guard.Enable(s.netguardScope(serverEndpoint, assignedIP)); err != nil {
+		attemptStarted := time.Now()
+		connectionErr = s.wgMgr.Connect(&wgConfig)
+		if connectionErr == nil {
+			handshakeCtx, handshakeCancel := context.WithTimeout(ctx, candidate.timeout)
+			connectionErr = s.wgMgr.WaitForHandshake(handshakeCtx)
+			handshakeCancel()
+		}
+		if connectionErr != nil {
 			s.wgMgr.Disconnect()
-			_ = s.apiClient.DeleteConnection(cleanupCtx, connCfg.PeerID)
-			s.agent.SetProtection(state.ProtectionStatus{LastError: err.Error()})
-			writeError(w, http.StatusInternalServerError, "kill switch: "+err.Error())
+			if candidateRelay != nil {
+				candidateRelay.Close()
+			}
+			if req.Protocol == "smart_auto" && index+1 < len(candidates) {
+				fallbackReason = candidate.protocol + "_handshake_failed"
+			}
+			continue
+		}
+
+		slog.Info("vpn transport handshake completed", "protocol", candidate.protocol, "duration", time.Since(attemptStarted))
+		activeProtocol = candidate.protocol
+		relay = candidateRelay
+		netguardEndpoint = candidateEndpoint
+		serverEndpoint = candidateEndpoint
+		break
+	}
+	if activeProtocol == "" {
+		_ = s.apiClient.DeleteConnection(cleanupCtx, connCfg.PeerID)
+		if isDNSPermissionError(connectionErr) {
+			writeStructuredError(w, http.StatusForbidden, "ERR_DNS_PERMISSION_DENIED",
+				"Permisos insuficientes para configurar DNS en /etc/resolv.conf. Habilita los permisos del sistema en MidoriVPN.")
 			return
 		}
+		if isTunPermissionError(connectionErr) {
+			writeStructuredError(w, http.StatusForbidden, "ERR_TUN_PERMISSION_DENIED",
+				"Permisos insuficientes para crear la interfaz WireGuard (TUN). Habilita los permisos del sistema en MidoriVPN.")
+			return
+		}
+		writeStructuredError(w, http.StatusBadGateway, "ERR_VPN_HANDSHAKE_FAILED", "No se pudo completar el handshake del túnel: "+connectionErr.Error())
+		return
+	}
+	connectionDurationMS := time.Since(connectionStarted).Milliseconds()
+
+	if err := s.guard.Enable(s.netguardScope(netguardEndpoint, assignedIP)); err != nil {
+		s.wgMgr.Disconnect()
+		if relay != nil {
+			relay.Close()
+		}
+		_ = s.apiClient.DeleteConnection(cleanupCtx, connCfg.PeerID)
+		s.agent.SetProtection(state.ProtectionStatus{LastError: err.Error()})
+		writeError(w, http.StatusInternalServerError, "kill switch: "+err.Error())
+		return
 	}
 
 	// Verify we were not superseded by a newer connect request that took ownership.
@@ -222,10 +325,21 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 	if superseded {
 		slog.Info("vpn connect: superseded by newer request, rolling back", "seq", mySeq)
 		s.wgMgr.Disconnect()
+		if relay != nil {
+			relay.Close()
+		}
 		_ = s.guard.Disable()
 		_ = s.apiClient.DeleteConnection(cleanupCtx, connCfg.PeerID)
 		writeError(w, http.StatusConflict, "superseded by a newer connect request")
 		return
+	}
+	if relay != nil {
+		s.setTransportRelay(relay)
+	}
+
+	pqAlgo := ""
+	if isPostQuantum {
+		pqAlgo = "ML-KEM-768"
 	}
 
 	s.agent.SetVPN(state.VPNStatus{
@@ -238,6 +352,9 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		ServerEndpoint: serverEndpoint,
 		ActiveProtocol: activeProtocol,
 		FallbackReason: fallbackReason,
+		ConnectionMS:   connectionDurationMS,
+		PostQuantum:    isPostQuantum,
+		PQAlgorithm:    pqAlgo,
 	})
 	s.startVPNStatsLoop()
 	s.agent.SetProtection(state.ProtectionStatus{
@@ -252,6 +369,9 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		"server":          server.Name,
 		"active_protocol": activeProtocol,
 		"fallback_reason": fallbackReason,
+		"connection_ms":   connectionDurationMS,
+		"post_quantum":    isPostQuantum,
+		"pq_algorithm":    pqAlgo,
 	})
 }
 
@@ -263,6 +383,7 @@ func (s *Server) handleVPNDisconnect(w http.ResponseWriter, r *http.Request) {
 		peerID = vpn.PeerID
 	}
 	// Disconnect locally and respond immediately — don't block on cloud API.
+	s.closeTransportRelay()
 	s.wgMgr.Disconnect()
 	_ = s.guard.Disable()
 	s.agent.SetVPN(state.VPNStatus{Connected: false})
@@ -275,6 +396,79 @@ func (s *Server) handleVPNDisconnect(w http.ResponseWriter, r *http.Request) {
 			defer cancel()
 			_ = s.apiClient.DeleteConnection(ctx, peerID)
 		}()
+	}
+}
+
+func findTransport(transports []apiClient.TransportCapability, protocol string) (apiClient.TransportCapability, bool) {
+	for _, transport := range transports {
+		if transport.Protocol == protocol && transport.Enabled && transport.HealthStatus == "healthy" {
+			return transport, true
+		}
+	}
+	return apiClient.TransportCapability{}, false
+}
+
+type vpnTransportCandidate struct {
+	protocol string
+	host     string
+	port     int
+	priority int
+	metadata map[string]interface{}
+	timeout  time.Duration
+}
+
+func selectTransportCandidates(transports []apiClient.TransportCapability, requested string) []vpnTransportCandidate {
+	validCandidate := func(protocol string) (vpnTransportCandidate, bool) {
+		transport, ok := findTransport(transports, protocol)
+		if !ok || transport.Host == "" || transport.Port < 1 || transport.Port > 65535 {
+			return vpnTransportCandidate{}, false
+		}
+		timeout := 5 * time.Second
+		if protocol == "wireguard" {
+			timeout = 1500 * time.Millisecond
+		}
+		return vpnTransportCandidate{protocol: protocol, host: transport.Host, port: transport.Port, priority: transport.Priority, metadata: transport.Metadata, timeout: timeout}, true
+	}
+
+	protocols := []string{requested}
+	if requested == "smart_auto" {
+		protocols = []string{"wireguard", "wss", "masque"}
+	}
+	candidates := make([]vpnTransportCandidate, 0, len(protocols))
+	for _, protocol := range protocols {
+		if candidate, ok := validCandidate(protocol); ok {
+			candidates = append(candidates, candidate)
+		}
+	}
+	if requested == "smart_auto" {
+		sort.SliceStable(candidates, func(i, j int) bool { return candidates[i].priority > candidates[j].priority })
+	}
+	return candidates
+}
+
+func metadataString(metadata map[string]interface{}, key string) (string, bool) {
+	value, ok := metadata[key].(string)
+	value = strings.TrimSpace(value)
+	return value, ok && value != ""
+}
+
+func (s *Server) setTransportRelay(relay interface{ Close() }) {
+	s.relayMu.Lock()
+	previous := s.transportRelay
+	s.transportRelay = relay
+	s.relayMu.Unlock()
+	if previous != nil && previous != relay {
+		previous.Close()
+	}
+}
+
+func (s *Server) closeTransportRelay() {
+	s.relayMu.Lock()
+	relay := s.transportRelay
+	s.transportRelay = nil
+	s.relayMu.Unlock()
+	if relay != nil {
+		relay.Close()
 	}
 }
 

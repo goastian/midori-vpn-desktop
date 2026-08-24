@@ -7,7 +7,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { invoke } from '@tauri-apps/api/core'
+import { invokePlatform } from '../lib/agent'
 
 const { t } = useI18n()
 const confirming = ref(false)
@@ -20,7 +20,7 @@ async function handleQuit() {
   if (!ok) return
   confirming.value = true
   try {
-    await invoke('quit_app')
+    await invokePlatform('quit_app')
   } catch {
     // quit_app closes the window before we can read the response; ignore.
   }

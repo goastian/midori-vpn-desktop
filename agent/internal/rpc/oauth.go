@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -20,26 +19,9 @@ import (
 	"github.com/goastian/midorivpn-agent/internal/logredact"
 )
 
-// oauthCallbackURI is the localhost redirect_uri the agent listens on. The
-// concrete URL is now resolved from the layered config
-// (cfg.AuthentikRedirectURI). The constant is kept for callers that need a
-// stable default (path is fixed by Authentik client registration).
-const oauthCallbackURI = "http://127.0.0.1:7071/oauth/callback"
-
-// redirectURI returns the configured redirect URI, falling back to the
-// hardcoded default when config is empty (should not happen post-Load).
+// redirectURI returns the mandatory configured loopback redirect URI.
 func (s *Server) redirectURI() string {
-	if s.cfg.AuthentikRedirectURI != "" {
-		return s.cfg.AuthentikRedirectURI
-	}
-	return oauthCallbackURI
-}
-
-func getEnvOrDefault(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
+	return s.cfg.AuthentikRedirectURI
 }
 
 func generateRandom(n int) (string, error) {
@@ -129,9 +111,27 @@ func (s *Server) handleOAuthStart(w http.ResponseWriter, r *http.Request) {
 // GET /oauth/callback?code=...&state=...
 func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	setLocalSecurityHeaders(w)
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 
 	code := r.URL.Query().Get("code")
 	oauthState := r.URL.Query().Get("state")
+
+	if errParam := r.URL.Query().Get("error"); errParam != "" {
+		s.oauthMu.Lock()
+		delete(s.pendingOAuth, oauthState)
+		s.oauthMu.Unlock()
+		if r.Header.Get("Accept") == "application/json" {
+			writeJSON(w, map[string]any{"ok": false, "error": errParam})
+		} else {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			fmt.Fprint(w, `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>MidoriVPN</title></head><body style="background:#020617;color:#f8fafc;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center;padding:2rem;background:#0f172a;border-radius:1rem;"><h3>Inicio de sesión cancelado</h3><p style="color:#94a3b8;">Puedes cerrar esta pestaña.</p></div></body></html>`)
+		}
+		return
+	}
 
 	s.oauthMu.Lock()
 	now := time.Now()
@@ -143,7 +143,11 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	s.oauthMu.Unlock()
 
 	if !ok || code == "" || now.After(entry.expiresAt) {
-		http.Error(w, "invalid state or missing code", http.StatusBadRequest)
+		if r.Header.Get("Accept") == "application/json" {
+			writeStructuredError(w, http.StatusBadRequest, "invalid_state", "invalid state or missing code")
+		} else {
+			http.Error(w, "invalid state or missing code", http.StatusBadRequest)
+		}
 		return
 	}
 	verifier := entry.verifier
@@ -157,15 +161,16 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		"client_id":     {s.authentikClientID},
 		"code_verifier": {verifier},
 	}
-	if s.authentikClientSecret != "" {
-		form.Set("client_secret", s.authentikClientSecret)
-	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL,
 		strings.NewReader(form.Encode()))
 	if err != nil {
-		http.Error(w, "token exchange failed", http.StatusInternalServerError)
+		if r.Header.Get("Accept") == "application/json" {
+			writeStructuredError(w, http.StatusInternalServerError, "token_exchange_failed", "token exchange failed")
+		} else {
+			http.Error(w, "token exchange failed", http.StatusInternalServerError)
+		}
 		return
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -173,7 +178,11 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		slog.Error("oauth: token exchange HTTP error", "err", err)
-		http.Error(w, "token exchange failed", http.StatusBadGateway)
+		if r.Header.Get("Accept") == "application/json" {
+			writeStructuredError(w, http.StatusBadGateway, "token_exchange_http_error", "token exchange failed")
+		} else {
+			http.Error(w, "token exchange failed", http.StatusBadGateway)
+		}
 		return
 	}
 	defer resp.Body.Close()
@@ -181,7 +190,11 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 
 	if resp.StatusCode != http.StatusOK {
 		slog.Warn("oauth: token exchange non-200", "status", resp.StatusCode, "body", logredact.Body(body))
-		http.Error(w, fmt.Sprintf("token exchange: %d", resp.StatusCode), http.StatusBadGateway)
+		if r.Header.Get("Accept") == "application/json" {
+			writeStructuredError(w, http.StatusBadGateway, "token_exchange_rejected", fmt.Sprintf("token exchange: %d", resp.StatusCode))
+		} else {
+			http.Error(w, fmt.Sprintf("token exchange: %d", resp.StatusCode), http.StatusBadGateway)
+		}
 		return
 	}
 
@@ -192,7 +205,11 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		IDToken      string `json:"id_token"`
 	}
 	if err := json.Unmarshal(body, &tok); err != nil {
-		http.Error(w, "invalid token response", http.StatusInternalServerError)
+		if r.Header.Get("Accept") == "application/json" {
+			writeStructuredError(w, http.StatusInternalServerError, "invalid_token_payload", "invalid token response")
+		} else {
+			http.Error(w, "invalid token response", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -227,13 +244,14 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// Reply with a blank page that immediately closes itself. The desktop app
-	// learns of the new auth state through the SSE relay, so the browser tab
-	// has no further purpose. If the browser refuses programmatic close
-	// (common for tabs the user opened), the page stays visually blank.
+	if r.Header.Get("Accept") == "application/json" {
+		writeJSON(w, map[string]any{"ok": true, "message": "logged_in", "username": username})
+		return
+	}
+
+	// Reply with a formatted success page that closes itself.
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
-	fmt.Fprint(w, `<!DOCTYPE html><html><head><meta charset="utf-8"><title></title></head><body><script>window.close();</script></body></html>`)
+	fmt.Fprint(w, `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>MidoriVPN</title></head><body style="background:#020617;color:#f8fafc;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center;padding:2rem;background:#0f172a;border-radius:1rem;border:1px solid #1e293b;"><h2 style="color:#10b981;margin-top:0;">¡Inicio de sesión exitoso!</h2><p style="color:#e2e8f0;">Has iniciado sesión en MidoriVPN Desktop.</p><p style="color:#94a3b8;font-size:0.9rem;">Ya puedes cerrar esta pestaña y regresar a la aplicación.</p></div><script>setTimeout(() => window.close(), 1500);</script></body></html>`)
 }
 
 // jwtEmail extracts email / preferred_username / sub from the id_token payload.

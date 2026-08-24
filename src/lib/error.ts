@@ -6,12 +6,15 @@ export const VPN_SERVER_UNAVAILABLE_MESSAGE =
   'The selected VPN server could not accept the connection. Try another server or check the vpn-core server logs for the failed peer provisioning.'
 export const VPN_DNS_PERMISSION_MESSAGE =
   'MidoriVPN needs its system permissions refreshed before it can protect DNS. Click “Enable required permissions” in the VPN tab, approve the system prompt, and connect again.'
+export const AUTH_FAILED_MESSAGE =
+  'No se pudo comunicar con el servidor de autenticación. Por favor, verifica tu conexión o vuelve a iniciar sesión.'
 
 export type ErrorCategory =
   | 'dns_permission'
   | 'tun_permission'
   | 'server_unavailable'
   | 'auth_expired'
+  | 'auth_failed'
   | 'auth_origin_rejected'
   | 'generic'
 
@@ -36,6 +39,15 @@ export function extractErrorMessage(raw: string): string {
   }
 
   const lower = cleaned.toLowerCase()
+
+  if (
+    lower.includes('unsupported protocol scheme') ||
+    lower.includes('api_url is not configured') ||
+    lower.includes('auth: http post') ||
+    lower.includes('failed to refresh token')
+  ) {
+    return i18n.global.t('errors.authExpired.desc') || AUTH_FAILED_MESSAGE
+  }
 
   if (lower.includes('device_name_already_active') || lower.includes('ya tienes un dispositivo activo') || lower.includes('device with this name')) {
     return i18n.global.t('errors.deviceNameActive')
@@ -64,14 +76,26 @@ export function toErrorMessage(e: unknown): string {
   if (isAuthOriginRejected(raw)) return AUTH_ORIGIN_REJECTED_MESSAGE
   if (isVPNServerUnavailable(raw)) return VPN_SERVER_UNAVAILABLE_MESSAGE
   if (isDNSPermissionDenied(raw)) return VPN_DNS_PERMISSION_MESSAGE
+  if (isAuthTechnicalError(raw)) return i18n.global.t('errors.authExpired.desc') || AUTH_FAILED_MESSAGE
 
   const message = extractErrorMessage(raw)
 
   if (isAuthOriginRejected(message)) return AUTH_ORIGIN_REJECTED_MESSAGE
   if (isVPNServerUnavailable(message)) return VPN_SERVER_UNAVAILABLE_MESSAGE
   if (isDNSPermissionDenied(message)) return VPN_DNS_PERMISSION_MESSAGE
+  if (isAuthTechnicalError(message)) return i18n.global.t('errors.authExpired.desc') || AUTH_FAILED_MESSAGE
 
   return message
+}
+
+export function isAuthTechnicalError(message: string): boolean {
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('unsupported protocol scheme') ||
+    lower.includes('api_url is not configured') ||
+    lower.includes('auth: http post') ||
+    lower.includes('/api/v1/auth/refresh')
+  )
 }
 
 export function isAuthOriginRejected(message: string): boolean {
@@ -139,7 +163,12 @@ export function parseAppError(e: unknown): ParsedError {
     }
   }
 
-  if (rawMessage.startsWith('auth_expired:') || lower.includes('not authenticated') || lower.includes('unauthorized')) {
+  if (
+    rawMessage.startsWith('auth_expired:') ||
+    isAuthTechnicalError(rawMessage) ||
+    lower.includes('not authenticated') ||
+    lower.includes('unauthorized')
+  ) {
     return {
       category: 'auth_expired',
       titleKey: 'errors.authExpired.title',

@@ -3,6 +3,8 @@ package rpc
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -15,26 +17,15 @@ import (
 
 func TestResolveAgentTokenRequiresTokenByDefault(t *testing.T) {
 	t.Setenv("MIDORIVPN_AGENT_TOKEN", "")
-	_, err := resolveAgentToken(false)
+	_, err := resolveAgentToken()
 	if err == nil || !strings.Contains(err.Error(), "MIDORIVPN_AGENT_TOKEN") {
 		t.Fatalf("expected missing token error, got %v", err)
 	}
 }
 
-func TestResolveAgentTokenAllowsExplicitDevMode(t *testing.T) {
-	t.Setenv("MIDORIVPN_AGENT_TOKEN", "")
-	token, err := resolveAgentToken(true)
-	if err != nil {
-		t.Fatalf("expected dev mode to allow missing token: %v", err)
-	}
-	if token != "" {
-		t.Fatalf("expected empty token in dev mode, got %q", token)
-	}
-}
-
 func TestResolveAgentTokenReturnsConfiguredToken(t *testing.T) {
 	t.Setenv("MIDORIVPN_AGENT_TOKEN", "secret")
-	token, err := resolveAgentToken(false)
+	token, err := resolveAgentToken()
 	if err != nil {
 		t.Fatalf("expected configured token to pass: %v", err)
 	}
@@ -70,6 +61,24 @@ func TestRequireLocalAuthAllowsLoopbackOriginAndHeaderToken(t *testing.T) {
 
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("expected accepted request, got %d", rec.Code)
+	}
+}
+
+func TestRequireLocalAuthAllowsBrowserOriginOnConfiguredPort(t *testing.T) {
+	h := requireLocalAuth(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+	}), "secret", false)
+
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:7443/status", nil)
+	req.RemoteAddr = "127.0.0.1:54321"
+	req.Header.Set("Origin", "http://127.0.0.1:7443")
+	req.Header.Set("X-Agent-Token", "secret")
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected configured browser origin to be accepted, got %d", rec.Code)
 	}
 }
 
@@ -159,11 +168,12 @@ func TestWithLocalCORSRejectsUnknownPreflightOrigin(t *testing.T) {
 
 func TestOAuthCallbackRouteIsAuthExempt(t *testing.T) {
 	s := &Server{
+		port:             7071,
 		localFwd:         proxy.NewLocalForwarder("127.0.0.1:0"),
 		pendingOAuth:     map[string]pendingOAuthEntry{},
 		authentikAuthURL: "https://accounts.astian.org/application/o/authorize/",
 	}
-	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/oauth/callback", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:7071/oauth/callback", nil)
 	req.RemoteAddr = "192.0.2.10:54321"
 	rec := httptest.NewRecorder()
 
@@ -174,6 +184,43 @@ func TestOAuthCallbackRouteIsAuthExempt(t *testing.T) {
 	}
 }
 
+func TestRequireLocalHostRejectsDNSRebindingHost(t *testing.T) {
+	h := requireLocalHost(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+	}), 7071)
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:7071/status", nil)
+	req.Host = "attacker.example"
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected forbidden host, got %d", rec.Code)
+	}
+}
+
+func TestBrowserUIServesAssetsAndSPAFallback(t *testing.T) {
+	uiDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(uiDir, "index.html"), []byte("<!doctype html><title>MidoriVPN</title>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(uiDir, "app.js"), []byte("export {}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{port: 7071, uiDir: uiDir, localFwd: proxy.NewLocalForwarder("127.0.0.1:0")}
+
+	for _, path := range []string{"/app.js", "/unknown-ui-route"} {
+		req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:7071"+path, nil)
+		rec := httptest.NewRecorder()
+		s.newMux("secret").ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s status = %d", path, rec.Code)
+		}
+		if got := rec.Header().Get("Content-Security-Policy"); !strings.Contains(got, "frame-ancestors 'none'") {
+			t.Fatalf("GET %s missing strict CSP: %q", path, got)
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // DNS validation
 // ---------------------------------------------------------------------------
@@ -181,19 +228,13 @@ func TestOAuthCallbackRouteIsAuthExempt(t *testing.T) {
 func TestIsReservedIP(t *testing.T) {
 	reserved := []string{
 		"127.0.0.1",
-		"10.0.0.1",
-		"10.255.255.255",
-		"172.16.0.1",
-		"172.31.255.255",
-		"192.168.1.1",
 		"169.254.0.1",
-		"100.64.0.1", // CGNAT
-		"100.127.255.255",
 		"0.0.0.1",
+		"224.0.0.1",
+		"255.255.255.255",
 		"::1",
 		"fe80::1",
-		"fc00::1",
-		"fd00::1",
+		"ff02::1",
 		"not-an-ip", // unparseable → reserved
 		"",
 	}
@@ -204,23 +245,26 @@ func TestIsReservedIP(t *testing.T) {
 	}
 }
 
-func TestIsReservedIP_Public(t *testing.T) {
-	public := []string{
+func TestIsReservedIP_UnicastResolvers(t *testing.T) {
+	resolvers := []string{
 		"1.1.1.1",
 		"8.8.8.8",
-		"9.9.9.9",
-		"208.67.222.222",
+		"10.0.0.53",
+		"100.64.0.53",
+		"172.16.0.53",
+		"192.168.1.53",
+		"fd00::53",
 		"2606:4700:4700::1111", // Cloudflare IPv6
 	}
-	for _, ip := range public {
+	for _, ip := range resolvers {
 		if isReservedIP(ip) {
-			t.Errorf("expected %q to be public, but isReservedIP returned true", ip)
+			t.Errorf("expected %q to be a usable unicast resolver, but isReservedIP returned true", ip)
 		}
 	}
 }
 
 func TestSanitizeDNS_FiltersReserved(t *testing.T) {
-	input := []string{"1.1.1.1", "192.168.1.1", "8.8.8.8", "10.0.0.1"}
+	input := []string{"1.1.1.1", "127.0.0.1", "10.0.0.53", "224.0.0.1"}
 	got := sanitizeDNS(input)
 	for _, addr := range got {
 		if isReservedIP(addr) {
@@ -232,23 +276,18 @@ func TestSanitizeDNS_FiltersReserved(t *testing.T) {
 	}
 }
 
-func TestSanitizeDNS_FallbackWhenAllReserved(t *testing.T) {
-	input := []string{"192.168.1.1", "10.0.0.1", "127.0.0.1"}
+func TestSanitizeDNS_FailsClosedWhenAllReserved(t *testing.T) {
+	input := []string{"127.0.0.1", "169.254.0.1", "224.0.0.1"}
 	got := sanitizeDNS(input)
-	if len(got) == 0 {
-		t.Fatal("sanitizeDNS returned empty slice; expected Cloudflare fallback")
-	}
-	for _, addr := range got {
-		if isReservedIP(addr) {
-			t.Errorf("fallback address %q is reserved", addr)
-		}
+	if len(got) != 0 {
+		t.Fatalf("sanitizeDNS returned %v; expected an empty rejected set", got)
 	}
 }
 
 func TestSanitizeDNS_Empty(t *testing.T) {
 	got := sanitizeDNS(nil)
-	if len(got) == 0 {
-		t.Fatal("sanitizeDNS(nil) returned empty; expected Cloudflare fallback")
+	if len(got) != 0 {
+		t.Fatalf("sanitizeDNS(nil) returned %v; expected empty", got)
 	}
 }
 

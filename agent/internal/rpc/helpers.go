@@ -36,14 +36,6 @@ func writeStructuredError(w http.ResponseWriter, httpStatus int, errCode string,
 	})
 }
 
-func splitHost(hostPort string) string {
-	host, _, err := net.SplitHostPort(hostPort)
-	if err != nil {
-		return hostPort
-	}
-	return host
-}
-
 func normalizeAssignedIP(assignedIP string) string {
 	for strings.HasSuffix(assignedIP, "/32/32") {
 		assignedIP = strings.TrimSuffix(assignedIP, "/32")
@@ -69,36 +61,23 @@ func splitCSV(raw string) []string {
 	return out
 }
 
-// isReservedIP returns true for IP addresses that must never be used as DNS
-// resolvers supplied by the backend.
+// isReservedIP returns true for addresses that cannot identify a unicast DNS
+// resolver. Private and carrier-grade NAT addresses remain valid because a VPN
+// may deliberately route DNS to an internal resolver.
 func isReservedIP(raw string) bool {
 	ip := net.ParseIP(strings.TrimSpace(raw))
 	if ip == nil {
 		return true
 	}
-	reserved := []string{
-		"0.0.0.0/8",
-		"10.0.0.0/8",
-		"100.64.0.0/10",
-		"127.0.0.0/8",
-		"169.254.0.0/16",
-		"172.16.0.0/12",
-		"192.168.0.0/16",
-		"::1/128",
-		"fe80::/10",
-		"fc00::/7",
+	if ipv4 := ip.To4(); ipv4 != nil && (ipv4[0] == 0 || ipv4[0] >= 240) {
+		return true
 	}
-	for _, cidr := range reserved {
-		_, network, err := net.ParseCIDR(cidr)
-		if err == nil && network.Contains(ip) {
-			return true
-		}
-	}
-	return false
+	return ip.IsUnspecified() || ip.IsLoopback() || ip.IsMulticast() ||
+		ip.IsLinkLocalUnicast() || !ip.IsGlobalUnicast()
 }
 
-// sanitizeDNS removes unsafe DNS resolvers supplied by the backend and falls
-// back to public resolvers when filtering leaves no usable entries.
+// sanitizeDNS removes unsafe DNS resolvers supplied by the backend. An empty
+// result is an invalid server contract; callers must fail closed.
 func sanitizeDNS(servers []string) []string {
 	safe := make([]string, 0, len(servers))
 	for _, s := range servers {
@@ -107,10 +86,6 @@ func sanitizeDNS(servers []string) []string {
 			continue
 		}
 		safe = append(safe, s)
-	}
-	if len(safe) == 0 {
-		slog.Warn("vpn connect: all backend DNS entries rejected; falling back to Cloudflare")
-		return []string{"1.1.1.1", "1.0.0.1"}
 	}
 	return safe
 }

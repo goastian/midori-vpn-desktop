@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/goastian/midorivpn-agent/internal/logredact"
-	"github.com/lestrrat-go/jwx/v2/jwk"
-	"github.com/lestrrat-go/jwx/v2/jwt"
+	"github.com/lestrrat-go/jwx/v3/jwk"
+	"github.com/lestrrat-go/jwx/v3/jwt"
 )
 
 // Server is an HTTP CONNECT proxy that authenticates via JWT.
@@ -238,7 +238,7 @@ func (s *Server) authenticate(r *http.Request) (string, error) {
 		return "", fmt.Errorf("invalid token: %w", err)
 	}
 
-	sub := tok.Subject()
+	sub, _ := tok.Subject()
 	if sub == "" {
 		return "", fmt.Errorf("empty sub claim")
 	}

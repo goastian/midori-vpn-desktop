@@ -25,6 +25,7 @@ func (s *Server) gracefulShutdown() {
 
 	// Disconnect VPN tunnel if up.
 	s.stopVPNStatsLoop()
+	s.closeTransportRelay()
 	if s.wgMgr != nil && s.wgMgr.IsConnected() {
 		slog.Info("shutdown: disconnecting WireGuard tunnel")
 		s.wgMgr.Disconnect()
@@ -74,6 +75,7 @@ func (s *Server) Shutdown(ctx context.Context) {
 
 	// 1. Disconnect VPN — this calls Guard.Disable() and restores resolv.conf.
 	if s.wgMgr != nil {
+		s.closeTransportRelay()
 		s.wgMgr.Disconnect()
 	}
 

@@ -9,6 +9,8 @@ use agent::AgentSupervisorStop;
 use agent::AgentToken;
 use serde_json::Value;
 use std::ffi::OsStr;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::AppHandle;
 use tauri::Manager;
@@ -106,23 +108,68 @@ fn security_check() -> Vec<security::SecurityIssue> {
     security::check()
 }
 
-fn is_allowed_oauth_url(raw: &str) -> bool {
+fn config_value(path: &Path, key: &str) -> Option<String> {
+    let contents = fs::read_to_string(path).ok()?;
+    contents.lines().find_map(|line| {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            return None;
+        }
+        let (name, value) = line.split_once('=')?;
+        if name.trim() != key {
+            return None;
+        }
+        let value = value.trim().trim_matches(['\'', '"']);
+        (!value.is_empty()).then(|| value.to_string())
+    })
+}
+
+fn configured_authentik_issuer() -> Option<String> {
+    let mut paths = vec![
+        PathBuf::from(".env"),
+        PathBuf::from("config.env"),
+        PathBuf::from("/etc/midorivpn/config.env"),
+    ];
+    if let Some(config_home) = std::env::var_os("XDG_CONFIG_HOME") {
+        paths.push(PathBuf::from(config_home).join("midorivpn/config.env"));
+    } else if let Some(home) = std::env::var_os("HOME") {
+        paths.push(PathBuf::from(home).join(".config/midorivpn/config.env"));
+    }
+
+    let mut issuer = paths
+        .iter()
+        .filter_map(|path| config_value(path, "AUTHENTIK_ISSUER"))
+        .next_back();
+    if let Ok(environment_issuer) = std::env::var("AUTHENTIK_ISSUER") {
+        if !environment_issuer.trim().is_empty() {
+            issuer = Some(environment_issuer);
+        }
+    }
+    issuer
+}
+
+fn is_allowed_oauth_url(raw: &str, configured_issuer: &str) -> bool {
     let Ok(url) = reqwest::Url::parse(raw) else {
         return false;
     };
-    if url.scheme() != "https" {
-        return false;
-    }
-    let Some(host) = url.host_str().map(str::to_ascii_lowercase) else {
+    let Ok(issuer) = reqwest::Url::parse(configured_issuer) else {
         return false;
     };
-    (host == "accounts.astian.org" || host.ends_with(".astian.org"))
+    if url.scheme() != "https" || issuer.scheme() != "https" {
+        return false;
+    }
+    url.host_str() == issuer.host_str()
+        && url.port_or_known_default() == issuer.port_or_known_default()
+        && url.username().is_empty()
+        && url.password().is_none()
         && url.path().starts_with("/application/o/")
 }
 
 #[tauri::command]
 async fn open_oauth_url(_app: AppHandle, url: String) -> Result<(), String> {
-    if !is_allowed_oauth_url(&url) {
+    let issuer = configured_authentik_issuer()
+        .ok_or_else(|| "AUTHENTIK_ISSUER is not configured".to_string())?;
+    if !is_allowed_oauth_url(&url, &issuer) {
         return Err("OAuth URL is not allowed".to_string());
     }
     open::that(url).map_err(|e| e.to_string())
@@ -222,25 +269,28 @@ mod tests {
     }
 
     #[test]
-    fn allows_only_astian_oauth_urls() {
+    fn allows_only_configured_oauth_origin() {
+        let issuer = "https://identity.example.com/application/o/vpn/";
         assert!(is_allowed_oauth_url(
-            "https://accounts.astian.org/application/o/authorize/?client_id=x"
-        ));
-        assert!(is_allowed_oauth_url(
-            "https://login.astian.org/application/o/authorize/?client_id=x"
+            "https://identity.example.com/application/o/authorize/?client_id=x",
+            issuer
         ));
 
         assert!(!is_allowed_oauth_url(
-            "http://accounts.astian.org/application/o/authorize/"
+            "http://identity.example.com/application/o/authorize/",
+            issuer
         ));
         assert!(!is_allowed_oauth_url(
-            "https://evil.example/application/o/authorize/"
+            "https://evil.example/application/o/authorize/",
+            issuer
         ));
         assert!(!is_allowed_oauth_url(
-            "https://accounts.astian.org.evil.example/application/o/"
+            "https://identity.example.com.evil.test/application/o/",
+            issuer
         ));
         assert!(!is_allowed_oauth_url(
-            "https://accounts.astian.org/not-oauth"
+            "https://identity.example.com/not-oauth",
+            issuer
         ));
     }
 }

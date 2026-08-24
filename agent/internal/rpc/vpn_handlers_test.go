@@ -1,0 +1,54 @@
+package rpc
+
+import (
+	"testing"
+	"time"
+
+	"github.com/goastian/midorivpn-agent/internal/apiClient"
+)
+
+func TestFindTransportRequiresEnabledHealthyCapability(t *testing.T) {
+	transports := []apiClient.TransportCapability{
+		{Protocol: "wss", Host: "unknown.example.test", Port: 443, Enabled: true, HealthStatus: "unknown"},
+		{Protocol: "wss", Host: "disabled.example.test", Port: 443, Enabled: false, HealthStatus: "healthy"},
+	}
+	if _, ok := findTransport(transports, "wss"); ok {
+		t.Fatal("unverified or disabled transport must not be selected")
+	}
+
+	transports = append(transports, apiClient.TransportCapability{
+		Protocol: "wss", Host: "healthy.example.test", Port: 443, Enabled: true, HealthStatus: "healthy",
+	})
+	transport, ok := findTransport(transports, "wss")
+	if !ok || transport.Host != "healthy.example.test" {
+		t.Fatalf("healthy transport not selected: %#v, %t", transport, ok)
+	}
+}
+
+func TestSelectTransportCandidatesSmartUsesOnlyHealthyOrder(t *testing.T) {
+	transports := []apiClient.TransportCapability{
+		{Protocol: "wss", Host: "vpn.example.test", Port: 443, Enabled: true, HealthStatus: "healthy"},
+		{Protocol: "wireguard", Host: "vpn.example.test", Port: 51820, Enabled: true, HealthStatus: "healthy"},
+		{Protocol: "openvpn", Host: "vpn.example.test", Port: 1194, Enabled: true, HealthStatus: "healthy"},
+	}
+	candidates := selectTransportCandidates(transports, "smart_auto")
+	if len(candidates) != 2 {
+		t.Fatalf("candidate count = %d, want 2", len(candidates))
+	}
+	if candidates[0].protocol != "wireguard" || candidates[0].timeout != 1500*time.Millisecond {
+		t.Fatalf("first candidate = %#v, want direct WireGuard", candidates[0])
+	}
+	if candidates[1].protocol != "wss" || candidates[1].timeout != 5*time.Second {
+		t.Fatalf("second candidate = %#v, want WSS", candidates[1])
+	}
+}
+
+func TestSelectTransportCandidatesRejectsDegradedAndInvalidEndpoints(t *testing.T) {
+	transports := []apiClient.TransportCapability{
+		{Protocol: "wireguard", Host: "vpn.example.test", Port: 51820, Enabled: true, HealthStatus: "degraded"},
+		{Protocol: "wss", Host: "", Port: 443, Enabled: true, HealthStatus: "healthy"},
+	}
+	if candidates := selectTransportCandidates(transports, "smart_auto"); len(candidates) != 0 {
+		t.Fatalf("unexpected candidates: %#v", candidates)
+	}
+}

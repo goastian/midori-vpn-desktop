@@ -18,14 +18,14 @@
         <div>
           <div style="font-size:14px;">Estrategia de Selección</div>
           <div class="label" style="margin-top:4px;">
-            Smart Auto prueba UDP directo y conmuta automáticamente a túneles TLS 443 si detecta bloqueo de red.
+            Smart Auto valida cada handshake real y recorre WireGuard, WSS y MASQUE según la prioridad y salud anunciadas por el servidor.
           </div>
         </div>
         <select v-model="selectedProtocolPolicy" class="select-field" @change="saveProtocolPolicy">
           <option value="smart_auto">Smart Auto (Recomendado)</option>
           <option value="wireguard">Forzar WireGuard (UDP 51820)</option>
-          <option value="obfs_tls">Forzar Transporte Ofuscado (TLS 443)</option>
-          <option value="openvpn_dco">Forzar OpenVPN DCO (Kernel)</option>
+		  <option value="wss">Forzar WireGuard sobre WSS (TLS 443, si está disponible)</option>
+          <option value="masque">Forzar WireGuard sobre MASQUE (HTTP/3 UDP 443, si está disponible)</option>
         </select>
       </div>
     </div>
@@ -46,11 +46,11 @@
       <div class="section-title">{{ t('settings.sectionAgent') }}</div>
       <div class="row" style="margin-bottom:12px;">
         <div class="label">{{ t('settings.localPort') }}</div>
-        <div class="value">7071</div>
+        <div class="value">{{ rpcPort ?? '—' }}</div>
       </div>
       <div class="row">
         <div class="label">{{ t('settings.proxyPort') }}</div>
-        <div class="value">8889</div>
+        <div class="value">{{ proxyPort ?? '—' }}</div>
       </div>
       <div class="row" style="margin-top:12px;">
         <div class="label">{{ t('settings.tokenStore') }}</div>
@@ -98,8 +98,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { invoke } from '@tauri-apps/api/core'
-import { agent } from '../lib/agent'
+import { agent, invokePlatform } from '../lib/agent'
 import { useCaps } from '../composables/useCaps'
 import { toErrorMessage } from '../lib/error'
 import QuitButton from '../components/QuitButton.vue'
@@ -114,6 +113,8 @@ const autostartError = ref<string | null>(null)
 const meshSettingsError = ref<string | null>(null)
 const tokenStoreLabel = ref('—')
 const tokenStoreDegraded = ref(false)
+const rpcPort = ref<number | null>(null)
+const proxyPort = ref<number | null>(null)
 const { featuresLocked, capsGranted, capsGranting, capsError, revertCaps } = useCaps()
 const revertResult = ref<'idle' | 'ok' | 'err'>('idle')
 const tokenStoreDisplay = computed(() =>
@@ -144,7 +145,7 @@ onMounted(async () => {
 
   // Autostart status comes from the OS (XDG autostart file presence).
   try {
-    autostart.value = await invoke<boolean>('autostart_is_enabled')
+    autostart.value = await invokePlatform<boolean>('autostart_is_enabled')
   } catch (e) {
     autostartError.value = toErrorMessage(e)
   }
@@ -157,6 +158,8 @@ onMounted(async () => {
   }
   try {
     const snapshot = await agent.status()
+    rpcPort.value = snapshot.local_rpc?.port ?? null
+    proxyPort.value = snapshot.local_proxy?.port ?? null
     tokenStoreLabel.value = snapshot.security?.token_store ?? 'unknown'
     tokenStoreDegraded.value = snapshot.security?.token_store_degraded ?? true
   } catch {
@@ -169,7 +172,7 @@ async function toggleAutostart() {
   const next = !autostart.value
   autostartError.value = null
   try {
-    await invoke('autostart_set', { enabled: next })
+    await invokePlatform('autostart_set', { enabled: next })
     autostart.value = next
   } catch (e) {
     autostartError.value = toErrorMessage(e)

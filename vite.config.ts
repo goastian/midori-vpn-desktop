@@ -7,6 +7,7 @@ export default defineConfig(async () => ({
   plugins: [vue()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    __LINUX_BROWSER_SHELL__: JSON.stringify(process.env.MIDORIVPN_LINUX_BROWSER_SHELL === '1'),
   },
 
   // Tauri: prevent Vite from obscuring Rust errors

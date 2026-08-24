@@ -1,0 +1,13 @@
+FROM fedora:latest
+
+RUN dnf install -y --setopt=install_weak_deps=False \
+    bash cargo clippy clang gcc-c++ git golang make nodejs npm openssl-devel \
+    rpm-build rust webkit2gtk4.1-devel libayatana-appindicator3-devel \
+    librsvg2-devel rustfmt && \
+    dnf clean all
+
+RUN cargo install cargo-audit --locked
+
+ENV GOTOOLCHAIN=auto \
+    npm_config_cache=/tmp/npm-cache
+WORKDIR /workspace

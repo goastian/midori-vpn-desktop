@@ -22,6 +22,9 @@ type VPNStatus struct {
 	BytesRecv      int64  `json:"bytes_recv"`
 	ActiveProtocol string `json:"active_protocol,omitempty"`
 	FallbackReason string `json:"fallback_reason,omitempty"`
+	ConnectionMS   int64  `json:"connection_ms,omitempty"`
+	PostQuantum    bool   `json:"post_quantum,omitempty"`
+	PQAlgorithm    string `json:"pq_algorithm,omitempty"`
 }
 
 // MeshStatus represents the current mesh node state.

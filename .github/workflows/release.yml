@@ -1,4 +1,4 @@
-name: Release - Desktop Multi-Platform
+name: Release - Desktop Linux RPM
 
 on:
   push:
@@ -10,97 +10,45 @@ permissions:
   contents: write
 
 jobs:
-  release-matrix:
-    name: Build Desktop Release (${{ matrix.platform }}-${{ matrix.arch }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Linux x86_64
-          - platform: linux
-            arch: x86_64
-            os: ubuntu-22.04
-            goos: linux
-            goarch: amd64
-            rust_target: x86_64-unknown-linux-gnu
-
-          # Windows x86_64
-          - platform: windows
-            arch: x86_64
-            os: windows-latest
-            goos: windows
-            goarch: amd64
-            rust_target: x86_64-pc-windows-msvc
-
-          # macOS Universal (Intel + Apple Silicon)
-          - platform: macos
-            arch: universal
-            os: macos-latest
-            goos: darwin
-            goarch: arm64
-            rust_target: aarch64-apple-darwin
-
-    runs-on: ${{ matrix.os }}
+  release-linux-rpm:
+    name: Build Desktop Linux RPM
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Checkout the project license
+        uses: actions/checkout@v6
         with:
-          node-version: '22.x'
-          cache: 'npm'
+          repository: goastian/midorivpn-core
+          path: .release-license
+          sparse-checkout: LICENSE
+          persist-credentials: false
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.26.x'
-          cache-dependency-path: agent/go.sum
-
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust_target }}
-
-      - name: Install Linux dependencies
-        if: matrix.platform == 'linux'
+      - name: Install rootless Podman and RPM signing tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev rpm gnupg
+          sudo apt-get install -y podman rpm gnupg
 
-      - name: Install Node dependencies
-        run: npm ci
-
-      - name: Build Go Agent (Linux/macOS)
-        if: matrix.platform != 'windows'
+      - name: Import RPM signing key
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-        run: |
-          mkdir -p agent/target/release bin
-          cd agent
-          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o ../agent/target/release/agent ./cmd/agent
-          cp ../agent/target/release/agent ../bin/midorivpn-agent
+          RPM_SIGNING_PRIVATE_KEY: ${{ secrets.RPM_SIGNING_PRIVATE_KEY }}
+        run: printf '%s' "$RPM_SIGNING_PRIVATE_KEY" | gpg --batch --import
 
-      - name: Build Go Agent (Windows)
-        if: matrix.platform == 'windows'
+      - name: Build and sign Linux RPM in rootless Podman
         env:
-          GOOS: windows
-          GOARCH: amd64
-        run: |
-          mkdir agent\target\release -ea 0
-          mkdir bin -ea 0
-          cd agent
-          go build -trimpath -ldflags="-s -w" -o ..\agent\target\release\agent.exe .\cmd\agent
-          Copy-Item ..\agent\target\release\agent.exe ..\bin\midorivpn-agent.exe
+          MIDORIVPN_LICENSE_FILE: ${{ github.workspace }}/.release-license/LICENSE
+          RPM_SIGNING_KEY_ID: ${{ secrets.RPM_SIGNING_KEY_ID }}
+        run: bash scripts/build-rpm.sh
 
-      - name: Build Tauri Desktop Application
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate checksums
+        run: sha256sum dist-packages/*.rpm dist-packages/RPM-GPG-KEY-midorivpn > dist-packages/SHA256SUMS
+
+      - name: Publish Linux RPM release
+        uses: softprops/action-gh-release@v2
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Midori VPN Desktop ${{ github.ref_name }}'
-          releaseBody: 'Release ${{ github.ref_name }} multi-platform desktop client.'
-          releaseDraft: false
-          prerelease: false
+          files: |
+            dist-packages/*.rpm
+            dist-packages/RPM-GPG-KEY-midorivpn
+            dist-packages/SHA256SUMS
+          generate_release_notes: true

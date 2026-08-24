@@ -1,5 +1,13 @@
-// main.rs — entry point for non-macOS
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+// Linux is the only supported production desktop target. macOS and Windows
+// implementations remain in source for future work, but are deliberately
+// blocked from building or packaging until their native networking paths have
+// an end-to-end certification.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+compile_error!("MidoriVPN Desktop production builds are currently supported on Linux only");
+
+// main.rs — Linux entry point
 
 #[cfg(target_os = "linux")]
 fn configure_linux_appimage_environment() {
@@ -17,9 +25,6 @@ fn configure_linux_appimage_environment() {
         }
     }
 }
-
-#[cfg(not(target_os = "linux"))]
-fn configure_linux_appimage_environment() {}
 
 fn main() {
     configure_linux_appimage_environment();

@@ -54,8 +54,9 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { invoke } from '@tauri-apps/api/core'
+import { invokePlatform, revealPlatformWindow } from '../lib/agent'
 import { useAuthStore } from '../stores/auth'
+import { toErrorMessage } from '../lib/error'
 import brandIcon from '../assets/midori-mv.png'
 import LanguageSelect from '../components/LanguageSelect.vue'
 
@@ -73,48 +74,75 @@ const isExpired = computed(() => route.query.reason === 'expired')
 // back to wherever the user was trying to reach.
 watch(
   () => auth.authenticated,
-  (ok) => {
+  async (ok) => {
     if (!ok) return
+    try {
+      await revealPlatformWindow()
+    } catch {
+      // ignore
+    }
     const target = (route.query.next as string) || '/'
     router.replace(target)
   },
   { immediate: true },
 )
 
+let loginStartTime = 0
+let loginTimeoutTimer: ReturnType<typeof setTimeout> | null = null
+
 async function doLogin() {
   loading.value = true
   error.value = ''
+  loginStartTime = Date.now()
+
+  if (loginTimeoutTimer) clearTimeout(loginTimeoutTimer)
+  // Set 90s safety timeout to prevent infinite spinner if browser tab is closed
+  loginTimeoutTimer = setTimeout(() => {
+    if (loading.value && !auth.authenticated) {
+      loading.value = false
+    }
+  }, 90000)
+
   try {
     await auth.startLogin()
     // Browser opened — keep loading=true; the watch above navigates away
     // as soon as auth.authenticated flips to true via SSE.
   } catch (e) {
-    error.value = String(e)
+    error.value = toErrorMessage(e)
     loading.value = false
+    if (loginTimeoutTimer) clearTimeout(loginTimeoutTimer)
   }
 }
 
 function cancelLogin() {
   loading.value = false
   error.value = ''
+  if (loginTimeoutTimer) clearTimeout(loginTimeoutTimer)
+}
+
+function handleWindowFocus() {
+  // If the user returns to the desktop window after opening the browser (> 6s)
+  // and is not authenticated, reset the loading state so they are not stuck.
+  if (loading.value && !auth.authenticated && (Date.now() - loginStartTime > 6000)) {
+    // Check with a slight delay to allow any pending SSE / callback to resolve first
+    setTimeout(() => {
+      if (loading.value && !auth.authenticated) {
+        loading.value = false
+      }
+    }, 1500)
+  }
 }
 
 async function quitApp() {
   try {
-    await invoke('quit_app')
+    await invokePlatform('quit_app')
   } catch {
     // ignore
   }
 }
 
-// Auto-trigger the OAuth browser flow on first mount so the user lands on the
-// Astian login page without an extra click. We skip it when the user was
-// redirected here because their session expired (they may want to read the
-// banner first) or when a session is already authenticated.
 onMounted(() => {
-  if (auth.authenticated) return
-  if (isExpired.value) return
-  doLogin()
+  window.addEventListener('focus', handleWindowFocus)
 })
 </script>
 

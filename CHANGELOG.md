@@ -2,15 +2,30 @@
 
 All notable MidoriVPN Desktop changes are documented here.
 
-## v2.0.0 - 2026-08-20
+## v2.0.0 - 2026-08-24
 
-Major Release with unified WireGuard TLS architecture, native Go 1.26 agent, and hardened Linux RPM package.
+Major Release with a verified WireGuard transport contract, native Go 1.27 agent, and hardened Linux RPM package.
+
+- Linux RPM is the sole production artifact. Windows and macOS builds are disabled while their platform agents remain experimental source only.
+- The RPM now declares AGPL-3.0-or-later licensing, publisher, homepage and descriptive metadata; its rootless build workspace is cleared of non-Linux binary artifacts before packaging.
+- The Linux RPM serves the Vue application from the authenticated loopback Go agent and contains no Tauri/WebKitGTK runtime.
+
+### Build and validation
+
+- Regenerated `Cargo.lock` from the manifest and made the Podman Rust runner use an executable target volume; `cargo check --locked` is now reproducible.
+- RPM builds use Node 24.19.0 and npm 12.0.2 inside a rootless multistage builder; an incompatible Node 22 build is rejected rather than distributed.
+- The packaged status UI reads its local RPC and proxy ports from the agent response instead of embedding them in the Vue view.
 
 ### Major Changes
-- **Go 1.26 Native Agent**: Compilación y ejecución nativa sobre Go 1.26 para la gestión del kernel WireGuard (`wg0`) y túneles ofuscados WSS.
-- **Tauri 2 Production Pipeline**: Arquitectura de interfaz ligera y reactiva con Vue 3.5.35 y Pinia.
+- **Go 1.27 Native Agent**: Compilación y ejecución nativa sobre Go 1.27 para la gestión del kernel WireGuard (`wg0`).
+- **Shell Linux local**: interfaz Vue servida por el agente Go en loopback; el código Tauri queda bloqueado para Windows y macOS.
 - **Empaquetado RPM Blindado para openSUSE Tumbleweed**: Scripts de post-instalación y desinstalación (`postinst`, `prerm`) estrictos con aislamiento Polkit y AppArmor en modo complain.
-- **Consolidación de Contratos de Red**: Soporte nativo para endpoints HTTPS/WSS puerto 443 con descubrimiento automático de servidores.
+- **WSS autenticado y verificable**: WireGuard puede usar un relay WSS con token efímero ligado a usuario, dispositivo y servidor; solo se ofrece cuando el servidor lo anuncia explícitamente.
+- **MASQUE RFC 9298 real**: el agente usa HTTP/3 CONNECT-UDP, TLS 1.3 y datagramas QUIC para transportar WireGuard, con MTU y ruta pública específicos.
+- **Smart con handshakes reales**: la selección automática prueba WireGuard, WSS y MASQUE por prioridad y solo acepta un transporte después del handshake WireGuard.
+- **Protocolos honestos**: OpenVPN e IKEv2 permanecen fuera de la selección mientras no exista un túnel real certificado.
+- **Código simulado retirado**: Se eliminaron los adaptadores internos no conectados de OpenVPN DCO, IKEv2, MASQUE, TLS ofuscado, selector Smart y benchmarks estimados; ya no pueden confundirse con soporte de producción.
+- **Seguridad de agente**: el token local es obligatorio en todas las compilaciones; se retiró el build tag de bypass de desarrollo y se corrigió el cierre concurrente de relays.
 
 ## v1.1.5 - MidoriVPN Desktop 1.1.5
 

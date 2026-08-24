@@ -65,10 +65,7 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
-import { invoke } from '@tauri-apps/api/core'
-import { listen } from '@tauri-apps/api/event'
-import { getCurrentWindow } from '@tauri-apps/api/window'
-import { agent, initAgentToken } from './lib/agent'
+import { agent, hidePlatformWindow, initAgentToken, invokePlatform, listenPlatform, minimizePlatformWindow, startPlatformDragging } from './lib/agent'
 import brandIcon from './assets/midori-mv.png'
 import { useVpnStore } from './stores/vpn'
 import { useMeshStore } from './stores/mesh'
@@ -78,7 +75,6 @@ import { isAuthOriginRejected } from './lib/error'
 
 const { t } = useI18n()
 const router = useRouter()
-const appWindow = getCurrentWindow()
 
 interface SecurityIssue { id: string; title: string; detail: string; fix_cmd: string; level: string }
 
@@ -106,11 +102,11 @@ async function copyAndFix(issue: SecurityIssue) {
 }
 
 async function minimizeWindow() {
-  await appWindow.minimize()
+  await minimizePlatformWindow()
 }
 
 async function closeWindow() {
-  await appWindow.hide()
+  await hidePlatformWindow()
 }
 
 function tryStartDrag(button: number, target: EventTarget | null) {
@@ -118,7 +114,7 @@ function tryStartDrag(button: number, target: EventTarget | null) {
   const el = target as HTMLElement | null
   if (!el) return
   if (el.closest('.window-actions, button, a, input, select, textarea, [role="button"]')) return
-  appWindow.startDragging().catch(() => { /* ignore */ })
+  startPlatformDragging().catch(() => { /* ignore */ })
 }
 
 function startDragMouse(e: MouseEvent) {
@@ -197,7 +193,7 @@ onMounted(async () => {
   // On 'running' the SSE relay reconnects and the agent re-sends the full
   // snapshot, so we don't poll loadSnapshot here (avoids racing the SSE
   // snapshot with a stale HTTP GET that can overwrite mesh state).
-  listen<{ status: string }>('agent://status', async (ev) => {
+  listenPlatform<{ status: string }>('agent://status', async (ev) => {
     const s = ev.payload.status
     if (s === 'running') {
       await initAgentToken()
@@ -224,7 +220,7 @@ onMounted(async () => {
 
   // Check for SELinux / AppArmor / firewall issues
   try {
-    const issues = await invoke<SecurityIssue[]>('security_check')
+    const issues = await invokePlatform<SecurityIssue[]>('security_check')
     if (issues.length) securityIssues.value = issues
   } catch {
     // non-critical: ignore if command fails

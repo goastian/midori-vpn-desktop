@@ -9,7 +9,7 @@
  */
 
 import { ref, computed } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
+import { invokePlatform } from '../lib/agent'
 import { text } from '../lib/i18nText'
 
 const capsGranted = ref(false)   // default false — assume not granted until checked
@@ -23,7 +23,7 @@ export function useCaps() {
    */
   async function checkCaps() {
     try {
-      capsGranted.value = await invoke<boolean>('agent_has_caps')
+      capsGranted.value = await invokePlatform<boolean>('agent_has_caps')
     } catch {
       // Non-Linux platforms (macOS, Windows) don't need caps.
       capsGranted.value = true
@@ -39,18 +39,18 @@ export function useCaps() {
     capsGranting.value = true
     capsError.value = ''
     try {
-      const ok = await invoke<boolean>('grant_agent_permissions')
+      const ok = await invokePlatform<boolean>('grant_agent_permissions')
       if (ok) {
         // The currently running agent may still have CapEff=0 if it was
         // started before setcap. Restart it so create TUN succeeds.
         try {
-          await invoke('restart_agent_cmd')
+          await invokePlatform('restart_agent_cmd')
         } catch {
           // If restart fails we'll still expose granted state; callers surface
           // runtime errors and the user can retry.
         }
 
-        capsGranted.value = await invoke<boolean>('agent_has_caps')
+        capsGranted.value = await invokePlatform<boolean>('agent_has_caps')
         if (!capsGranted.value) {
           capsError.value = text('errors.capsVerifyFailed')
           return false
@@ -81,13 +81,13 @@ export function useCaps() {
     try {
       let ok = false
       try {
-        ok = await invoke<boolean>('grant_dns_protection_caps')
+        ok = await invokePlatform<boolean>('grant_dns_protection_caps')
       } catch {
         ok = false
       }
       if (!ok) {
         try {
-          ok = await invoke<boolean>('grant_agent_permissions')
+          ok = await invokePlatform<boolean>('grant_agent_permissions')
         } catch (err) {
           capsError.value = String(err)
           return false
@@ -98,11 +98,11 @@ export function useCaps() {
         return false
       }
       try {
-        await invoke('restart_agent_cmd')
+        await invokePlatform('restart_agent_cmd')
       } catch {
         // Non-fatal: surfaced via runtime errors.
       }
-      capsGranted.value = await invoke<boolean>('agent_has_caps')
+      capsGranted.value = await invokePlatform<boolean>('agent_has_caps')
       if (!capsGranted.value) {
         capsError.value = text('errors.capsVerifyFailed')
         return false
@@ -122,7 +122,7 @@ export function useCaps() {
     capsGranting.value = true
     capsError.value = ''
     try {
-      const ok = await invoke<boolean>('revert_agent_permissions')
+      const ok = await invokePlatform<boolean>('revert_agent_permissions')
       if (ok) {
         capsGranted.value = false
         return true

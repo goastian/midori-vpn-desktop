@@ -70,3 +70,22 @@ func TestResolveEndpointLookupError(t *testing.T) {
 		t.Fatalf("expected wrapped lookup error, got %v", err)
 	}
 }
+
+func TestIPCHasHandshake(t *testing.T) {
+	state := "private_key=redacted\npublic_key=redacted\nlast_handshake_time_sec=1787443200\nlast_handshake_time_nsec=1\n"
+	if !ipcHasHandshake(state) {
+		t.Fatal("expected a positive handshake timestamp to be accepted")
+	}
+}
+
+func TestIPCHasHandshakeRejectsMissingInvalidAndZeroTimestamps(t *testing.T) {
+	for _, state := range []string{
+		"public_key=redacted\n",
+		"last_handshake_time_sec=0\n",
+		"last_handshake_time_sec=invalid\n",
+	} {
+		if ipcHasHandshake(state) {
+			t.Fatalf("unexpected handshake in state %q", state)
+		}
+	}
+}

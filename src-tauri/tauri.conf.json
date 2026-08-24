@@ -41,7 +41,15 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "appimage", "rpm", "dmg", "app", "msi", "nsis"],
+    "category": "Utility",
+    "copyright": "Copyright (C) 2026 Astian, Inc.",
+    "homepage": "https://github.com/goastian/midorivpn-desktop",
+    "license": "AGPL-3.0-or-later",
+    "licenseFile": "../../LICENSE",
+    "longDescription": "MidoriVPN is the Linux desktop client for secure Midori VPN connections. It includes the privileged local agent needed to configure and manage supported VPN transports.",
+    "publisher": "Astian, Inc.",
+    "shortDescription": "Secure Midori VPN client for Linux",
+    "targets": ["rpm"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -58,6 +66,7 @@
       "../packaging/selinux/midorivpn.fc": "selinux/midorivpn.fc",
       "../packaging/autostart/midorivpn.desktop": "autostart/midorivpn.desktop",
       "../packaging/launcher/midorivpn.desktop": "launcher/midorivpn.desktop",
+      "../config.env.example": "config.env.example",
       "icons/32x32.png": "icons/32x32.png",
       "icons/128x128.png": "icons/128x128.png",
       "icons/128x128@2x.png": "icons/128x128@2x.png"
@@ -82,7 +91,7 @@
           "/etc/polkit-1/rules.d/49-midorivpn.rules": "polkit/49-midorivpn.rules",
           "/usr/share/midorivpn/selinux/midorivpn.te": "../packaging/selinux/midorivpn.te",
           "/usr/share/midorivpn/selinux/midorivpn.fc": "../packaging/selinux/midorivpn.fc",
-          "/etc/pki/rpm-gpg/RPM-GPG-KEY-midorivpn": "../RPM-GPG-KEY-midorivpn"
+          "/usr/share/doc/midori-vpn/config.env.example": "../config.env.example"
         },
         "postInstallScript": "../packaging/maintainer/postinst",
         "preRemoveScript": "../packaging/maintainer/prerm"

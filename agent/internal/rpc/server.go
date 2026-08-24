@@ -55,16 +55,18 @@ type Server struct {
 	// Configurable from env / Tauri startup args.
 	apiURL  string
 	jwksURL string
+	uiDir   string
+	restart func() error
+	quit    context.CancelFunc
 
 	// OAuth / PKCE state store.
-	oauthMu               sync.Mutex
-	pendingOAuth          map[string]pendingOAuthEntry // state → PKCE verifier + expiry
-	authentikIssuer       string
-	authentikClientID     string
-	authentikClientSecret string
-	authentikAuthURL      string
-	authentikTokenURL     string
-	authentikUserinfoURL  string
+	oauthMu              sync.Mutex
+	pendingOAuth         map[string]pendingOAuthEntry // state → PKCE verifier + expiry
+	authentikIssuer      string
+	authentikClientID    string
+	authentikAuthURL     string
+	authentikTokenURL    string
+	authentikUserinfoURL string
 
 	serversMu            sync.Mutex
 	serversCache         []apiClient.Server
@@ -81,15 +83,31 @@ type Server struct {
 	connectCancel context.CancelFunc
 	connectSeq    uint64
 
+	// transportRelay is present while WireGuard uses WSS or MASQUE. relayMu
+	// keeps disconnect and shutdown from racing cleanup.
+	relayMu        sync.Mutex
+	transportRelay interface{ Close() }
+
 	// meshMu serializes concurrent enableMesh calls so AutoEnableMesh and the
 	// frontend cannot race and double-activate the mesh node.
 	meshMu sync.Mutex
+}
 
-	allowMissingAgentTokenForDev bool
+// SetUIDir enables the Linux browser UI from an immutable package directory.
+// An empty path leaves static serving disabled for Tauri-based targets.
+func (s *Server) SetUIDir(path string) {
+	s.uiDir = strings.TrimSpace(path)
+}
+
+// SetLifecycle wires process-level actions without coupling the RPC package
+// to OS-specific exec or signal primitives.
+func (s *Server) SetLifecycle(restart func() error, quit context.CancelFunc) {
+	s.restart = restart
+	s.quit = quit
 }
 
 // NewServer creates the RPC server. Configuration is loaded from layered
-// sources (defaults → /etc/midorivpn/config.env → user config → env vars).
+// files and environment variables without environment-specific defaults.
 func NewServer(ag *state.Agent, port int) *Server {
 	cfg := config.Load()
 
@@ -109,13 +127,12 @@ func NewServer(ag *state.Agent, port int) *Server {
 		apiURL:   cfg.APIURL,
 		jwksURL:  cfg.AuthentikJWKSURL,
 
-		pendingOAuth:          make(map[string]pendingOAuthEntry),
-		authentikIssuer:       cfg.AuthentikIssuer,
-		authentikClientID:     cfg.AuthentikClientID,
-		authentikClientSecret: cfg.AuthentikClientSecret,
-		authentikAuthURL:      cfg.AuthentikAuthURL,
-		authentikTokenURL:     cfg.AuthentikTokenURL,
-		authentikUserinfoURL:  cfg.AuthentikUserinfoURL,
+		pendingOAuth:         make(map[string]pendingOAuthEntry),
+		authentikIssuer:      cfg.AuthentikIssuer,
+		authentikClientID:    cfg.AuthentikClientID,
+		authentikAuthURL:     cfg.AuthentikAuthURL,
+		authentikTokenURL:    cfg.AuthentikTokenURL,
+		authentikUserinfoURL: cfg.AuthentikUserinfoURL,
 	}
 
 	// Build the auth manager BEFORE the apiClient so the apiClient's refresh
@@ -150,7 +167,7 @@ func NewServer(ag *state.Agent, port int) *Server {
 	}
 	s.authMgr = auth.NewManager(store, refreshFn, notifier)
 
-	s.apiClient = apiClient.New(s.apiURL, ag.GetAccessToken, func(ctx context.Context) error {
+	s.apiClient = apiClient.New(s.apiURL, s.authentikClientID, ag.GetAccessToken, func(ctx context.Context) error {
 		// Use SoftRefreshNow so that a 401 returned by any regular API call
 		// (e.g. CreateConnection) triggers a token refresh attempt WITHOUT
 		// clearing the session.  Only the manager's own scheduled proactive
@@ -162,15 +179,16 @@ func NewServer(ag *state.Agent, port int) *Server {
 	return s
 }
 
-// SetAllowMissingAgentTokenForDev enables the legacy no-token RPC mode for
-// local development only. Production launchers must pass a token.
-func (s *Server) SetAllowMissingAgentTokenForDev(allow bool) {
-	s.allowMissingAgentTokenForDev = allow
-}
-
 // Init performs startup work that needs a context (loading persisted tokens,
 // initial refresh if expired). Call once before Start.
 func (s *Server) Init(ctx context.Context) error {
+	if err := s.cfg.Validate(); err != nil {
+		return fmt.Errorf("invalid runtime configuration: %w", err)
+	}
+	expectedRedirect := fmt.Sprintf("http://127.0.0.1:%d/oauth/callback", s.port)
+	if s.cfg.AuthentikRedirectURI != expectedRedirect {
+		return fmt.Errorf("invalid runtime configuration: AUTHENTIK_REDIRECT_URI must match the RPC listener (%s)", expectedRedirect)
+	}
 	return s.authMgr.Init(ctx)
 }
 
@@ -358,18 +376,4 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request) {
 		expiresIn = t.ExpiresAt - time.Now().Unix()
 	}
 	writeJSON(w, map[string]any{"ok": true, "expires_in": expiresIn})
-}
-
-// refreshAuthToken is kept as a thin wrapper for code paths that still need
-// the legacy (expiresIn, error) signature. New code should use authMgr.
-func (s *Server) refreshAuthToken(ctx context.Context) (int, error) {
-	_, err := s.authMgr.RefreshNow(ctx)
-	if err != nil {
-		return 0, err
-	}
-	t := s.authMgr.Snapshot()
-	if t.ExpiresAt == 0 {
-		return 0, nil
-	}
-	return int(t.ExpiresAt - time.Now().Unix()), nil
 }

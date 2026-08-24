@@ -18,21 +18,23 @@ import (
 type Client struct {
 	baseURL     string
 	origin      string
+	clientID    string
 	httpClient  *http.Client
 	tokenFunc   func() string // returns the current access token
 	refreshFunc func(context.Context) error
 }
 
 // New creates a new Client.
-func New(baseURL string, tokenFunc func() string, refreshFunc func(context.Context) error) *Client {
+func New(baseURL string, clientID string, tokenFunc func() string, refreshFunc func(context.Context) error) *Client {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	origin, err := originFromBaseURL(baseURL)
-	if err != nil {
+	if err != nil && baseURL != "" {
 		slog.Warn("api client: API_URL cannot be used as CSRF origin", "api_url", baseURL, "err", err)
 	}
 	return &Client{
 		baseURL:     baseURL,
 		origin:      origin,
+		clientID:    clientID,
 		tokenFunc:   tokenFunc,
 		refreshFunc: refreshFunc,
 		httpClient:  &http.Client{Timeout: 30 * time.Second},
@@ -54,22 +56,32 @@ func originFromBaseURL(baseURL string) (string, error) {
 
 // Server is a VPN server entry.
 type Server struct {
-	ID                string `json:"id"`
-	Name              string `json:"name"`
-	Host              string `json:"host"`
-	Endpoint          string `json:"endpoint"`
-	Port              int    `json:"port"`
-	WGPort            int    `json:"wg_port"`
-	PublicKey         string `json:"public_key"`
-	Location          string `json:"location"`
-	CountryCode       string `json:"country_code"`
-	MaxPeers          int    `json:"max_peers"`
-	CurrentPeers      int    `json:"current_peers"`
-	IsActive          bool   `json:"is_active"`
-	ProxyPort         int    `json:"proxy_port"`
-	SupportsWireGuard bool   `json:"supports_wireguard"`
-	SupportsProxy     bool   `json:"supports_proxy"`
-	SupportsMeshExit  bool   `json:"supports_mesh_exit"`
+	ID                string                `json:"id"`
+	Name              string                `json:"name"`
+	Host              string                `json:"host"`
+	Endpoint          string                `json:"endpoint"`
+	Port              int                   `json:"port"`
+	WGPort            int                   `json:"wg_port"`
+	PublicKey         string                `json:"public_key"`
+	Location          string                `json:"location"`
+	CountryCode       string                `json:"country_code"`
+	MaxPeers          int                   `json:"max_peers"`
+	CurrentPeers      int                   `json:"current_peers"`
+	IsActive          bool                  `json:"is_active"`
+	SupportsWireGuard bool                  `json:"supports_wireguard"`
+	SupportsProxy     bool                  `json:"supports_proxy"`
+	SupportsMeshExit  bool                  `json:"supports_mesh_exit"`
+	Transports        []TransportCapability `json:"transports"`
+}
+
+type TransportCapability struct {
+	Protocol     string                 `json:"protocol"`
+	Host         string                 `json:"host"`
+	Port         int                    `json:"port"`
+	Enabled      bool                   `json:"enabled"`
+	Priority     int                    `json:"priority"`
+	HealthStatus string                 `json:"health_status"`
+	Metadata     map[string]interface{} `json:"metadata"`
 }
 
 // Connection is a VPN peer/connection entry.
@@ -92,14 +104,14 @@ type ConnectionConfig struct {
 	ServerPublicKey string `json:"server_public_key"`
 	ServerEndpoint  string `json:"server_endpoint"`
 	PresharedKey    string `json:"preshared_key,omitempty"`
+	PQKEMCiphertext string `json:"pq_kem_ciphertext,omitempty"`
 	DNS             string `json:"dns"`
 	AllowedIPs      string `json:"allowed_ips"`
 }
 
-// Keypair is a generated WireGuard keypair.
-type Keypair struct {
-	PublicKey  string `json:"public_key"`
-	PrivateKey string `json:"private_key"`
+type TunnelCredentials struct {
+	TunnelToken string `json:"tunnel_token"`
+	ExpiresIn   int    `json:"expires_in"`
 }
 
 // MeshNode is the mesh node status from the backend.
@@ -145,27 +157,29 @@ func (c *Client) ListServers(ctx context.Context) ([]Server, error) {
 	return result, nil
 }
 
-// GenerateKeypair requests a new ephemeral keypair from the backend.
-func (c *Client) GenerateKeypair(ctx context.Context) (*Keypair, error) {
-	var kp Keypair
-	if err := c.post(ctx, "/api/v1/control/keypair", nil, &kp); err != nil {
-		return nil, err
-	}
-	return &kp, nil
-}
-
-// CreateConnection registers a new VPN peer for the given server.
-func (c *Client) CreateConnection(ctx context.Context, serverID, publicKey, deviceName string) (*ConnectionConfig, error) {
+// CreateConnection registers a new VPN peer for the given server with optional Post-Quantum ML-KEM-768 public key.
+func (c *Client) CreateConnection(ctx context.Context, serverID, publicKey, deviceName string, pqKEMPublicKey ...string) (*ConnectionConfig, error) {
 	body := map[string]string{
 		"server_id":   serverID,
 		"public_key":  publicKey,
 		"device_name": deviceName,
+	}
+	if len(pqKEMPublicKey) > 0 && pqKEMPublicKey[0] != "" {
+		body["pq_kem_public_key"] = pqKEMPublicKey[0]
 	}
 	var connCfg ConnectionConfig
 	if err := c.post(ctx, "/api/v1/control/connections", body, &connCfg); err != nil {
 		return nil, err
 	}
 	return &connCfg, nil
+}
+
+func (c *Client) TunnelCredentials(ctx context.Context, peerID string) (*TunnelCredentials, error) {
+	var credentials TunnelCredentials
+	if err := c.post(ctx, "/api/v1/control/tunnel-credentials", map[string]string{"peer_id": peerID}, &credentials); err != nil {
+		return nil, err
+	}
+	return &credentials, nil
 }
 
 // ListConnections returns the user's active VPN connections.
@@ -257,9 +271,13 @@ func (c *Client) ClearExitNode(ctx context.Context) error {
 
 // RefreshToken exchanges a refresh_token for new tokens.
 func (c *Client) RefreshToken(ctx context.Context, refreshToken string) (accessToken, newRefreshToken string, expiresIn int, err error) {
+	clientID := c.clientID
+	if clientID == "" {
+		return "", "", 0, fmt.Errorf("api client: AUTHENTIK_CLIENT_ID is not configured")
+	}
 	body := map[string]string{
 		"refresh_token": refreshToken,
-		"client_id":     "60mBgw8BHTvKRPYVhDTJGoKEt30QYG3b7Sv0RFNd",
+		"client_id":     clientID,
 	}
 	var result struct {
 		AccessToken  string `json:"access_token"`
@@ -299,6 +317,10 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any, aut
 }
 
 func (c *Client) doOnce(ctx context.Context, method, path string, body, out any, auth bool, allowRefresh bool) error {
+	if c.baseURL == "" {
+		return fmt.Errorf("api client: API_URL is not configured (check /etc/midorivpn/config.env)")
+	}
+
 	var bodyReader io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)

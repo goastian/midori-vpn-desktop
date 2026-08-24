@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { agent, type Server, type VPNStatus } from '../lib/agent'
+import { agent, type Server, type VPNStatus, type VPNTransportProtocol } from '../lib/agent'
 import { toErrorMessage } from '../lib/error'
 
 export const useVpnStore = defineStore('vpn', () => {
@@ -12,7 +12,7 @@ export const useVpnStore = defineStore('vpn', () => {
   const bytesUp = ref(0)
   const bytesDown = ref(0)
   const connectedAt = ref<string | null>(null)
-  const activeProtocol = ref<'wireguard' | 'obfs_tls' | 'openvpn_dco' | 'masque_h3'>('wireguard')
+  const activeProtocol = ref<VPNTransportProtocol>('wireguard')
   const fallbackReason = ref<string | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)

@@ -85,7 +85,7 @@ func TestClientSendsOriginDerivedFromAPIURL(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := New(server.URL+"/api", func() string { return "token" }, nil)
+	client := New(server.URL+"/api", "test-client-id", func() string { return "token" }, nil)
 	if _, err := client.ListServers(context.Background()); err != nil {
 		t.Fatalf("ListServers() error = %v", err)
 	}

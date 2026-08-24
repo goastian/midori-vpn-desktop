@@ -24,7 +24,7 @@ describe('error helpers', () => {
     expect(parsed.titleKey).toBe('errors.authOriginRejected.title')
   })
 
-  it('detects legacy origin rejection payloads', () => {
+  it('detects nested origin rejection payloads', () => {
     expect(isAuthOriginRejected('502 Bad Gateway: {"error":"auth: api error 403: {\\"ok\\":false,\\"error\\":\\"origin not allowed\\"}"}')).toBe(true)
   })
 

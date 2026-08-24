@@ -7,8 +7,7 @@
  */
 
 import { ref, computed } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
-import { agent, type DnsStatus } from '../lib/agent'
+import { agent, invokePlatform, type DnsStatus } from '../lib/agent'
 
 const status = ref<DnsStatus | null>(null)
 const loading = ref(false)
@@ -35,11 +34,11 @@ export function useDnsProtection() {
     granting.value = true
     error.value = ''
     try {
-      const ok = await invoke<boolean>('grant_dns_protection_caps')
+      const ok = await invokePlatform<boolean>('grant_dns_protection_caps')
       if (ok) {
         // Restart agent so the new file caps land in the effective set.
         try {
-          await invoke('restart_agent_cmd')
+          await invokePlatform('restart_agent_cmd')
         } catch {
           // Non-fatal: caller can retry refresh().
         }

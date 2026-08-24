@@ -1,14 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { invoke } from '@tauri-apps/api/core'
-import { agent, type AuthStatus } from '../lib/agent'
+import { agent, invokePlatform, type AuthStatus } from '../lib/agent'
 
 function isAllowedOAuthUrl(raw: string): boolean {
   try {
     const url = new URL(raw)
-    const host = url.hostname.toLowerCase()
     return url.protocol === 'https:'
-      && (host === 'accounts.astian.org' || host.endsWith('.astian.org'))
+      && url.username === ''
+      && url.password === ''
       && url.pathname.startsWith('/application/o/')
   } catch {
     return false
@@ -51,7 +50,7 @@ export const useAuthStore = defineStore('auth', () => {
     if (!isAllowedOAuthUrl(url)) {
       throw new Error('OAuth URL is not allowed')
     }
-    await invoke('open_oauth_url', { url })
+    await invokePlatform('open_oauth_url', { url })
   }
 
   async function setTokens(accessToken: string, refreshToken: string, expiresIn: number) {

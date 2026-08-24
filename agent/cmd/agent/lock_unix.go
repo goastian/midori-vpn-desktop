@@ -22,8 +22,7 @@ func acquireSingleInstanceLock() (func(), error) {
 	}
 	if err := unix.Flock(int(lockFile.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
 		lockFile.Close()
-		fmt.Fprintln(os.Stderr, "midorivpn-agent: already running (lock held by another process)")
-		os.Exit(0)
+		return nil, fmt.Errorf("%w: lock held by another process", errAlreadyRunning)
 	}
 	return func() {
 		unix.Flock(int(lockFile.Fd()), unix.LOCK_UN) //nolint:errcheck

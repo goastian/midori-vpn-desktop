@@ -103,7 +103,7 @@ func EnableNAT(outIface string) error {
 
 	// Try nft first, then iptables.
 	nft := findBin(nftBin, "/usr/sbin/nft", "/usr/bin/nft")
-	ipt := findBin(iptablesBin, "/usr/sbin/iptables", "/usr/sbin/iptables-legacy", "/usr/bin/iptables")
+	ipt := findBin(iptablesBin, "/usr/sbin/iptables", "/usr/bin/iptables")
 
 	capturedIface := outIface
 	if nft != "" {
@@ -171,7 +171,7 @@ func DisableNAT(outIface string) {
 		slog.Info("mesh: NAT disabled (nft table removed)")
 		return
 	}
-	if ipt := findBin(iptablesBin, "/usr/sbin/iptables", "/usr/sbin/iptables-legacy"); ipt != "" {
+	if ipt := findBin(iptablesBin, "/usr/sbin/iptables", "/usr/bin/iptables"); ipt != "" {
 		if outIface == "" {
 			outIface, _ = defaultRouteIface()
 		}

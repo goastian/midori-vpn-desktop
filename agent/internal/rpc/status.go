@@ -11,6 +11,9 @@ import (
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	snap := s.agent.Snapshot()
+	snap["local_rpc"] = map[string]any{
+		"port": s.port,
+	}
 	snap["local_proxy"] = map[string]any{
 		"port":     localFwdPort,
 		"active":   s.localFwd.Active(),

@@ -80,9 +80,25 @@ fn agent_has_any_network_cap() -> bool {
 }
 
 /// Returns true when the installed binary carries CAP_NET_ADMIN (the essential capability for WireGuard & TUN).
+fn has_required_caps(output: &str) -> bool {
+    [
+        "cap_net_admin",
+        "cap_net_raw",
+        "cap_dac_override",
+        "cap_linux_immutable",
+    ]
+    .iter()
+    .all(|capability| output.contains(capability))
+}
+
 #[cfg(target_os = "linux")]
 fn agent_has_required_caps() -> bool {
-    agent_has_any_network_cap()
+    let target = find_agent_installed_path();
+    Command::new("getcap")
+        .arg(target)
+        .output()
+        .map(|out| has_required_caps(&String::from_utf8_lossy(&out.stdout)))
+        .unwrap_or(false)
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -99,7 +115,10 @@ fn try_install_caps(extended: bool) -> bool {
     };
 
     let target_binary = find_agent_installed_path();
-    eprintln!("[permissions] Attempting to grant capabilities to '{}' using setcap '{}' (extended={})", target_binary, setcap, extended);
+    eprintln!(
+        "[permissions] Attempting to grant capabilities to '{}' using setcap '{}' (extended={})",
+        target_binary, setcap, extended
+    );
 
     if extended {
         match Command::new("pkexec")
@@ -116,7 +135,11 @@ fn try_install_caps(extended: bool) -> bool {
                     }
                 } else {
                     let err = String::from_utf8_lossy(&out.stderr);
-                    eprintln!("[permissions] pkexec extended setcap failed (exit code {:?}): {}", out.status.code(), err.trim());
+                    eprintln!(
+                        "[permissions] pkexec extended setcap failed (exit code {:?}): {}",
+                        out.status.code(),
+                        err.trim()
+                    );
                 }
             }
             Err(e) => {
@@ -125,7 +148,10 @@ fn try_install_caps(extended: bool) -> bool {
         }
     }
 
-    eprintln!("[permissions] Applying standard capability set (cap_net_admin,cap_net_raw=ep) on '{}'", target_binary);
+    eprintln!(
+        "[permissions] Applying standard capability set (cap_net_admin,cap_net_raw=ep) on '{}'",
+        target_binary
+    );
     match Command::new("pkexec")
         .arg(setcap)
         .arg("cap_net_admin,cap_net_raw=ep")
@@ -137,16 +163,31 @@ fn try_install_caps(extended: bool) -> bool {
                 eprintln!("[permissions] pkexec standard setcap succeeded");
             } else {
                 let err = String::from_utf8_lossy(&out.stderr);
-                eprintln!("[permissions] pkexec standard setcap failed (exit code {:?}): {}", out.status.code(), err.trim());
+                eprintln!(
+                    "[permissions] pkexec standard setcap failed (exit code {:?}): {}",
+                    out.status.code(),
+                    err.trim()
+                );
             }
         }
         Err(e) => {
-            eprintln!("[permissions] Error executing pkexec standard setcap: {}", e);
+            eprintln!(
+                "[permissions] Error executing pkexec standard setcap: {}",
+                e
+            );
         }
     }
 
     let ok = agent_has_required_caps();
-    eprintln!("[permissions] Verification result for '{}': {}", target_binary, if ok { "GRANTED (CAP_NET_ADMIN active)" } else { "NOT GRANTED" });
+    eprintln!(
+        "[permissions] Verification result for '{}': {}",
+        target_binary,
+        if ok {
+            "GRANTED (CAP_NET_ADMIN active)"
+        } else {
+            "NOT GRANTED"
+        }
+    );
     ok
 }
 

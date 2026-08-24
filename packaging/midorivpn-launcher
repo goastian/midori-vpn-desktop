@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+die() {
+  printf 'Error: %s\n' "$*" >&2
+  exit 1
+}
+
+LAUNCHER_CONFIG="/etc/midorivpn/launcher.env"
+AGENT_BINARY="/usr/libexec/midorivpn-agent"
+
+[[ -r "$LAUNCHER_CONFIG" ]] || die "missing launcher configuration: $LAUNCHER_CONFIG"
+[[ -x "$AGENT_BINARY" ]] || die "missing MidoriVPN agent: $AGENT_BINARY"
+
+set -a
+# shellcheck source=/dev/null
+source "$LAUNCHER_CONFIG"
+set +a
+
+: "${MIDORIVPN_AGENT_PORT:?MIDORIVPN_AGENT_PORT is required in launcher.env}"
+: "${MIDORIVPN_UI_DIR:?MIDORIVPN_UI_DIR is required in launcher.env}"
+
+exec "$AGENT_BINARY" \
+  --port "$MIDORIVPN_AGENT_PORT" \
+  --ui-dir "$MIDORIVPN_UI_DIR" \
+  --open-ui \
+  "$@"

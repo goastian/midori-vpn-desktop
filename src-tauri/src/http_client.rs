@@ -84,10 +84,7 @@ async fn read_json_response(resp: reqwest::Response) -> Result<Value, String> {
 fn classify_http_error(status: reqwest::StatusCode, body: &str) -> String {
     if let Ok(parsed) = serde_json::from_str::<Value>(body) {
         if let Some(code) = parsed.get("code").and_then(|c| c.as_str()) {
-            let msg = parsed
-                .get("error")
-                .and_then(|e| e.as_str())
-                .unwrap_or(body);
+            let msg = parsed.get("error").and_then(|e| e.as_str()).unwrap_or(body);
             match code {
                 "ERR_DNS_PERMISSION_DENIED" => return format!("dns_permission_denied: {}", msg),
                 "ERR_TUN_PERMISSION_DENIED" => return format!("tun_permission_denied: {}", msg),

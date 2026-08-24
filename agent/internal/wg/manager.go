@@ -4,6 +4,7 @@
 package wg
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"log/slog"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/goastian/midorivpn-agent/internal/dns"
 	"github.com/goastian/midorivpn-agent/internal/logredact"
@@ -26,12 +28,15 @@ import (
 
 // Config holds the WireGuard configuration needed to bring up a connection.
 type Config struct {
-	PrivateKey string
-	PublicKey  string // server public key
-	Endpoint   string // host:port of the WireGuard server
-	AssignedIP string // CIDR assigned to this peer, e.g. "10.8.0.5/32"
-	DNS        []string
-	MeshIPs    []string // additional allowed IPs for mesh routing
+	PrivateKey    string
+	PublicKey     string // server public key
+	PresharedKey  string // post-quantum / pre-shared symmetric key (base64)
+	Endpoint      string // host:port of the WireGuard server
+	RouteEndpoint string // public endpoint pinned outside the full tunnel
+	AssignedIP    string // CIDR assigned to this peer, e.g. "10.8.0.5/32"
+	DNS           []string
+	MeshIPs       []string // additional allowed IPs for mesh routing
+	MTU           int      // transport-specific tunnel MTU
 }
 
 // Manager wraps a wireguard-go Device and TUN interface.
@@ -58,17 +63,24 @@ func NewManager() *Manager {
 func (m *Manager) DNSBackendKind() dns.Kind {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.dnsBackendKindLocked()
+}
+
+func (m *Manager) dnsBackendKindLocked() dns.Kind {
 	if m.dnsBackend == nil {
 		m.dnsBackend = dns.Detect()
 	}
 	return m.dnsBackend.Kind()
 }
 
-// Connect brings up the wg0 TUN interface with the given config.
-// It tears down any existing interface first.
+// Connect brings up the WireGuard TUN interface and configures routing.
 func (m *Manager) Connect(cfg *Config) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if m.dev != nil {
+		return fmt.Errorf("already connected")
+	}
 
 	// Tear down existing connection.
 	m.shutdownLocked()
@@ -105,6 +117,11 @@ func (m *Manager) Connect(cfg *Config) error {
 	var uapiBuilder strings.Builder
 	fmt.Fprintf(&uapiBuilder, "private_key=%x\n", privKeyBytes)
 	fmt.Fprintf(&uapiBuilder, "public_key=%x\n", serverPubKeyBytes)
+	if cfg.PresharedKey != "" {
+		if pskBytes, pErr := base64.StdEncoding.DecodeString(cfg.PresharedKey); pErr == nil && len(pskBytes) == 32 {
+			fmt.Fprintf(&uapiBuilder, "preshared_key=%x\n", pskBytes)
+		}
+	}
 	fmt.Fprintf(&uapiBuilder, "endpoint=%s\n", resolvedEndpoint)
 	fmt.Fprintf(&uapiBuilder, "persistent_keepalive_interval=25\n")
 	fmt.Fprintf(&uapiBuilder, "allowed_ip=0.0.0.0/0\n")
@@ -135,7 +152,7 @@ func (m *Manager) Connect(cfg *Config) error {
 	}
 
 	// Assign the IP address to the TUN interface.
-	if err := m.assignAddr(tdev, cfg.AssignedIP); err != nil {
+	if err := m.assignAddr(tdev, cfg.AssignedIP, cfg.MTU); err != nil {
 		dev.Close()
 		return fmt.Errorf("assign IP: %w", err)
 	}
@@ -167,6 +184,46 @@ func (m *Manager) IsConnected() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.dev != nil
+}
+
+// WaitForHandshake blocks until the configured peer reports a completed
+// WireGuard handshake or the context expires. Interface creation alone is not
+// treated as connectivity evidence.
+func (m *Manager) WaitForHandshake(ctx context.Context) error {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		m.mu.Lock()
+		if m.dev == nil {
+			m.mu.Unlock()
+			return fmt.Errorf("wireguard device is not connected")
+		}
+		state, err := m.dev.IpcGet()
+		m.mu.Unlock()
+		if err != nil {
+			return fmt.Errorf("read wireguard handshake state: %w", err)
+		}
+		if ipcHasHandshake(state) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("wireguard handshake: %w", ctx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
+func ipcHasHandshake(state string) bool {
+	for _, line := range strings.Split(state, "\n") {
+		value, ok := strings.CutPrefix(strings.TrimSpace(line), "last_handshake_time_sec=")
+		if !ok {
+			continue
+		}
+		seconds, err := strconv.ParseInt(value, 10, 64)
+		return err == nil && seconds > 0
+	}
+	return false
 }
 
 func (m *Manager) shutdownLocked() {
@@ -238,46 +295,23 @@ func readInt64File(path string) (int64, error) {
 
 // assignAddr sets the IP address on the TUN interface using netlink (Linux).
 // On macOS/Windows this needs platform-specific handling.
-func (m *Manager) assignAddr(tdev tun.Device, cidr string) error {
+func (m *Manager) assignAddr(tdev tun.Device, cidr string, mtu int) error {
 	name, err := tdev.Name()
 	if err != nil {
 		return err
 	}
 
-	prefix, err := netip.ParsePrefix(cidr)
-	if err != nil {
+	if _, err := netip.ParsePrefix(cidr); err != nil {
 		return fmt.Errorf("parse CIDR %s: %w", cidr, err)
 	}
-
-	iface, err := net.InterfaceByName(name)
-	if err != nil {
-		return fmt.Errorf("get interface %s: %w", name, err)
+	if mtu < 576 || mtu > 9000 {
+		return fmt.Errorf("MTU must be between 576 and 9000, got %d", mtu)
 	}
-
-	// Use ip command for portability across Linux distros (avoids netlink cgo).
-	// Production build should use golang.org/x/net/netlink for no-exec dependency.
-	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_DGRAM, 0)
-	if err != nil {
-		return err
-	}
-	defer unix.Close(fd)
-
-	addr := prefix.Addr()
-	mask := net.CIDRMask(prefix.Bits(), 32)
-	if prefix.Addr().Is6() {
-		mask = net.CIDRMask(prefix.Bits(), 128)
-	}
-
-	_ = iface
-	_ = addr
-	_ = mask
 
 	// Bring the link up explicitly before assigning the address. device.Up()
 	// starts the WireGuard engine, but Linux routing tools still expect the
 	// netdev itself to be UP.
-	// MTU 1280 for stability over throughput; reduces packet fragmentation
-	// and improves compatibility with constrained network paths.
-	if err := runIP("link", "set", "dev", name, "up", "mtu", "1280"); err != nil {
+	if err := runIP("link", "set", "dev", name, "up", "mtu", strconv.Itoa(mtu)); err != nil {
 		return fmt.Errorf("set link up: %w", err)
 	}
 
@@ -298,7 +332,7 @@ func (m *Manager) configureSystemTunnel(tdev tun.Device, cfg *Config) error {
 	}
 	m.defaultRoutes = splitNonEmptyLines(defaults)
 
-	if err := m.pinEndpointRoute(cfg.Endpoint); err != nil {
+	if err := m.pinEndpointRoute(cfg.RouteEndpoint); err != nil {
 		return err
 	}
 

@@ -45,7 +45,13 @@ pub fn start_event_relay(app: AppHandle, port: u16) {
             }
 
             if let Err(err) = relay_agent_events_once(&app, &client, &url, &token).await {
-                eprintln!("[midorivpn] agent event relay reconnecting: {err}");
+                if !supervisor_should_stop(&app)
+                    && !err.contains("error decoding response body")
+                    && !err.contains("connection closed")
+                    && !err.contains("channel closed")
+                {
+                    eprintln!("[midorivpn] agent event relay reconnecting: {err}");
+                }
             }
 
             // Poll for agent readiness with short interval (~100ms) instead of

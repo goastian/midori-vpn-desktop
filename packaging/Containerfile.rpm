@@ -1,9 +1,15 @@
+FROM docker.io/library/node:24-bookworm-slim AS node_runtime
+
+RUN npm install --global npm@12.0.2
+
 FROM fedora:latest
 
+COPY --from=node_runtime /usr/local/ /usr/local/
+
 RUN dnf install -y --setopt=install_weak_deps=False \
-    rust cargo nodejs npm rpm-build \
-    webkit2gtk4.1-devel libayatana-appindicator3-devel \
-    openssl-devel gtk3-devel librsvg2-devel golang git file curl && \
+    rpm-build golang git file && \
     dnf clean all
+
+ENV GOTOOLCHAIN=auto
 
 WORKDIR /src
