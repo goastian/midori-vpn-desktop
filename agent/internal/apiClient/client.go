@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -13,6 +14,43 @@ import (
 	"strings"
 	"time"
 )
+
+// APIError is a non-success response returned by vpn-core. Code is the
+// backend's stable machine-readable identifier; callers must not match the
+// human-readable Message to decide retry behavior.
+type APIError struct {
+	StatusCode int
+	Code       string
+	Message    string
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("api error %d: %s", e.StatusCode, e.Message)
+}
+
+func ErrorCode(err error) string {
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.Code
+	}
+	return ""
+}
+
+func ErrorStatus(err error) int {
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.StatusCode
+	}
+	return 0
+}
+
+func ErrorMessage(err error) string {
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.Message
+	}
+	return err.Error()
+}
 
 // Client is the vpn-core API client.
 type Client struct {
@@ -363,7 +401,18 @@ func (c *Client) doOnce(ctx context.Context, method, path string, body, out any,
 
 	if resp.StatusCode >= 400 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return fmt.Errorf("api error %d: %s", resp.StatusCode, string(b))
+		message := strings.TrimSpace(string(b))
+		var envelope struct {
+			Error string `json:"error"`
+			Code  string `json:"code"`
+		}
+		if json.Unmarshal(b, &envelope) == nil && envelope.Error != "" {
+			message = envelope.Error
+		}
+		if message == "" {
+			message = http.StatusText(resp.StatusCode)
+		}
+		return &APIError{StatusCode: resp.StatusCode, Code: envelope.Code, Message: message}
 	}
 
 	if out != nil {

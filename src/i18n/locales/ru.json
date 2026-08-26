@@ -24,6 +24,7 @@
     "mode": "Режим: {mode}"
   },
   "errors": {
+    "meshCountryUnavailable": "Временно не удалось определить страну происхождения. Mesh не был включён; повторите попытку позже.",
     "capsApplyFailed": "Не удалось применить разрешения. Выполните команду вручную от root.",
     "capsVerifyFailed": "Разрешения применены, но агент не смог их проверить.",
     "capsRevertFailed": "Не удалось отозвать разрешения. Выполните \"sudo setcap -r /usr/local/bin/midorivpn-agent\" вручную.",

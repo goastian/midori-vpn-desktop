@@ -144,8 +144,8 @@ func NewServer(ag *state.Agent, port int) *Server {
 		}
 		ac, rt, expIn, rerr := s.apiClient.RefreshToken(ctx, refreshToken)
 		if rerr != nil {
-			msg := rerr.Error()
-			if strings.Contains(msg, "api error 400") || strings.Contains(msg, "api error 401") {
+			status := apiClient.ErrorStatus(rerr)
+			if status == http.StatusBadRequest || status == http.StatusUnauthorized {
 				return "", "", 0, &auth.DefiniteAuthError{Err: rerr}
 			}
 			return "", "", 0, rerr
@@ -255,6 +255,11 @@ func (s *Server) AutoEnableMesh(ctx context.Context) {
 			slog.Info("auto-mesh: aborting (no longer authenticated)")
 			return
 		}
+		if !shouldRetryAutoMesh(err) {
+			s.setMeshDegraded(err)
+			slog.Warn("auto-mesh: disabled until an explicit retry", "err", err, "code", apiClient.ErrorCode(err))
+			return
+		}
 		slog.Warn("auto-mesh: enable failed; will retry", "attempt", attempt, "err", err, "backoff", backoff)
 		select {
 		case <-ctx.Done():
@@ -312,11 +317,34 @@ func (s *Server) handleSetTokens(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		if err := s.enableMesh(ctx); err != nil {
+			s.setMeshDegraded(err)
 			slog.Warn("auto-mesh on login failed", "err", err)
 		}
 	}()
 
 	writeJSON(w, map[string]bool{"ok": true})
+}
+
+func shouldRetryAutoMesh(err error) bool {
+	if apiClient.ErrorCode(err) == "origin_country_unavailable" {
+		return false
+	}
+	status := apiClient.ErrorStatus(err)
+	if status >= 400 && status < 500 && status != http.StatusRequestTimeout && status != http.StatusTooManyRequests {
+		return false
+	}
+	return true
+}
+
+func (s *Server) setMeshDegraded(err error) {
+	snapshot := s.agent.Snapshot()
+	meshStatus, _ := snapshot["mesh"].(state.MeshStatus)
+	if meshStatus.Active {
+		return
+	}
+	meshStatus.ErrorCode = apiClient.ErrorCode(err)
+	meshStatus.LastError = apiClient.ErrorMessage(err)
+	s.agent.SetMesh(meshStatus)
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {

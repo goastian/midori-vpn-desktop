@@ -3,6 +3,7 @@ package apiClient
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -92,5 +93,26 @@ func TestClientSendsOriginDerivedFromAPIURL(t *testing.T) {
 
 	if gotOrigin != server.URL {
 		t.Fatalf("Origin header = %q, want %q", gotOrigin, server.URL)
+	}
+}
+
+func TestClientReturnsStructuredAPIError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": false, "code": "origin_country_unavailable", "error": "country lookup unavailable",
+		})
+	}))
+	defer server.Close()
+
+	client := New(server.URL, "test-client-id", func() string { return "token" }, nil)
+	_, err := client.ActivateNode(context.Background())
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("ActivateNode() error = %T %v, want *APIError", err, err)
+	}
+	if apiErr.StatusCode != http.StatusServiceUnavailable || apiErr.Code != "origin_country_unavailable" || apiErr.Message != "country lookup unavailable" {
+		t.Fatalf("unexpected APIError: %+v", apiErr)
 	}
 }

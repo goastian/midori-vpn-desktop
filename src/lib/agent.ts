@@ -73,6 +73,8 @@ export interface MeshStatus {
   exit_node_port?: number
   exit_node_scheme?: string
   peers: MeshPeer[]
+	error_code?: string
+	last_error?: string
 }
 
 export interface ProtectionStatus {

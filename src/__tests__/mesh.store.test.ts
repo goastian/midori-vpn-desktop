@@ -73,6 +73,18 @@ describe('useMeshStore — state machine', () => {
     expect(m.meshState).toBe('enabling')
   })
 
+  it('surfaces a degraded auto-mesh status without claiming it is enabled', () => {
+    const m = useMeshStore()
+    m.applyStatus({
+      active: false, mesh_id: '', mesh_ip: '', public_ip: '', is_exit_node: false,
+      full_tunnel: false, peers: [], error_code: 'origin_country_unavailable',
+      last_error: 'public origin country is temporarily unavailable',
+    })
+    expect(m.meshState).toBe('error')
+    expect(m.enabled).toBe(false)
+    expect(m.error).toBeTruthy()
+  })
+
   it('blocks re-entry while transition is in flight', async () => {
     const m = useMeshStore()
     let resolveEnable!: () => void

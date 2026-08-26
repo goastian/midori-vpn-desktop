@@ -44,6 +44,12 @@ export const useMeshStore = defineStore('mesh', () => {
     // Reconcile state machine with authoritative backend state.
     if (s.active && meshState.value !== 'enabled') {
       meshState.value = 'enabled'
+      error.value = null
+    } else if (!s.active && s.last_error) {
+      meshState.value = 'error'
+      error.value = s.error_code === 'origin_country_unavailable'
+        ? text('errors.meshCountryUnavailable')
+        : s.last_error
     } else if (!s.active && meshState.value !== 'idle') {
       // Covers 'enabled', 'enabling', 'disabling', and 'error' → reset to idle.
       meshState.value = 'idle'
@@ -56,7 +62,7 @@ export const useMeshStore = defineStore('mesh', () => {
       stopRefreshTimer()
     }
 
-    error.value = null
+    if (!s.last_error) error.value = null
   }
 
   function startRefreshTimer() {

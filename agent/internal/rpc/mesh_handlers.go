@@ -22,7 +22,12 @@ import (
 
 func (s *Server) handleMeshEnable(w http.ResponseWriter, r *http.Request) {
 	if err := s.enableMesh(r.Context()); err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+		status := http.StatusBadGateway
+		if apiClient.ErrorCode(err) == "origin_country_unavailable" {
+			status = http.StatusServiceUnavailable
+		}
+		s.setMeshDegraded(err)
+		writeStructuredError(w, status, apiClient.ErrorCode(err), apiClient.ErrorMessage(err))
 		return
 	}
 	// User explicitly enabled mesh — clear any prior "start disabled" pref so

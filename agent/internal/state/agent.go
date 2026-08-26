@@ -39,6 +39,8 @@ type MeshStatus struct {
 	ExitNodePort   int              `json:"exit_node_port,omitempty"`
 	ExitNodeScheme string           `json:"exit_node_scheme,omitempty"`
 	Peers          []apiClient.Peer `json:"peers"`
+	ErrorCode      string           `json:"error_code,omitempty"`
+	LastError      string           `json:"last_error,omitempty"`
 }
 
 type ProtectionStatus struct {
