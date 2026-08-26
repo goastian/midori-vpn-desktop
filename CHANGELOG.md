@@ -9,6 +9,8 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
 - Linux RPM is the sole production artifact. Windows and macOS builds are disabled while their platform agents remain experimental source only.
 - The RPM now declares AGPL-3.0-or-later licensing, publisher, homepage and descriptive metadata; its rootless build workspace is cleared of non-Linux binary artifacts before packaging.
 - The Linux RPM serves the Vue application from the authenticated loopback Go agent and contains no Tauri/WebKitGTK runtime.
+- A Qt 6 tray integration opens that same Vue dashboard, avoiding a second Linux interface. OAuth uses one browser tab: dashboard, Authentik, loopback callback, then dashboard again with the per-tab local session restored.
+- The packaged agent carries the public PKCE identity used by MidoriVPN Control, so normal installations do not require an Authentik configuration file or client secret.
 
 ### Build and validation
 

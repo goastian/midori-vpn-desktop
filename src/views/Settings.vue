@@ -31,6 +31,18 @@
     </div>
 
     <div class="card">
+      <div class="section-title">Inicio de la aplicación</div>
+      <div class="row">
+        <div>
+          <div style="font-size:14px;">Iniciar minimizado en la bandeja</div>
+          <div class="label" style="margin-top:4px;">Al iniciar sesión, oculta la ventana solo si el escritorio ofrece bandeja del sistema.</div>
+        </div>
+        <button class="toggle" :class="{ on: startMinimized }" @click="toggleStartMinimized"></button>
+      </div>
+      <div v-if="uiSettingsError" class="error" style="margin-top:8px;">{{ uiSettingsError }}</div>
+    </div>
+
+    <div class="card">
       <div class="section-title">{{ t('settings.sectionAutoStart') }}</div>
       <div class="row">
         <div>
@@ -108,9 +120,11 @@ const appVersion = __APP_VERSION__
 
 const autostart = ref(false)
 const meshAutoStart = ref(true)
+const startMinimized = ref(false)
 const selectedProtocolPolicy = ref('smart_auto')
 const autostartError = ref<string | null>(null)
 const meshSettingsError = ref<string | null>(null)
+const uiSettingsError = ref<string | null>(null)
 const tokenStoreLabel = ref('—')
 const tokenStoreDegraded = ref(false)
 const rpcPort = ref<number | null>(null)
@@ -134,6 +148,7 @@ async function handleRevertCaps() {
 interface AgentSettings {
   mesh?: { start_disabled?: boolean }
   autostart?: { enabled?: boolean }
+  ui?: { start_minimized?: boolean }
 }
 
 onMounted(async () => {
@@ -153,6 +168,7 @@ onMounted(async () => {
   try {
     const s = await agent.settings.get() as AgentSettings
     meshAutoStart.value = !(s?.mesh?.start_disabled ?? false)
+    startMinimized.value = s?.ui?.start_minimized ?? false
   } catch (e) {
     meshSettingsError.value = toErrorMessage(e)
   }
@@ -186,10 +202,26 @@ async function toggleMeshAutoStart() {
     await agent.settings.put({
       mesh: { start_disabled: !next },
       autostart: { enabled: autostart.value },
+      ui: { start_minimized: startMinimized.value },
     })
     meshAutoStart.value = next
   } catch (e) {
     meshSettingsError.value = toErrorMessage(e)
+  }
+}
+
+async function toggleStartMinimized() {
+  const next = !startMinimized.value
+  uiSettingsError.value = null
+  try {
+    await agent.settings.put({
+      mesh: { start_disabled: !meshAutoStart.value },
+      autostart: { enabled: autostart.value },
+      ui: { start_minimized: next },
+    })
+    startMinimized.value = next
+  } catch (e) {
+    uiSettingsError.value = toErrorMessage(e)
   }
 }
 </script>

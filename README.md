@@ -1,6 +1,6 @@
 # MidoriVPN Desktop 2.0.0
 
-The production Linux client is a native Go 1.27 agent plus a Vue UI served on authenticated loopback. The RPM does not compile or ship Tauri, GTK3 or WebKitGTK. Windows and macOS source remains in `src-tauri` and platform files, but those targets are blocked from CI and release until certified.
+The production Linux client is a native Go 1.27 agent plus a Qt 6 tray integration. The dashboard is the same authenticated Vue UI served by the local agent at `127.0.0.1`, so the Linux experience matches the existing client instead of maintaining a second UI. It works across X11 and Wayland desktops, offers a tray menu when the desktop exposes one, and never links Tauri, GTK3 or WebKitGTK. Windows and macOS source remains in `src-tauri` and platform files, but those targets are blocked from CI and release until certified.
 
 ## Linux transports
 
@@ -42,7 +42,7 @@ cd midori-vpn-desktop
 RPM_SIGNING_KEY_ID=<local-key-fingerprint> bash scripts/build-rpm.sh
 ```
 
-The builder compiles the Linux Vue bundle and Go agent, creates the RPM and signs it. Output is written only to `dist-packages/`.
+The builder compiles the Qt tray shell, the Go agent and the authenticated Vue loopback UI, creates the RPM and signs it. Output is written only to `dist-packages/`.
 
 ## Verify and install
 
@@ -64,12 +64,23 @@ Runtime dependencies are declared in `packaging/midori-vpn.spec` and include Wir
 ## Runtime checks
 
 ```bash
-systemctl status midorivpn-agent.service
-getcap /usr/libexec/midorivpn-agent
+# The launcher starts the native tray integration, which owns one local agent,
+# keeps RPC on loopback, and opens the Vue dashboard in the default browser.
+midorivpn-desktop
+```
+
+While the launcher is running, an unauthenticated local status request must
+return `403`:
+
+```bash
 curl -i http://127.0.0.1:7071/status
 ```
 
-An unauthenticated local status request must return `403`. The installed launcher opens the agent-served UI in the default browser and supplies the session through the protected bootstrap flow.
+The dashboard and OAuth flow open in the default browser. The tray integration
+reads the per-session local token from a `0600` runtime file; the agent must not
+bind outside `127.0.0.1`. Its “Salir y desconectar” action restores the network
+state. The start-minimized option uses the system tray when it is available;
+without a tray the dashboard opens normally.
 
 ## Benchmarks
 
@@ -79,7 +90,8 @@ An unauthenticated local status request must return `403`. The installed launche
 
 ```text
 agent/                 privileged Go networking agent
-src/                   Vue browser-shell UI
+desktop-qt/            Qt 6 native Linux tray integration
+src/                   retained authenticated loopback UI
 packaging/             RPM spec, policy, MAC and maintainer files
 scripts/build-rpm.sh   rootless production package pipeline
 src-tauri/             retained non-Linux source; excluded from Linux RPM

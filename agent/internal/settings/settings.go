@@ -1,12 +1,13 @@
 // Package settings persists user-controlled agent preferences to a JSON file
 // at $XDG_CONFIG_HOME/midorivpn/settings.json.
 //
-// Used today for two switches the user explicitly requested:
+// Used today for three switches the user explicitly requested:
 //   - Mesh.StartDisabled: when true, the agent does NOT auto-enable the
 //     mesh node on startup. Default false (mesh is always-on).
 //   - Autostart.Enabled: tracks whether the user opted out of XDG autostart.
-//     The actual XDG entry is managed by the Tauri side; we keep the bit
-//     here so the agent can mirror it through SSE for the UI.
+//     The actual XDG entry is managed by the desktop shell.
+//   - UI.StartMinimized: starts the Qt desktop shell in the system tray when
+//     the desktop environment exposes one.
 package settings
 
 import (
@@ -23,6 +24,7 @@ import (
 type Settings struct {
 	Mesh      MeshSettings      `json:"mesh"`
 	Autostart AutostartSettings `json:"autostart"`
+	UI        UISettings        `json:"ui"`
 }
 
 type MeshSettings struct {
@@ -37,11 +39,16 @@ type AutostartSettings struct {
 	Enabled bool `json:"enabled"`
 }
 
+type UISettings struct {
+	StartMinimized bool `json:"start_minimized"`
+}
+
 // defaults returns the product-mandated defaults.
 func defaults() Settings {
 	return Settings{
 		Mesh:      MeshSettings{StartDisabled: false},
 		Autostart: AutostartSettings{Enabled: true},
+		UI:        UISettings{StartMinimized: false},
 	}
 }
 

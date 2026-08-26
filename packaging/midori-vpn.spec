@@ -17,13 +17,15 @@ Requires:       polkit
 Requires:       /usr/bin/ip
 Requires:       wireguard-tools
 Requires:       xdg-utils
+# Qt shared-library capabilities are derived automatically from the tray
+# executable. Do not hard-code distribution-specific Qt package names.
 Recommends:     checkpolicy
 Recommends:     policycoreutils
 
 %description
 MidoriVPN is the Linux client for secure WireGuard and authenticated
 WireGuard-over-WebSocket connections. The package includes a native Go agent
-and a browser-based local UI bound exclusively to loopback.
+and a Qt 6 system-tray integration that opens the authenticated Vue dashboard.
 
 %prep
 
@@ -46,6 +48,7 @@ install -d %{buildroot}/etc/midorivpn
 install -d %{buildroot}/etc/apparmor.d
 
 install -m 0755 %{source_dir}/agent/target/release/agent %{buildroot}/usr/libexec/midorivpn-agent
+install -m 0755 %{source_dir}/desktop-qt/build/midorivpn-desktop-ui %{buildroot}/usr/libexec/midorivpn-desktop-ui
 install -m 0755 %{source_dir}/packaging/midorivpn-launcher %{buildroot}/usr/bin/midorivpn-desktop
 install -m 0755 %{source_dir}/scripts/benchmark-transports.sh %{buildroot}/usr/bin/midorivpn-benchmark
 cp -a %{source_dir}/dist/. %{buildroot}/usr/share/midorivpn/ui/
@@ -74,6 +77,7 @@ install -m 0644 %{source_dir}/packaging/apparmor/usr.libexec.midorivpn-agent %{b
 /usr/bin/midorivpn-desktop
 /usr/bin/midorivpn-benchmark
 /usr/libexec/midorivpn-agent
+/usr/libexec/midorivpn-desktop-ui
 /usr/share/applications/midorivpn.desktop
 /usr/share/doc/midori-vpn/config.env.example
 /usr/share/icons/hicolor/32x32/apps/midorivpn.png

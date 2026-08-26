@@ -49,7 +49,7 @@ func installedCapabilitiesGranted() bool {
 		return false
 	}
 	text := string(out)
-	for _, capability := range []string{"cap_net_admin", "cap_net_raw", "cap_dac_override", "cap_linux_immutable"} {
+	for _, capability := range []string{"cap_net_admin", "cap_net_raw"} {
 		if !strings.Contains(text, capability) {
 			return false
 		}
@@ -57,7 +57,14 @@ func installedCapabilitiesGranted() bool {
 	return true
 }
 
-func setInstalledCapabilities(_ bool) (bool, error) {
+func capabilitySet(extended bool) string {
+	if extended {
+		return "cap_net_admin,cap_net_raw,cap_dac_override,cap_linux_immutable=ep"
+	}
+	return "cap_net_admin,cap_net_raw=ep"
+}
+
+func setInstalledCapabilities(extended bool) (bool, error) {
 	setcap, err := findExecutable("/usr/sbin/setcap", "/sbin/setcap", "/usr/bin/setcap", "/bin/setcap")
 	if err != nil {
 		return false, err
@@ -70,8 +77,7 @@ func setInstalledCapabilities(_ bool) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	capabilitySet := "cap_net_admin,cap_net_raw,cap_dac_override,cap_linux_immutable=ep"
-	cmd := exec.Command(pkexec, setcap, capabilitySet, target)
+	cmd := exec.Command(pkexec, setcap, capabilitySet(extended), target)
 	if output, runErr := cmd.CombinedOutput(); runErr != nil {
 		return false, fmt.Errorf("set capabilities: %w: %s", runErr, strings.TrimSpace(string(output)))
 	}
@@ -138,11 +144,10 @@ func setAutostart(enabled bool, port int, uiDir string) error {
 		}
 		return nil
 	}
-	executable, err := currentExecutable()
-	if err != nil {
-		return err
-	}
-	execArg, err := quoteDesktopArg(executable)
+	// The autostart entry must launch the desktop shell, not this networking
+	// agent. The shell owns the user-visible window and starts the agent with
+	// --background after the graphical session is ready.
+	execArg, err := quoteDesktopArg("/usr/bin/midorivpn-desktop")
 	if err != nil {
 		return err
 	}
@@ -150,7 +155,7 @@ func setAutostart(enabled bool, port int, uiDir string) error {
 	if err != nil {
 		return err
 	}
-	body := fmt.Sprintf("[Desktop Entry]\nType=Application\nName=MidoriVPN\nComment=Start MidoriVPN at login\nExec=%s --port %d --ui-dir %s --background\nIcon=midorivpn\nTerminal=false\nCategories=Network;Security;\nStartupNotify=false\nX-GNOME-Autostart-enabled=true\nX-MidoriVPN-Managed=true\n", execArg, port, uiArg)
+	body := fmt.Sprintf("[Desktop Entry]\nType=Application\nName=MidoriVPN\nComment=Start MidoriVPN at login\nExec=%s --port %d --ui-dir %s --autostart\nIcon=midorivpn\nTerminal=false\nCategories=Network;Security;\nStartupNotify=false\nX-GNOME-Autostart-enabled=true\nX-MidoriVPN-Managed=true\n", execArg, port, uiArg)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}

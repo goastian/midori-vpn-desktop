@@ -16,8 +16,8 @@ fi
 
 # Release output is generated material. A clean directory prevents an older
 # RPM from being distributed when the current build fails or changes version.
-rm -rf -- "$ROOT_DIR/dist-packages" "$ROOT_DIR/src-tauri/target/release/bundle/rpm"
-mkdir -p "$ROOT_DIR/dist-packages" "$ROOT_DIR/src-tauri/target/release/bundle/rpm"
+rm -rf -- "$ROOT_DIR/dist-packages" "$ROOT_DIR/desktop-qt/build"
+mkdir -p "$ROOT_DIR/dist-packages"
 
 echo "==> Construyendo imagen midorivpn-rpm-builder..."
 podman build -t midorivpn-rpm-builder -f "$ROOT_DIR/packaging/Containerfile.rpm" "$ROOT_DIR/packaging"
@@ -35,6 +35,7 @@ podman run --rm --userns=keep-id:uid=0,gid=0 \
   cd /app && \
   npm ci && \
   npm run build:linux && \
+  npm run build:qt-shell && \
   npm run build-agent:host && \
   mkdir -p /tmp/rpmbuild/RPMS /tmp/rpmbuild/BUILD /tmp/rpmbuild/BUILDROOT /tmp/rpmbuild/SOURCES /tmp/rpmbuild/SPECS /tmp/rpmbuild/SRPMS && \
   rpmbuild -bb --define '_topdir /tmp/rpmbuild' --define 'source_dir /app' --define 'license_file /project-license' /app/packaging/midori-vpn.spec && \

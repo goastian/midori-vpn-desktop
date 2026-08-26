@@ -4,6 +4,7 @@ describe('browser agent client', () => {
   beforeEach(() => {
     vi.resetModules()
     Reflect.deleteProperty(window, '__TAURI_INTERNALS__')
+    sessionStorage.clear()
     window.history.replaceState(null, '', '/#/?agent_token=browser-secret')
   })
 
@@ -22,6 +23,7 @@ describe('browser agent client', () => {
 
     expect(tauriRuntime).toBe(false)
     expect(window.location.hash).toBe('')
+    expect(sessionStorage.getItem('midorivpn.agent_token')).toBe('browser-secret')
     expect(fetchMock).toHaveBeenCalledWith('/status', expect.objectContaining({
       method: 'GET',
       credentials: 'omit',
@@ -33,5 +35,20 @@ describe('browser agent client', () => {
     window.history.replaceState(null, '', '/')
     const { initAgentToken } = await import('./agent')
     await expect(initAgentToken()).rejects.toThrow('local_ui_session_missing')
+  })
+
+  it('restores the session token after the OAuth callback returns to this tab', async () => {
+    sessionStorage.setItem('midorivpn.agent_token', 'browser-secret')
+    window.history.replaceState(null, '', '/')
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { agent, initAgentToken } = await import('./agent')
+    await initAgentToken()
+    await agent.status()
+
+    expect(fetchMock).toHaveBeenCalledWith('/status', expect.objectContaining({
+      headers: expect.objectContaining({ 'X-Agent-Token': 'browser-secret' }),
+    }))
   })
 })

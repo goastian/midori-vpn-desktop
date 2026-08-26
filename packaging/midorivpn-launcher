@@ -8,9 +8,11 @@ die() {
 
 LAUNCHER_CONFIG="/etc/midorivpn/launcher.env"
 AGENT_BINARY="/usr/libexec/midorivpn-agent"
+DESKTOP_BINARY="/usr/libexec/midorivpn-desktop-ui"
 
 [[ -r "$LAUNCHER_CONFIG" ]] || die "missing launcher configuration: $LAUNCHER_CONFIG"
 [[ -x "$AGENT_BINARY" ]] || die "missing MidoriVPN agent: $AGENT_BINARY"
+[[ -x "$DESKTOP_BINARY" ]] || die "missing MidoriVPN desktop shell: $DESKTOP_BINARY"
 
 set -a
 # shellcheck source=/dev/null
@@ -20,8 +22,8 @@ set +a
 : "${MIDORIVPN_AGENT_PORT:?MIDORIVPN_AGENT_PORT is required in launcher.env}"
 : "${MIDORIVPN_UI_DIR:?MIDORIVPN_UI_DIR is required in launcher.env}"
 
-exec "$AGENT_BINARY" \
+exec "$DESKTOP_BINARY" \
+	--agent "$AGENT_BINARY" \
   --port "$MIDORIVPN_AGENT_PORT" \
   --ui-dir "$MIDORIVPN_UI_DIR" \
-  --open-ui \
   "$@"

@@ -61,7 +61,7 @@
       "../agent/target/release/agent": "agent",
       "polkit/org.astian.midorivpn.policy": "polkit/org.astian.midorivpn.policy",
       "polkit/49-midorivpn.rules": "polkit/49-midorivpn.rules",
-      "../packaging/apparmor/usr.local.bin.midorivpn-agent": "apparmor/usr.local.bin.midorivpn-agent",
+      "../packaging/apparmor/usr.libexec.midorivpn-agent": "apparmor/usr.libexec.midorivpn-agent",
       "../packaging/selinux/midorivpn.te": "selinux/midorivpn.te",
       "../packaging/selinux/midorivpn.fc": "selinux/midorivpn.fc",
       "../packaging/autostart/midorivpn.desktop": "autostart/midorivpn.desktop",
@@ -77,7 +77,7 @@
         "files": {
           "/usr/share/polkit-1/actions/org.astian.midorivpn.policy": "polkit/org.astian.midorivpn.policy",
           "/etc/polkit-1/rules.d/49-midorivpn.rules": "polkit/49-midorivpn.rules",
-          "/etc/apparmor.d/usr.local.bin.midorivpn-agent": "../packaging/apparmor/usr.local.bin.midorivpn-agent",
+          "/etc/apparmor.d/usr.libexec.midorivpn-agent": "../packaging/apparmor/usr.libexec.midorivpn-agent",
           "/usr/share/midorivpn/selinux/midorivpn.te": "../packaging/selinux/midorivpn.te",
           "/usr/share/midorivpn/selinux/midorivpn.fc": "../packaging/selinux/midorivpn.fc"
         },

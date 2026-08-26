@@ -12,6 +12,7 @@
 
 export const tauriRuntime = !__LINUX_BROWSER_SHELL__ && '__TAURI_INTERNALS__' in window
 let browserAgentToken = ''
+const browserTokenStorageKey = 'midorivpn.agent_token'
 
 function loadBrowserAgentToken(): void {
   if (tauriRuntime || browserAgentToken) return
@@ -19,7 +20,13 @@ function loadBrowserAgentToken(): void {
   const fragment = new URLSearchParams(hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : hash)
   browserAgentToken = fragment.get('agent_token') ?? ''
   if (browserAgentToken) {
+    // OAuth leaves and later returns to this same local origin. Keep the
+    // per-agent token only for this browser tab so the dashboard can resume
+    // after the callback without opening another tab or exposing a query key.
+    sessionStorage.setItem(browserTokenStorageKey, browserAgentToken)
     window.history.replaceState(null, '', window.location.pathname + window.location.search)
+  } else {
+    browserAgentToken = sessionStorage.getItem(browserTokenStorageKey) ?? ''
   }
 }
 
@@ -227,8 +234,9 @@ export async function invokePlatform<T>(command: string, args: Record<string, un
       return browserRequest<T>('POST', 'system/autostart', { enabled: Boolean(args.enabled) })
     case 'open_oauth_url': {
       const raw = String(args.url ?? '')
-      const opened = window.open(raw, '_blank', 'noopener,noreferrer')
-      if (!opened) throw new Error('oauth_popup_blocked')
+      // The browser shell has a single working tab. Navigating it preserves
+      // the user journey: dashboard → Authentik → loopback callback → dashboard.
+      window.location.assign(raw)
       return undefined as T
     }
     default:
@@ -445,4 +453,5 @@ export interface DnsStatus {
 export interface UserSettings {
   mesh?: { start_disabled?: boolean }
   autostart?: { enabled?: boolean }
+  ui?: { start_minimized?: boolean }
 }

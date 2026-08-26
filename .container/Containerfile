@@ -1,7 +1,13 @@
-FROM fedora:latest
+FROM docker.io/library/node:24.19.0-bookworm-slim AS node
+
+FROM docker.io/library/fedora:44
+
+COPY --from=node /usr/local /usr/local
+
+RUN npm install --global npm@12.0.2
 
 RUN dnf install -y --setopt=install_weak_deps=False \
-    bash cargo clippy clang gcc-c++ git golang make nodejs npm openssl-devel \
+    bash cargo clippy clang gcc-c++ git golang make openssl-devel \
     rpm-build rust webkit2gtk4.1-devel libayatana-appindicator3-devel \
     librsvg2-devel rustfmt && \
     dnf clean all
@@ -9,5 +15,6 @@ RUN dnf install -y --setopt=install_weak_deps=False \
 RUN cargo install cargo-audit --locked
 
 ENV GOTOOLCHAIN=auto \
+    PATH=/usr/local/bin:$PATH \
     npm_config_cache=/tmp/npm-cache
 WORKDIR /workspace

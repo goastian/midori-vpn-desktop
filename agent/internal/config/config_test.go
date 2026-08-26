@@ -6,14 +6,13 @@ import (
 	"testing"
 )
 
-func TestDefaultEmptyAPIURL(t *testing.T) {
-	// Ensure no stray env var overrides the test.
-	t.Setenv("API_URL", "")
-
-	var cfg Config
-	applyEnv(&cfg)
-	if cfg.APIURL != "" {
-		t.Fatalf("unconfigured APIURL = %q, want empty", cfg.APIURL)
+func TestProductionConfigIsComplete(t *testing.T) {
+	cfg := productionConfig()
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("production configuration must be usable without a config file: %v", err)
+	}
+	if cfg.APIURL != "https://vpn.dorrejo.com" {
+		t.Fatalf("production APIURL = %q", cfg.APIURL)
 	}
 }
 

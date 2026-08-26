@@ -1,10 +1,11 @@
 // Package config loads layered runtime configuration for the agent.
 //
 // Resolution order (later wins):
-//  1. Local .env/config.env files for development.
-//  2. /etc/midorivpn/config.env (system-wide packaged deployment).
-//  3. $XDG_CONFIG_HOME/midorivpn/config.env (per-user override).
-//  4. Process environment variables.
+//  1. The public production identity used by MidoriVPN Control.
+//  2. Local .env/config.env files for development.
+//  3. /etc/midorivpn/config.env (system-wide deployment override).
+//  4. $XDG_CONFIG_HOME/midorivpn/config.env (per-user override).
+//  5. Process environment variables.
 //
 // Keys mirror the browser extension (.env) so admins can use the same
 // vocabulary across components: API_URL, AUTHENTIK_*, ACCOUNT_URL.
@@ -40,7 +41,7 @@ type Config struct {
 //  3. $XDG_CONFIG_HOME/midorivpn/config.env (user-specific)
 //  4. Process environment variables (highest priority)
 func Load() Config {
-	var cfg Config
+	cfg := productionConfig()
 
 	// Local directory .env and config.env
 	applyDotenv(&cfg, ".env")
@@ -58,6 +59,25 @@ func Load() Config {
 	applyEnv(&cfg)
 
 	return cfg
+}
+
+// productionConfig contains public OIDC metadata only. It intentionally holds
+// no client secret: this is the same PKCE public client and provider metadata
+// discovered by MidoriVPN Control. Packaged desktops therefore work without a
+// per-machine configuration file while development/deployment overrides remain
+// available through the normal precedence chain.
+func productionConfig() Config {
+	return Config{
+		APIURL:               "https://vpn.dorrejo.com",
+		AccountURL:           "https://vpn.dorrejo.com",
+		AuthentikIssuer:      "https://accounts.astian.org/",
+		AuthentikClientID:    "Wbc5hsIaK6kDp4cCFvzTtgAnEc5qNfWWARMmYXTn",
+		AuthentikAuthURL:     "https://accounts.astian.org/application/o/authorize/",
+		AuthentikTokenURL:    "https://accounts.astian.org/application/o/token/",
+		AuthentikUserinfoURL: "https://accounts.astian.org/application/o/userinfo/",
+		AuthentikJWKSURL:     "https://accounts.astian.org/application/o/elrealplatano/jwks/",
+		AuthentikRedirectURI: "http://127.0.0.1:7071/oauth/callback",
+	}
 }
 
 // userConfigPath returns $XDG_CONFIG_HOME/midorivpn/config.env or

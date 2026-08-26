@@ -44,6 +44,7 @@
     "check": "npm run typecheck && npm run lint && npm test && npm run build",
     "build": "npm run typecheck && vite build",
     "build:linux": "npm run typecheck && MIDORIVPN_LINUX_BROWSER_SHELL=1 vite build",
+    "build:qt-shell": "bash scripts/build-qt-shell.sh",
     "preview": "vite preview",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",

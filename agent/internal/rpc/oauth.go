@@ -244,14 +244,19 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	writeOAuthSuccess(w, r, username)
+}
+
+func writeOAuthSuccess(w http.ResponseWriter, r *http.Request, username string) {
 	if r.Header.Get("Accept") == "application/json" {
 		writeJSON(w, map[string]any{"ok": true, "message": "logged_in", "username": username})
 		return
 	}
 
-	// Reply with a formatted success page that closes itself.
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprint(w, `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>MidoriVPN</title></head><body style="background:#020617;color:#f8fafc;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div style="text-align:center;padding:2rem;background:#0f172a;border-radius:1rem;border:1px solid #1e293b;"><h2 style="color:#10b981;margin-top:0;">¡Inicio de sesión exitoso!</h2><p style="color:#e2e8f0;">Has iniciado sesión en MidoriVPN Desktop.</p><p style="color:#94a3b8;font-size:0.9rem;">Ya puedes cerrar esta pestaña y regresar a la aplicación.</p></div><script>setTimeout(() => window.close(), 1500);</script></body></html>`)
+	// Return the same browser tab to the local dashboard with an HTTP redirect.
+	// The per-tab agent token remains in sessionStorage and never appears in the
+	// callback URL, response body, process arguments or persistent storage.
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 // jwtEmail extracts email / preferred_username / sub from the id_token payload.
