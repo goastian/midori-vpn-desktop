@@ -13,6 +13,7 @@ Requires:       e2fsprogs
 Requires:       jq
 Requires:       libcap-progs
 Requires:       nftables
+Requires:       openvpn >= 2.7
 Requires:       polkit
 Requires:       /usr/bin/ip
 Requires:       wireguard-tools
@@ -23,9 +24,10 @@ Recommends:     checkpolicy
 Recommends:     policycoreutils
 
 %description
-MidoriVPN is the Linux client for secure WireGuard and authenticated
-WireGuard-over-WebSocket connections. The package includes a native Go agent
-and a Qt 6 system-tray integration that opens the authenticated Vue dashboard.
+MidoriVPN is the Linux client for secure WireGuard, authenticated encapsulated
+transports and certificate-based OpenVPN 2.7/DCO gateways. The package includes
+a native Go agent and a Qt 6 system-tray integration that opens the
+authenticated Vue dashboard.
 
 %prep
 
@@ -90,3 +92,4 @@ install -m 0644 %{source_dir}/packaging/apparmor/usr.libexec.midorivpn-agent %{b
 %changelog
 * Sun Aug 23 2026 Astian, Inc. <support@astian.org> - 2.0.0-1
 - Replace the Linux GTK3 shell with the native agent and authenticated loopback UI.
+- Add device-owned certificate enrollment and a DCO-required OpenVPN 2.7 client.

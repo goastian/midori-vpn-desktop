@@ -1,9 +1,11 @@
 package apiClient
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +13,33 @@ import (
 
 	"github.com/goastian/midorivpn-agent/internal/config"
 )
+
+func TestEnrollDeviceCertificateSendsCSRWithoutPrivateKey(t *testing.T) {
+	var requestBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/control/certificates" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		requestBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "data": map[string]any{
+			"certificate": map[string]any{
+				"id": "cert-one", "server_id": "server-one", "device_name": "linux-one",
+				"certificate_pem": "CERT", "not_before": "2026-01-01T00:00:00Z", "not_after": "2026-02-01T00:00:00Z",
+			},
+			"ca_certificate_pem": "CA",
+		}})
+	}))
+	defer server.Close()
+	client := New(server.URL, "client", func() string { return "token" }, nil)
+	result, err := client.EnrollDeviceCertificate(context.Background(), "server-one", "linux-one", "CSR")
+	if err != nil || result.Certificate.ID != "cert-one" {
+		t.Fatalf("EnrollDeviceCertificate() = %+v, %v", result, err)
+	}
+	if !bytes.Contains(requestBody, []byte(`"csr_pem":"CSR"`)) || bytes.Contains(bytes.ToLower(requestBody), []byte("private")) {
+		t.Fatalf("unsafe enrollment request body: %s", requestBody)
+	}
+}
 
 func TestOriginFromBaseURL(t *testing.T) {
 	tests := []struct {

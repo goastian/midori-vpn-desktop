@@ -17,6 +17,8 @@ import (
 	"github.com/goastian/midorivpn-agent/internal/auth"
 	"github.com/goastian/midorivpn-agent/internal/caps"
 	"github.com/goastian/midorivpn-agent/internal/config"
+	"github.com/goastian/midorivpn-agent/internal/devicepki"
+	"github.com/goastian/midorivpn-agent/internal/dns"
 	"github.com/goastian/midorivpn-agent/internal/netguard"
 	"github.com/goastian/midorivpn-agent/internal/proxy"
 	"github.com/goastian/midorivpn-agent/internal/settings"
@@ -40,6 +42,11 @@ type Server struct {
 	proxyCtx  context.CancelFunc
 	localFwd  *proxy.LocalForwarder
 	apiClient *apiClient.Client
+	devicePKI *devicepki.Store
+
+	externalDNSMu      sync.Mutex
+	externalDNS        dns.Backend
+	externalDNSApplied bool
 
 	// Resolved runtime configuration (defaults + dotenv overrides + env).
 	cfg config.Config
@@ -175,6 +182,12 @@ func NewServer(ag *state.Agent, port int) *Server {
 		_, err := s.authMgr.SoftRefreshNow(ctx)
 		return err
 	})
+	devicePKI, err := devicepki.NewStore()
+	if err != nil {
+		slog.Warn("secure device certificate storage unavailable", "err", err)
+	} else {
+		s.devicePKI = devicePKI
+	}
 	s.loadServersCacheFromDisk()
 	return s
 }
@@ -360,15 +373,17 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	s.connectSeq++ // invalidate any superseded connect that beat the cancel
 	s.connectMu.Unlock()
 
-	// Disconnect VPN if connected.
-	if s.wgMgr.IsConnected() {
-		snap := s.agent.Snapshot()
-		if vpn, ok := snap["vpn"].(state.VPNStatus); ok && vpn.Connected {
+	// Disconnect any active VPN transport.
+	snap := s.agent.Snapshot()
+	if vpn, ok := snap["vpn"].(state.VPNStatus); ok && vpn.Connected {
+		if vpn.PeerID != "" {
 			_ = s.apiClient.DeleteConnection(ctx, vpn.PeerID)
 		}
-		s.wgMgr.Disconnect()
-		_ = s.guard.Disable()
 	}
+	s.closeTransportRelay()
+	s.restoreExternalDNS()
+	s.wgMgr.Disconnect()
+	_ = s.guard.Disable()
 
 	// Clean up mesh.
 	_ = s.apiClient.DeleteAutoMesh(ctx)

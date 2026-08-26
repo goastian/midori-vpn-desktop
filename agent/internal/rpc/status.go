@@ -23,9 +23,10 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	snap["kill_switch"] = map[string]any{
 		"active": s.guard.Active(),
 	}
-	snap["dns_protected"] = s.wgMgr.DNSProtected()
-	snap["dns_backend"] = s.wgMgr.DNSBackendKind().String()
-	snap["dns_needs_extra_caps"] = s.wgMgr.DNSBackendKind().NeedsExtraCaps()
+	dnsKind, dnsProtected := s.currentDNSStatus()
+	snap["dns_protected"] = dnsProtected
+	snap["dns_backend"] = dnsKind.String()
+	snap["dns_needs_extra_caps"] = dnsKind.NeedsExtraCaps()
 	authBackend := "unknown"
 	if s.authMgr != nil {
 		authBackend = s.authMgr.Backend()

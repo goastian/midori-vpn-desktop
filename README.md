@@ -8,8 +8,9 @@ The production Linux client is a native Go 1.27 agent plus a Qt 6 tray integrati
 - WireGuard over authenticated WSS.
 - WireGuard over authenticated RFC 9298 MASQUE/HTTP3 CONNECT-UDP.
 - Smart selection ordered by server priority and accepted only after a real WireGuard handshake.
+- OpenVPN 2.7 with an AEAD-only profile and mandatory verification that the established Linux interface uses DCO. It is exposed only for a server capability marked healthy.
 
-The client never invents endpoints or marks a requested protocol connected without its handshake. OpenVPN and IKEv2 are not selectable until their real gateways and Linux adapters are available.
+The client never invents endpoints or marks a requested protocol connected without its handshake. IKEv2 remains unavailable until its strongSwan 6 gateway and Linux adapter are certified.
 
 ## Security model
 
@@ -17,6 +18,7 @@ The client never invents endpoints or marks a requested protocol connected witho
 - Local RPC listens only on loopback and requires the per-session `X-Agent-Token` in every build.
 - Tokens use the OS secret service where available; permissions and degraded storage are visible to the UI.
 - WireGuard private keys are generated locally.
+- OpenVPN device keys are generated locally as ECDSA P-256 keys and persisted only in Secret Service. Core receives a CSR, never the private key; native client files exist only in the mode-`0700` user runtime directory and are removed on disconnect.
 - Kill switch, route pinning and DNS state are installed only for the selected endpoint and are restored on disconnect.
 - WSS/MASQUE use short-lived tokens bound to the active peer and server.
 
@@ -59,7 +61,7 @@ sudo dnf install ./dist-packages/midori-vpn-2.0.0-1.x86_64.rpm
 
 Use the distribution package manager for the actual install so runtime dependencies are resolved. Do not bypass a failed RPM signature.
 
-Runtime dependencies are declared in `packaging/midori-vpn.spec` and include WireGuard tools, nftables, policy kit, capabilities, IP routing utilities and browser launch support. There are no GTK/WebKit dependencies.
+Runtime dependencies are declared in `packaging/midori-vpn.spec` and include WireGuard tools, OpenVPN 2.7, nftables, policy kit, capabilities, IP routing utilities and browser launch support. There are no GTK/WebKit dependencies.
 
 ## Runtime checks
 

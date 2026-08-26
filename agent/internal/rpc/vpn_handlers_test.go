@@ -52,3 +52,24 @@ func TestSelectTransportCandidatesRejectsDegradedAndInvalidEndpoints(t *testing.
 		t.Fatalf("unexpected candidates: %#v", candidates)
 	}
 }
+
+func TestTransportDNSAcceptsStringAndArray(t *testing.T) {
+	for _, metadata := range []map[string]interface{}{
+		{"dns": "10.8.0.1, 10.8.0.2"},
+		{"dns": []interface{}{"10.8.0.1", "10.8.0.2"}},
+	} {
+		got := transportDNS(metadata)
+		if len(got) != 2 || got[0] != "10.8.0.1" || got[1] != "10.8.0.2" {
+			t.Fatalf("transportDNS(%#v) = %#v", metadata, got)
+		}
+	}
+}
+
+func TestOpenVPNCandidateUsesHandshakeTimeout(t *testing.T) {
+	candidates := selectTransportCandidates([]apiClient.TransportCapability{{
+		Protocol: "openvpn", Host: "vpn.example.test", Port: 1194, Enabled: true, HealthStatus: "healthy",
+	}}, "openvpn")
+	if len(candidates) != 1 || candidates[0].timeout != 30*time.Second {
+		t.Fatalf("OpenVPN candidates = %#v", candidates)
+	}
+}

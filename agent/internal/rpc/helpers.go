@@ -103,8 +103,12 @@ func isDNSPermissionError(err error) bool {
 }
 
 func (s *Server) netguardScope(endpoint, assignedIP string) netguard.Scope {
+	return s.netguardScopeForInterface(s.wgMgr.InterfaceName(), endpoint, assignedIP)
+}
+
+func (s *Server) netguardScopeForInterface(iface, endpoint, assignedIP string) netguard.Scope {
 	scope := netguard.Scope{
-		TunnelIface: s.wgMgr.InterfaceName(),
+		TunnelIface: iface,
 		Endpoint:    endpoint,
 		APIURL:      s.apiURL,
 		AssignedIP:  assignedIP,

@@ -152,6 +152,24 @@ type TunnelCredentials struct {
 	ExpiresIn   int    `json:"expires_in"`
 }
 
+// DeviceCertificate is the public portion of a certificate issued for one
+// local device. Private keys are generated and retained by the desktop agent.
+type DeviceCertificate struct {
+	ID              string    `json:"id"`
+	ServerID        string    `json:"server_id"`
+	DeviceName      string    `json:"device_name"`
+	SerialNumber    string    `json:"serial_number"`
+	CertificatePEM  string    `json:"certificate_pem"`
+	PublicKeySHA256 string    `json:"public_key_sha256"`
+	NotBefore       time.Time `json:"not_before"`
+	NotAfter        time.Time `json:"not_after"`
+}
+
+type DeviceCertificateEnrollment struct {
+	Certificate      DeviceCertificate `json:"certificate"`
+	CACertificatePEM string            `json:"ca_certificate_pem"`
+}
+
 // MeshNode is the mesh node status from the backend.
 type MeshNode struct {
 	Active   bool   `json:"active"`
@@ -218,6 +236,25 @@ func (c *Client) TunnelCredentials(ctx context.Context, peerID string) (*TunnelC
 		return nil, err
 	}
 	return &credentials, nil
+}
+
+// EnrollDeviceCertificate submits only a CSR. The corresponding private key
+// must never be included in this or any other backend request.
+func (c *Client) EnrollDeviceCertificate(ctx context.Context, serverID, deviceName, csrPEM string) (*DeviceCertificateEnrollment, error) {
+	body := map[string]string{
+		"server_id":   serverID,
+		"device_name": deviceName,
+		"csr_pem":     csrPEM,
+	}
+	var enrollment DeviceCertificateEnrollment
+	if err := c.post(ctx, "/api/v1/control/certificates", body, &enrollment); err != nil {
+		return nil, err
+	}
+	return &enrollment, nil
+}
+
+func (c *Client) RevokeDeviceCertificate(ctx context.Context, certificateID string) error {
+	return c.delete(ctx, "/api/v1/control/certificates/"+url.PathEscape(certificateID))
 }
 
 // ListConnections returns the user's active VPN connections.

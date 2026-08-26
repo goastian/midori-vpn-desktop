@@ -100,6 +100,51 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "not authenticated: please sign in")
 		return
 	}
+	if current, ok := s.agent.Snapshot()["vpn"].(state.VPNStatus); ok && current.Connected {
+		writeStructuredError(w, http.StatusConflict, "ERR_VPN_ALREADY_CONNECTED", "Desconecta el túnel actual antes de iniciar otro.")
+		return
+	}
+
+	// Resolve and validate the requested transport before provisioning any
+	// protocol-specific credential. In particular, certificate transports must
+	// never create an unrelated WireGuard peer as a side effect.
+	servers, err := s.apiClient.ListServers(ctx)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "list servers: "+err.Error())
+		return
+	}
+	var server *apiClient.Server
+	for i := range servers {
+		if servers[i].ID == req.ServerID {
+			server = &servers[i]
+			break
+		}
+	}
+	if server == nil {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	if req.Protocol != "wireguard" && req.Protocol != "smart_auto" && req.Protocol != "wss" && req.Protocol != "masque" && req.Protocol != "openvpn" && req.Protocol != "ikev2" {
+		writeStructuredError(w, http.StatusBadRequest, "ERR_TRANSPORT_UNAVAILABLE", "El transporte solicitado no está disponible en este servidor.")
+		return
+	}
+	candidates := selectTransportCandidates(server.Transports, req.Protocol)
+	if len(candidates) == 0 {
+		writeStructuredError(w, http.StatusBadRequest, "ERR_TRANSPORT_UNAVAILABLE", "No hay transportes saludables disponibles en este servidor.")
+		return
+	}
+	if req.Protocol == "openvpn" {
+		s.handleOpenVPNConnect(w, ctx, server, candidates[0], mySeq)
+		return
+	}
+	if req.Protocol == "ikev2" {
+		writeStructuredError(w, http.StatusNotImplemented, "ERR_TRANSPORT_UNAVAILABLE", "IKEv2 todavía no está certificado en este cliente.")
+		return
+	}
+	if !server.SupportsWireGuard {
+		writeError(w, http.StatusBadRequest, "server does not support WireGuard full tunnel")
+		return
+	}
 
 	// Generate WireGuard and ML-KEM-768 keypairs locally. Private key material
 	// never leaves the client process.
@@ -134,36 +179,6 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if connCfg.PresharedKey != "" {
 		isPostQuantum = true
-	}
-
-	// Get server details.
-	servers, err := s.apiClient.ListServers(ctx)
-	if err != nil {
-		writeError(w, http.StatusBadGateway, "list servers: "+err.Error())
-		return
-	}
-	var server *apiClient.Server
-	for i := range servers {
-		if servers[i].ID == req.ServerID {
-			server = &servers[i]
-			break
-		}
-	}
-	if server == nil {
-		// Peer was registered but we cannot find the server — roll back.
-		_ = s.apiClient.DeleteConnection(cleanupCtx, connCfg.PeerID)
-		writeError(w, http.StatusNotFound, "server not found")
-		return
-	}
-	if !server.SupportsWireGuard {
-		_ = s.apiClient.DeleteConnection(cleanupCtx, connCfg.PeerID)
-		writeError(w, http.StatusBadRequest, "server does not support WireGuard full tunnel")
-		return
-	}
-	if req.Protocol != "wireguard" && req.Protocol != "smart_auto" && req.Protocol != "wss" && req.Protocol != "masque" {
-		_ = s.apiClient.DeleteConnection(cleanupCtx, connCfg.PeerID)
-		writeStructuredError(w, http.StatusBadRequest, "ERR_TRANSPORT_UNAVAILABLE", "El transporte solicitado no está disponible en este servidor.")
-		return
 	}
 
 	// Prefer public host for server identification; fallback to endpoint
@@ -201,13 +216,6 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		AssignedIP:   assignedIP,
 		DNS:          dnsServers,
 		MTU:          1280,
-	}
-
-	candidates := selectTransportCandidates(server.Transports, req.Protocol)
-	if len(candidates) == 0 {
-		_ = s.apiClient.DeleteConnection(cleanupCtx, connCfg.PeerID)
-		writeStructuredError(w, http.StatusBadRequest, "ERR_TRANSPORT_UNAVAILABLE", "No hay transportes saludables disponibles en este servidor.")
-		return
 	}
 
 	activeProtocol := ""
@@ -384,6 +392,7 @@ func (s *Server) handleVPNDisconnect(w http.ResponseWriter, r *http.Request) {
 	}
 	// Disconnect locally and respond immediately — don't block on cloud API.
 	s.closeTransportRelay()
+	s.restoreExternalDNS()
 	s.wgMgr.Disconnect()
 	_ = s.guard.Disable()
 	s.agent.SetVPN(state.VPNStatus{Connected: false})
@@ -426,6 +435,8 @@ func selectTransportCandidates(transports []apiClient.TransportCapability, reque
 		timeout := 5 * time.Second
 		if protocol == "wireguard" {
 			timeout = 1500 * time.Millisecond
+		} else if protocol == "openvpn" || protocol == "ikev2" {
+			timeout = 30 * time.Second
 		}
 		return vpnTransportCandidate{protocol: protocol, host: transport.Host, port: transport.Port, priority: transport.Priority, metadata: transport.Metadata, timeout: timeout}, true
 	}
@@ -510,6 +521,16 @@ func (s *Server) stopVPNStatsLoop() {
 
 func (s *Server) updateVPNByteCounters() {
 	tx, rx, ok := s.wgMgr.ByteCounters()
+	if !ok {
+		s.relayMu.Lock()
+		counter, supportsCounters := s.transportRelay.(interface {
+			ByteCounters() (int64, int64, bool)
+		})
+		s.relayMu.Unlock()
+		if supportsCounters {
+			tx, rx, ok = counter.ByteCounters()
+		}
+	}
 	if !ok {
 		return
 	}

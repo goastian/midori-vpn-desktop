@@ -27,6 +27,8 @@ profile midorivpn-agent /usr/libexec/midorivpn-agent {
   owner /run/user/[0-9]*/midorivpn-agent.lock rwk,
   owner /run/user/[0-9]*/midorivpn-agent.token rwk,
   owner /run/user/[0-9]*/midorivpn-launch.html rwk,
+  owner /run/user/[0-9]*/midorivpn-pki-*/ rw,
+  owner /run/user/[0-9]*/midorivpn-pki-*/** rwk,
 
   /usr/sbin/iptables rix,
   /usr/sbin/ip6tables rix,
@@ -37,6 +39,7 @@ profile midorivpn-agent /usr/libexec/midorivpn-agent {
   /usr/bin/firewall-cmd rix,
   /usr/sbin/ufw rix,
   /usr/sbin/nft rix,
+  /usr/sbin/openvpn rix,
   /usr/bin/resolvectl rix,
   /bin/resolvectl rix,
   /usr/bin/chattr rix,
@@ -57,4 +60,5 @@ profile midorivpn-agent /usr/libexec/midorivpn-agent {
   /proc/meminfo r,
   /proc/stat r,
   /proc/self/** r,
+  /sys/class/net/midorivpn-ovpn/statistics/* r,
 }
