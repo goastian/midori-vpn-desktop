@@ -42,12 +42,13 @@ type Config struct {
 }
 
 type Client struct {
-	charon     *exec.Cmd
-	charonDone chan error
-	files      *devicepki.RuntimeFiles
-	swanctl    string
-	configPath string
-	closeOnce  sync.Once
+	charon            *exec.Cmd
+	charonDone        chan error
+	files             *devicepki.RuntimeFiles
+	swanctl           string
+	configPath        string
+	swanctlConfigPath string
+	closeOnce         sync.Once
 }
 
 func Start(ctx context.Context, config Config) (*Client, error) {
@@ -62,15 +63,16 @@ func Start(ctx context.Context, config Config) (*Client, error) {
 	if err != nil {
 		return nil, errors.New("strongSwan swanctl is not installed")
 	}
-	if err := requireVersion(ctx, charonPath); err != nil {
-		return nil, err
-	}
 	files, err := config.Credential.Materialize()
 	if err != nil {
 		return nil, err
 	}
 	client := &Client{files: files, swanctl: swanctlPath, charonDone: make(chan error, 1)}
 	if err := client.prepareRuntime(config); err != nil {
+		client.Close()
+		return nil, err
+	}
+	if err := requireVersion(ctx, charonPath, client.configPath); err != nil {
 		client.Close()
 		return nil, err
 	}
@@ -91,7 +93,7 @@ func Start(ctx context.Context, config Config) (*Client, error) {
 		client.Close()
 		return nil, err
 	}
-	if _, err := client.runSwanctl(ctx, config.Timeout, "--load-all"); err != nil {
+	if _, err := client.runSwanctl(ctx, config.Timeout, "--load-all", "--file", client.swanctlConfigPath); err != nil {
 		client.Close()
 		return nil, fmt.Errorf("load strongSwan connection: %w", err)
 	}
@@ -160,9 +162,9 @@ func (c *Client) prepareRuntime(config Config) error {
 		}
 	}
 	configPath := filepath.Join(c.files.Directory, "strongswan.conf")
-	swanctlPath := filepath.Join(c.files.Directory, "swanctl.conf")
+	swanctlPath := filepath.Join(credentialRoot, "swanctl.conf")
 	viciSocket := filepath.Join(c.files.Directory, "charon.vici")
-	strongswanConfig := buildStrongSwanConfig(viciSocket, credentialRoot)
+	strongswanConfig := buildStrongSwanConfig(viciSocket)
 	swanctlConfig := buildSwanctlConfig(config)
 	if err := os.WriteFile(configPath, []byte(strongswanConfig), 0o600); err != nil {
 		return fmt.Errorf("write strongSwan runtime configuration: %w", err)
@@ -171,10 +173,11 @@ func (c *Client) prepareRuntime(config Config) error {
 		return fmt.Errorf("write swanctl runtime configuration: %w", err)
 	}
 	c.configPath = configPath
+	c.swanctlConfigPath = swanctlPath
 	return nil
 }
 
-func buildStrongSwanConfig(viciSocket, credentialRoot string) string {
+func buildStrongSwanConfig(viciSocket string) string {
 	return fmt.Sprintf(`charon {
   load_modular = no
   load = random nonce x509 revocation constraints pubkey pem openssl pkcs1 pkcs8 gmp kdf gcm drbg kernel-netlink socket-default vici eap-identity eap-tls
@@ -191,9 +194,8 @@ func buildStrongSwanConfig(viciSocket, credentialRoot string) string {
 }
 swanctl {
   socket = unix://%s
-  load_creds = %s
 }
-`, interfaceName, viciSocket, viciSocket, credentialRoot)
+`, interfaceName, viciSocket, viciSocket)
 }
 
 func buildSwanctlConfig(config Config) string {
@@ -351,10 +353,12 @@ func setNetworkCapsInheritable() {
 	_ = unix.Capset(&header, &data[0])
 }
 
-func requireVersion(ctx context.Context, binary string) error {
+func requireVersion(ctx context.Context, binary, configPath string) error {
 	versionCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	output, err := exec.CommandContext(versionCtx, binary, "--version").CombinedOutput()
+	command := exec.CommandContext(versionCtx, binary, "--version")
+	command.Env = append(os.Environ(), "STRONGSWAN_CONF="+configPath)
+	output, err := command.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("read strongSwan version: %w", err)
 	}

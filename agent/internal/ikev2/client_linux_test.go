@@ -3,6 +3,9 @@
 package ikev2
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -32,7 +35,7 @@ func TestBuildSwanctlConfigUsesEAPTLSAndXFRM(t *testing.T) {
 }
 
 func TestBuildStrongSwanConfigUsesRandomPortsAndPrivateVICI(t *testing.T) {
-	generated := buildStrongSwanConfig("/run/user/1000/test/charon.vici", "/run/user/1000/test/swanctl")
+	generated := buildStrongSwanConfig("/run/user/1000/test/charon.vici")
 	for _, required := range []string{
 		"initiator_only = yes", "port = 0", "port_nat_t = 0",
 		"install_routes_xfrmi = yes", "install_virtual_ip_on = midorivpn-ike",
@@ -41,6 +44,23 @@ func TestBuildStrongSwanConfigUsesRandomPortsAndPrivateVICI(t *testing.T) {
 		if !strings.Contains(generated, required) {
 			t.Errorf("strongSwan configuration omits %q", required)
 		}
+	}
+}
+
+func TestRequireVersionUsesPrivateConfiguration(t *testing.T) {
+	directory := t.TempDir()
+	configPath := filepath.Join(directory, "strongswan.conf")
+	if err := os.WriteFile(configPath, []byte("charon {}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("EXPECTED_CONFIG", configPath)
+	binary := filepath.Join(directory, "charon")
+	script := "#!/bin/sh\n[ \"$STRONGSWAN_CONF\" = \"$EXPECTED_CONFIG\" ] || exit 2\n[ -r \"$STRONGSWAN_CONF\" ] || exit 3\necho 'strongSwan 6.0.7'\n"
+	if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := requireVersion(context.Background(), binary, configPath); err != nil {
+		t.Fatalf("requireVersion() error = %v", err)
 	}
 }
 
