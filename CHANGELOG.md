@@ -15,6 +15,8 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
 - Device certificate private keys are generated as ECDSA P-256 keys in the agent, stored only in Secret Service and submitted to Core exclusively as CSRs. Invalid or unpersistable enrollments fail closed and are revoked.
 - The Linux agent includes a real OpenVPN 2.7 adapter with an AEAD-only TLS 1.3 profile, certificate-name validation, handshake detection, DNS/kill-switch integration, runtime credential cleanup and mandatory DCO interface verification. It remains server-health gated until the gateway E2E is certified.
 - The Linux agent includes a private strongSwan 6 client for IKEv2 EAP-TLS. It reuses the device-owned certificate, creates an isolated VICI runtime and XFRM interface, loads `swanctl.conf` and credentials explicitly from that private directory, validates the gateway DNS identity, and integrates assigned IP, DNS, kill switch, counters and deterministic cleanup without creating a persistent system profile.
+- WireGuard full-tunnel teardown now removes its temporary endpoint `/32` route and restores any route that existed before connection, preventing stale host-route state after disconnect or failed setup.
+- MASQUE now supplies the implicit HTTPS port `443` to the QUIC dialer when a standards-compliant URI template omits it, allowing external CONNECT-UDP sessions to start correctly.
 - Settings exposes explicit OpenVPN and IKEv2 choices only for already healthy/certified server capabilities; Smart Auto remains limited to the currently certified WireGuard family until transport E2E is complete.
 
 ### Build and validation

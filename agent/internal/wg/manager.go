@@ -46,8 +46,11 @@ type Manager struct {
 	tunDev        tun.Device
 	cfg           *Config
 	defaultRoutes []string
+	endpointRoute string
+	endpointSaved []string
 	dnsBackend    dns.Backend
 	dnsApplied    bool
+	ipCommand     func(...string) error
 	// saved sysctl values restored on disconnect
 	rpFilterSaved map[string]string
 }
@@ -311,13 +314,13 @@ func (m *Manager) assignAddr(tdev tun.Device, cidr string, mtu int) error {
 	// Bring the link up explicitly before assigning the address. device.Up()
 	// starts the WireGuard engine, but Linux routing tools still expect the
 	// netdev itself to be UP.
-	if err := runIP("link", "set", "dev", name, "up", "mtu", strconv.Itoa(mtu)); err != nil {
+	if err := m.runIP("link", "set", "dev", name, "up", "mtu", strconv.Itoa(mtu)); err != nil {
 		return fmt.Errorf("set link up: %w", err)
 	}
 
 	// Use replace instead of add so reconnects recover from a stale address left
 	// by a previous agent crash or failed attempt.
-	return runIP("addr", "replace", cidr, "dev", name)
+	return m.runIP("addr", "replace", cidr, "dev", name)
 }
 
 func (m *Manager) configureSystemTunnel(tdev tun.Device, cfg *Config) error {
@@ -353,14 +356,14 @@ func (m *Manager) configureSystemTunnel(tdev tun.Device, cfg *Config) error {
 
 	for _, line := range m.defaultRoutes {
 		args := append([]string{"route", "del"}, strings.Fields(line)...)
-		_ = runIP(args...)
+		_ = m.runIP(args...)
 	}
-	if err := runIP("route", "replace", "default", "dev", name); err != nil {
+	if err := m.runIP("route", "replace", "default", "dev", name); err != nil {
 		m.restoreSystemTunnel()
 		return fmt.Errorf("replace default route: %w", err)
 	}
 	// Best-effort IPv6 default via tunnel (suppresses AAAA leaks outside tunnel).
-	_ = runIP("-6", "route", "replace", "default", "dev", name)
+	_ = m.runIP("-6", "route", "replace", "default", "dev", name)
 
 	slog.Info("dns: config has DNS servers", "count", len(cfg.DNS), "servers", logredact.IPs(cfg.DNS))
 	if len(cfg.DNS) > 0 {
@@ -409,12 +412,22 @@ func (m *Manager) pinEndpointRoute(endpoint string) error {
 	if dev == "" {
 		return fmt.Errorf("could not parse endpoint route %q", route)
 	}
-	args := []string{"route", "replace", endpointIP.String() + "/32"}
+	endpointRoute := endpointIP.String() + "/32"
+	existing, err := outputIP("route", "show", endpointRoute)
+	if err != nil {
+		return fmt.Errorf("save endpoint route: %w", err)
+	}
+	args := []string{"route", "replace", endpointRoute}
 	if via != "" {
 		args = append(args, "via", via)
 	}
 	args = append(args, "dev", dev)
-	return runIP(args...)
+	if err := m.runIP(args...); err != nil {
+		return err
+	}
+	m.endpointRoute = endpointRoute
+	m.endpointSaved = splitNonEmptyLines(existing)
+	return nil
 }
 
 func resolveEndpoint(endpoint string, lookupIP func(string) ([]net.IP, error)) (string, net.IP, error) {
@@ -457,23 +470,44 @@ func (m *Manager) restoreSystemTunnel() {
 
 	if m.tunDev != nil {
 		if name, err := m.tunDev.Name(); err == nil && name != "" {
-			_ = runIP("route", "del", "default", "dev", name)
-			_ = runIP("-6", "route", "del", "default", "dev", name)
+			_ = m.runIP("route", "del", "default", "dev", name)
+			_ = m.runIP("-6", "route", "del", "default", "dev", name)
 		}
 	}
 	for _, line := range m.defaultRoutes {
 		args := append([]string{"route", "replace"}, strings.Fields(line)...)
-		if err := runIP(args...); err != nil {
+		if err := m.runIP(args...); err != nil {
 			slog.Warn("wg: failed to restore default route", "route", line, "err", err)
 		}
 	}
 	m.defaultRoutes = nil
+
+	if m.endpointRoute != "" {
+		if err := m.runIP("route", "del", m.endpointRoute); err != nil {
+			slog.Warn("wg: failed to remove endpoint route", "route", m.endpointRoute, "err", err)
+		}
+		for _, line := range m.endpointSaved {
+			args := append([]string{"route", "replace"}, strings.Fields(line)...)
+			if err := m.runIP(args...); err != nil {
+				slog.Warn("wg: failed to restore endpoint route", "route", line, "err", err)
+			}
+		}
+	}
+	m.endpointRoute = ""
+	m.endpointSaved = nil
 
 	// Restore rp_filter values saved before tunnel setup.
 	for key, val := range m.rpFilterSaved {
 		_ = sysctlSet(key, val)
 	}
 	m.rpFilterSaved = nil
+}
+
+func (m *Manager) runIP(args ...string) error {
+	if m.ipCommand != nil {
+		return m.ipCommand(args...)
+	}
+	return runIP(args...)
 }
 
 func splitNonEmptyLines(s string) []string {

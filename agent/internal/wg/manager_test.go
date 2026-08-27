@@ -5,6 +5,7 @@ package wg
 import (
 	"errors"
 	"net"
+	"reflect"
 	"testing"
 )
 
@@ -87,5 +88,30 @@ func TestIPCHasHandshakeRejectsMissingInvalidAndZeroTimestamps(t *testing.T) {
 		if ipcHasHandshake(state) {
 			t.Fatalf("unexpected handshake in state %q", state)
 		}
+	}
+}
+
+func TestRestoreSystemTunnelRemovesTemporaryEndpointRoute(t *testing.T) {
+	var commands [][]string
+	manager := &Manager{
+		endpointRoute: "192.0.2.10/32",
+		endpointSaved: []string{"192.0.2.10 via 192.0.2.1 dev eth0 metric 50"},
+		ipCommand: func(arguments ...string) error {
+			commands = append(commands, append([]string(nil), arguments...))
+			return nil
+		},
+	}
+
+	manager.restoreSystemTunnel()
+
+	want := [][]string{
+		{"route", "del", "192.0.2.10/32"},
+		{"route", "replace", "192.0.2.10", "via", "192.0.2.1", "dev", "eth0", "metric", "50"},
+	}
+	if !reflect.DeepEqual(commands, want) {
+		t.Fatalf("restore commands = %#v, want %#v", commands, want)
+	}
+	if manager.endpointRoute != "" || manager.endpointSaved != nil {
+		t.Fatal("endpoint route state was not cleared")
 	}
 }

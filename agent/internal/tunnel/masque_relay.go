@@ -64,6 +64,13 @@ func StartMasqueRelay(ctx context.Context, proxyTemplate, target, token string) 
 			ServerName: proxyURL.Hostname(),
 		},
 		QUICConfig: &quic.Config{EnableDatagrams: true, InitialPacketSize: 1350},
+		// masque-go passes URL.Host directly to quic.DialAddr. Unlike an HTTP
+		// client, quic.DialAddr doesn't infer the default port for an HTTPS URL,
+		// so templates such as https://vpn.example/masque must explicitly be
+		// normalized to host:443 at the transport boundary.
+		DialAddr: func(dialCtx context.Context, _ string, tlsConf *tls.Config, quicConf *quic.Config) (*quic.Conn, error) {
+			return quic.DialAddr(dialCtx, masqueProxyAddress(proxyURL), tlsConf, quicConf)
+		},
 	}
 
 	type dialResult struct {
@@ -100,6 +107,13 @@ func StartMasqueRelay(ctx context.Context, proxyTemplate, target, token string) 
 	relay := &MasqueRelay{udp: udp, conn: result.conn, cancel: cancel, done: make(chan struct{})}
 	go relay.run(relayCtx)
 	return relay, udp.LocalAddr().String(), nil
+}
+
+func masqueProxyAddress(proxyURL *url.URL) string {
+	if proxyURL.Port() != "" {
+		return proxyURL.Host
+	}
+	return net.JoinHostPort(proxyURL.Hostname(), "443")
 }
 
 func (r *MasqueRelay) Close() {
