@@ -52,6 +52,15 @@ public:
     auto *quitAction = trayMenu.addAction(QStringLiteral("Salir y desconectar"));
     connect(quitAction, &QAction::triggered, this, &DesktopController::shutdown);
     connect(&trayMenu, &QMenu::aboutToShow, this, &DesktopController::refreshTray);
+    // The browser dashboard can request /app/quit directly from the child
+    // agent. Keep the shell and agent as one lifecycle: once the owned agent
+    // exits (cleanly or fatally), remove the tray instead of leaving an
+    // orphaned desktop process behind.
+    connect(&agent, &QProcess::finished, this, [this](int, QProcess::ExitStatus) {
+      poll.stop();
+      tray.hide();
+      QTimer::singleShot(0, &app, &QCoreApplication::quit);
+    });
   }
 
   void start() { startAgent(); waitForAgent(); }

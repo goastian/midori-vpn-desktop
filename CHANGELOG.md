@@ -17,6 +17,7 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
 - The Linux agent includes a private strongSwan 6 client for IKEv2 EAP-TLS. It reuses the device-owned certificate, creates an isolated VICI runtime and XFRM interface, loads `swanctl.conf` and credentials explicitly from that private directory, validates the gateway DNS identity, and integrates assigned IP, DNS, kill switch, counters and deterministic cleanup without creating a persistent system profile.
 - WireGuard full-tunnel teardown now removes its temporary endpoint `/32` route and restores any route that existed before connection, preventing stale host-route state after disconnect or failed setup.
 - MASQUE now supplies the implicit HTTPS port `443` to the QUIC dialer when a standards-compliant URI template omits it, allowing external CONNECT-UDP sessions to start correctly.
+- The Qt tray now follows the lifecycle of its owned agent, so closing MidoriVPN from the Vue dashboard cannot leave an orphaned desktop shell running.
 - Settings exposes explicit OpenVPN and IKEv2 choices only for already healthy/certified server capabilities; Smart Auto remains limited to the currently certified WireGuard family until transport E2E is complete.
 
 ### Build and validation
