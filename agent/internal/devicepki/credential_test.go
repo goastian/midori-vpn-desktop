@@ -74,6 +74,23 @@ func TestCredentialValidationAndRuntimePermissions(t *testing.T) {
 	}
 }
 
+func TestCredentialValidationAcceptsOnlyX509PrecisionDifference(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	request, err := NewRequest("linux-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	credential := issueTestCredential(t, request, "fd2649e9-bc30-47e4-9ea8-9f06d320e5e1", now)
+	credential.NotAfter = credential.NotAfter.Add(731 * time.Millisecond)
+	if err := credential.Validate("server-one", now); err != nil {
+		t.Fatalf("Validate() rejected subsecond JSON/X.509 precision difference: %v", err)
+	}
+	credential.NotAfter = credential.NotAfter.Add(time.Second)
+	if err := credential.Validate("server-one", now); err == nil {
+		t.Fatal("Validate() accepted a material certificate expiry mismatch")
+	}
+}
+
 func issueTestCredential(t *testing.T, request *Request, id string, now time.Time) Credential {
 	t.Helper()
 	caKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

@@ -100,7 +100,11 @@ func (c *Credential) Validate(expectedServerID string, now time.Time) error {
 	if c.Identity != expectedIdentity {
 		return errors.New("stored device identity is invalid")
 	}
-	if !c.NotAfter.Equal(cert.NotAfter) {
+	// X.509 validity is encoded with second precision. Older Core versions
+	// returned the pre-encoding timestamp (including fractional seconds) in
+	// enrollment JSON, so compare at the precision actually signed into the
+	// certificate while still rejecting any material metadata mismatch.
+	if !c.NotAfter.UTC().Truncate(time.Second).Equal(cert.NotAfter.UTC().Truncate(time.Second)) {
 		return errors.New("stored certificate expiry is invalid")
 	}
 	return nil
