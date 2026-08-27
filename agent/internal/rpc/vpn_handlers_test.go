@@ -73,3 +73,12 @@ func TestOpenVPNCandidateUsesHandshakeTimeout(t *testing.T) {
 		t.Fatalf("OpenVPN candidates = %#v", candidates)
 	}
 }
+
+func TestIKEv2CandidateUsesHandshakeTimeout(t *testing.T) {
+	candidates := selectTransportCandidates([]apiClient.TransportCapability{{
+		Protocol: "ikev2", Host: "vpn.example.test", Port: 500, Enabled: true, HealthStatus: "healthy",
+	}}, "ikev2")
+	if len(candidates) != 1 || candidates[0].timeout != 30*time.Second {
+		t.Fatalf("IKEv2 candidates = %#v", candidates)
+	}
+}

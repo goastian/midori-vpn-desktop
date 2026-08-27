@@ -14,6 +14,7 @@ Requires:       jq
 Requires:       libcap-progs
 Requires:       nftables
 Requires:       openvpn >= 2.7
+Requires:       strongswan >= 6.0
 Requires:       polkit
 Requires:       /usr/bin/ip
 Requires:       wireguard-tools
@@ -25,7 +26,7 @@ Recommends:     policycoreutils
 
 %description
 MidoriVPN is the Linux client for secure WireGuard, authenticated encapsulated
-transports and certificate-based OpenVPN 2.7/DCO gateways. The package includes
+transports, OpenVPN 2.7/DCO and strongSwan 6/IKEv2 EAP-TLS gateways. The package includes
 a native Go agent and a Qt 6 system-tray integration that opens the
 authenticated Vue dashboard.
 
@@ -93,3 +94,4 @@ install -m 0644 %{source_dir}/packaging/apparmor/usr.libexec.midorivpn-agent %{b
 * Sun Aug 23 2026 Astian, Inc. <support@astian.org> - 2.0.0-1
 - Replace the Linux GTK3 shell with the native agent and authenticated loopback UI.
 - Add device-owned certificate enrollment and a DCO-required OpenVPN 2.7 client.
+- Add a private strongSwan 6 client with EAP-TLS and an XFRM interface.

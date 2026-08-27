@@ -24,8 +24,10 @@
         <select v-model="selectedProtocolPolicy" class="select-field" @change="saveProtocolPolicy">
           <option value="smart_auto">Smart Auto (Recomendado)</option>
           <option value="wireguard">Forzar WireGuard (UDP 51820)</option>
-		  <option value="wss">Forzar WireGuard sobre WSS (TLS 443, si está disponible)</option>
+          <option value="wss">Forzar WireGuard sobre WSS (TLS 443, si está disponible)</option>
           <option value="masque">Forzar WireGuard sobre MASQUE (HTTP/3 UDP 443, si está disponible)</option>
+          <option value="openvpn">Forzar OpenVPN 2.7/DCO (UDP 1194, si está certificado)</option>
+          <option value="ikev2">Forzar IKEv2/EAP-TLS (UDP 500/4500, si está certificado)</option>
         </select>
       </div>
     </div>

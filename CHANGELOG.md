@@ -14,6 +14,8 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
 - Auto-Mesh recognizes Core's `origin_country_unavailable` degraded state, stops retrying permanent failures, and reports the condition in the Vue dashboard instead of logging once per minute forever.
 - Device certificate private keys are generated as ECDSA P-256 keys in the agent, stored only in Secret Service and submitted to Core exclusively as CSRs. Invalid or unpersistable enrollments fail closed and are revoked.
 - The Linux agent includes a real OpenVPN 2.7 adapter with an AEAD-only TLS 1.3 profile, certificate-name validation, handshake detection, DNS/kill-switch integration, runtime credential cleanup and mandatory DCO interface verification. It remains server-health gated until the gateway E2E is certified.
+- The Linux agent includes a private strongSwan 6 client for IKEv2 EAP-TLS. It reuses the device-owned certificate, creates an isolated VICI runtime and XFRM interface, validates the gateway DNS identity, and integrates assigned IP, DNS, kill switch, counters and deterministic cleanup without creating a persistent system profile.
+- Settings exposes explicit OpenVPN and IKEv2 choices only for already healthy/certified server capabilities; Smart Auto remains limited to the currently certified WireGuard family until transport E2E is complete.
 
 ### Build and validation
 
@@ -28,7 +30,7 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
 - **WSS autenticado y verificable**: WireGuard puede usar un relay WSS con token efímero ligado a usuario, dispositivo y servidor; solo se ofrece cuando el servidor lo anuncia explícitamente.
 - **MASQUE RFC 9298 real**: el agente usa HTTP/3 CONNECT-UDP, TLS 1.3 y datagramas QUIC para transportar WireGuard, con MTU y ruta pública específicos.
 - **Smart con handshakes reales**: la selección automática prueba WireGuard, WSS y MASQUE por prioridad y solo acepta un transporte después del handshake WireGuard.
-- **Protocolos honestos**: OpenVPN solo aparece con capacidad saludable y ejecuta un túnel DCO real; IKEv2 permanece fuera de la selección mientras no exista un gateway y cliente certificados.
+- **Protocolos honestos**: OpenVPN e IKEv2 solo aparecen con capacidad saludable y certificada, y ambos completan un handshake nativo real antes de declarar conexión.
 - **Código simulado retirado**: Se eliminaron los adaptadores internos no conectados de OpenVPN DCO, IKEv2, MASQUE, TLS ofuscado, selector Smart y benchmarks estimados; ya no pueden confundirse con soporte de producción.
 - **Seguridad de agente**: el token local es obligatorio en todas las compilaciones; se retiró el build tag de bypass de desarrollo y se corrigió el cierre concurrente de relays.
 

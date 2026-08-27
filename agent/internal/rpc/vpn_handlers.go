@@ -138,7 +138,7 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Protocol == "ikev2" {
-		writeStructuredError(w, http.StatusNotImplemented, "ERR_TRANSPORT_UNAVAILABLE", "IKEv2 todavía no está certificado en este cliente.")
+		s.handleIKEv2Connect(w, ctx, server, candidates[0], mySeq)
 		return
 	}
 	if !server.SupportsWireGuard {

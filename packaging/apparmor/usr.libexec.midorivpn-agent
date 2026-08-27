@@ -40,6 +40,12 @@ profile midorivpn-agent /usr/libexec/midorivpn-agent {
   /usr/sbin/ufw rix,
   /usr/sbin/nft rix,
   /usr/sbin/openvpn rix,
+  /usr/libexec/ipsec/charon rix,
+  /usr/lib/ipsec/charon rix,
+  /usr/sbin/swanctl rix,
+  /usr/bin/swanctl rix,
+  /etc/strongswan.d/** r,
+  /usr/lib64/ipsec/** mr,
   /usr/bin/resolvectl rix,
   /bin/resolvectl rix,
   /usr/bin/chattr rix,
@@ -61,4 +67,5 @@ profile midorivpn-agent /usr/libexec/midorivpn-agent {
   /proc/stat r,
   /proc/self/** r,
   /sys/class/net/midorivpn-ovpn/statistics/* r,
+  /sys/class/net/midorivpn-ike/statistics/* r,
 }
