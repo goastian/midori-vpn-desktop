@@ -4,6 +4,7 @@ package ikev2
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -91,5 +92,17 @@ func TestBoundedOutputRetainsLatestDiagnostics(t *testing.T) {
 	}
 	if got := output.String(); got != "defghijk" {
 		t.Fatalf("String() after oversized write = %q", got)
+	}
+}
+
+func TestWithCharonDiagnosticPreservesCause(t *testing.T) {
+	client := &Client{charonOutput: newBoundedOutput(64)}
+	_, _ = client.charonOutput.Write([]byte("IKE_SA retransmit 3"))
+	err := client.withCharonDiagnostic(context.DeadlineExceeded)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("diagnostic error no longer wraps deadline: %v", err)
+	}
+	if !strings.Contains(err.Error(), "IKE_SA retransmit 3") {
+		t.Fatalf("diagnostic missing from error: %v", err)
 	}
 }

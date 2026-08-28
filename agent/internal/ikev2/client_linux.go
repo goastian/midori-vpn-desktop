@@ -345,12 +345,27 @@ func (c *Client) runSwanctl(parent context.Context, timeout time.Duration, argum
 	command.Env = append(os.Environ(), "STRONGSWAN_CONF="+c.configPath)
 	output, err := command.CombinedOutput()
 	if ctx.Err() != nil {
-		return "", ctx.Err()
+		return "", c.withCharonDiagnostic(ctx.Err())
 	}
 	if err != nil {
-		return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(string(output)))
+		commandOutput := strings.TrimSpace(string(output))
+		if commandOutput == "" {
+			return "", c.withCharonDiagnostic(err)
+		}
+		return "", c.withCharonDiagnostic(fmt.Errorf("%w: %s", err, commandOutput))
 	}
 	return string(output), nil
+}
+
+func (c *Client) withCharonDiagnostic(err error) error {
+	if c.charonOutput == nil {
+		return err
+	}
+	diagnostic := c.charonOutput.String()
+	if diagnostic == "" {
+		return err
+	}
+	return fmt.Errorf("%w: %s", err, diagnostic)
 }
 
 func (c *Client) waitForAssignedIP(ctx context.Context, timeout time.Duration) error {
