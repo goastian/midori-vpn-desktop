@@ -65,6 +65,10 @@ func Start(ctx context.Context, config Config) (*Client, error) {
 	managementSocket := filepath.Join(files.Directory, "management.sock")
 	args := buildArgs(config, files, managementSocket)
 	client.cmd = exec.Command(openvpnPath, args...)
+	if err := setNetworkCapsInheritable(); err != nil {
+		_ = files.Close()
+		return nil, fmt.Errorf("prepare OpenVPN network capabilities: %w", err)
+	}
 	client.cmd.SysProcAttr = &syscall.SysProcAttr{AmbientCaps: []uintptr{unix.CAP_NET_ADMIN, unix.CAP_NET_RAW}}
 	reader, writer, err := os.Pipe()
 	if err != nil {
@@ -110,6 +114,17 @@ func Start(ctx context.Context, config Config) (*Client, error) {
 		client.Close()
 		return nil, errors.New("OpenVPN handshake timed out")
 	}
+}
+
+func setNetworkCapsInheritable() error {
+	var header unix.CapUserHeader
+	header.Version = unix.LINUX_CAPABILITY_VERSION_3
+	var data [2]unix.CapUserData
+	if err := unix.Capget(&header, &data[0]); err != nil {
+		return err
+	}
+	data[0].Inheritable |= 1<<unix.CAP_NET_ADMIN | 1<<unix.CAP_NET_RAW
+	return unix.Capset(&header, &data[0])
 }
 
 func validateConfig(config Config) error {

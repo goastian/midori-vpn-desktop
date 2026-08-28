@@ -49,7 +49,7 @@ func installedCapabilitiesGranted() bool {
 		return false
 	}
 	text := string(out)
-	for _, capability := range []string{"cap_net_admin", "cap_net_raw"} {
+	for _, capability := range []string{"cap_net_admin", "cap_net_raw", "cap_dac_override", "cap_linux_immutable"} {
 		if !strings.Contains(text, capability) {
 			return false
 		}

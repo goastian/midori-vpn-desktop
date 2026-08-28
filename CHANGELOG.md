@@ -21,6 +21,11 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
 - The Qt tray now follows the lifecycle of its owned agent, so closing MidoriVPN from the Vue dashboard cannot leave an orphaned desktop shell running.
 - Device-certificate validation accepts only the subsecond precision loss inherent to X.509 time encoding, while continuing to reject material expiry mismatches.
 - Settings exposes explicit OpenVPN and IKEv2 choices only for already healthy/certified server capabilities; Smart Auto remains limited to the currently certified WireGuard family until transport E2E is complete.
+- The Qt shell enforces one Desktop/tray instance, prioritizes the packaged MidoriVPN icon, localizes tray actions from the selected UI language, and reuses the active dashboard when launched again.
+- Permission elevation restarts the agent in background mode and reconnects the existing dashboard instead of opening another browser tab. The single permission prompt now requires the complete network and DNS capability set.
+- Settings removes internal agent ports and duplicated startup cards, localizes the transport strategy, shows only the selected transport explanation, and greys out transports that no healthy server advertises.
+- The agent persists the original resolver state before changing `/etc/resolv.conf`, restores it after an unclean prior exit, and receives `SIGTERM` when its owning Qt shell disappears.
+- Privileged Linux child processes now receive only their required ambient capabilities: nftables firewall rules, OpenVPN, NAT cleanup/iptables fallback and resolver immutability no longer lose the agent's file capabilities across `exec`.
 
 ### Build and validation
 

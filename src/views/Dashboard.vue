@@ -152,9 +152,6 @@
       @request="grantCapsSmart"
     />
 
-    <!-- DNS protection trigger: only on systems without systemd-resolved -->
-    <DnsProtectionCard />
-
     <!-- Auth card (sign-in or signed-in session) -->
     <AuthSection @authenticated="onAuthenticated" />
   </div>
@@ -172,7 +169,6 @@ import { formatBytes } from '../lib/format'
 import LanguageSelect from '../components/LanguageSelect.vue'
 import AuthSection from '../components/dashboard/AuthSection.vue'
 import PermissionsTriggerCard from '../components/dashboard/PermissionsTriggerCard.vue'
-import DnsProtectionCard from '../components/dashboard/DnsProtectionCard.vue'
 import ErrorAlertCard from '../components/dashboard/ErrorAlertCard.vue'
 import { parseAppError, type ParsedError } from '../lib/error'
 

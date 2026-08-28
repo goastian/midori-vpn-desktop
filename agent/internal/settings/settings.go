@@ -40,7 +40,8 @@ type AutostartSettings struct {
 }
 
 type UISettings struct {
-	StartMinimized bool `json:"start_minimized"`
+	StartMinimized bool   `json:"start_minimized"`
+	Language       string `json:"language,omitempty"`
 }
 
 // defaults returns the product-mandated defaults.

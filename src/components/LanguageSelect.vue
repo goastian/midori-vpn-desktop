@@ -27,9 +27,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getLocale, setLocale, type Locale } from '../i18n'
+import { agent } from '../lib/agent'
 
 defineProps<{
   compact?: boolean
@@ -40,6 +41,10 @@ const { t } = useI18n()
 const currentLocale = ref(getLocale())
 const isChanging = ref(false)
 
+onMounted(() => {
+  void agent.settings.put({ ui: { language: currentLocale.value } }).catch(() => undefined)
+})
+
 async function onLocaleChange(e: Event) {
   const nextLocale = (e.target as HTMLSelectElement).value as Locale
   if (nextLocale === currentLocale.value || isChanging.value) return
@@ -48,6 +53,10 @@ async function onLocaleChange(e: Event) {
   try {
     await setLocale(nextLocale)
     currentLocale.value = getLocale()
+    await agent.settings.put({ ui: { language: currentLocale.value } }).catch(() => {
+      // localStorage remains authoritative for this browser profile when the
+      // agent is temporarily restarting.
+    })
   } finally {
     isChanging.value = false
   }

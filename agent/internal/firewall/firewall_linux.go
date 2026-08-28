@@ -25,9 +25,11 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/goastian/midorivpn-agent/internal/sysstate"
+	"golang.org/x/sys/unix"
 )
 
 const ManagedTag = "midorivpn-managed"
@@ -464,6 +466,12 @@ func run(ctx context.Context, name string, args ...string) error {
 		return fmt.Errorf("%s: command not found", name)
 	}
 	cmd := exec.CommandContext(ctx, exe, args...)
+	if name == "nft" {
+		if err := setNetAdminInheritable(); err != nil {
+			return fmt.Errorf("prepare nft network capability: %w", err)
+		}
+		cmd.SysProcAttr = &syscall.SysProcAttr{AmbientCaps: []uintptr{unix.CAP_NET_ADMIN}}
+	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s %s: %w (%s)", name, strings.Join(args, " "),
@@ -471,4 +479,18 @@ func run(ctx context.Context, name string, args ...string) error {
 	}
 	slog.Debug("firewall cmd", "cmd", name, "args", args)
 	return nil
+}
+
+// Executing an ordinary binary clears a non-root process's effective file
+// capabilities. Put CAP_NET_ADMIN in the inheritable set so Go can raise it as
+// an ambient capability only for the nft child process.
+func setNetAdminInheritable() error {
+	var header unix.CapUserHeader
+	header.Version = unix.LINUX_CAPABILITY_VERSION_3
+	var data [2]unix.CapUserData
+	if err := unix.Capget(&header, &data[0]); err != nil {
+		return err
+	}
+	data[0].Inheritable |= 1 << unix.CAP_NET_ADMIN
+	return unix.Capset(&header, &data[0])
 }

@@ -455,5 +455,5 @@ export interface DnsStatus {
 export interface UserSettings {
   mesh?: { start_disabled?: boolean }
   autostart?: { enabled?: boolean }
-  ui?: { start_minimized?: boolean }
+  ui?: { start_minimized?: boolean; language?: string }
 }

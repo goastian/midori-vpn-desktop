@@ -13,35 +13,22 @@
     </div>
 
     <div class="card">
-      <div class="section-title">Protocolo de Conexión (Smart Protocol)</div>
+      <div class="section-title">{{ t('settings.protocolTitle') }}</div>
       <div class="row" style="flex-direction:column; align-items:flex-start; gap:8px;">
         <div>
-          <div style="font-size:14px;">Estrategia de Selección</div>
-          <div class="label" style="margin-top:4px;">
-            Smart Auto valida cada handshake real y recorre WireGuard, WSS y MASQUE según la prioridad y salud anunciadas por el servidor.
-          </div>
+          <div style="font-size:14px;">{{ t('settings.protocolStrategy') }}</div>
         </div>
         <select v-model="selectedProtocolPolicy" class="select-field" @change="saveProtocolPolicy">
-          <option value="smart_auto">Smart Auto (Recomendado)</option>
-          <option value="wireguard">Forzar WireGuard (UDP 51820)</option>
-          <option value="wss">Forzar WireGuard sobre WSS (TLS 443, si está disponible)</option>
-          <option value="masque">Forzar WireGuard sobre MASQUE (HTTP/3 UDP 443, si está disponible)</option>
-          <option value="openvpn">Forzar OpenVPN 2.7/DCO (UDP 1194, si está certificado)</option>
-          <option value="ikev2">Forzar IKEv2/EAP-TLS (UDP 500/4500, si está certificado)</option>
+          <option
+            v-for="option in protocolOptions"
+            :key="option.value"
+            :value="option.value"
+            :disabled="!option.available"
+          >{{ option.label }}{{ option.available ? '' : ` — ${t('settings.protocolUnavailableShort')}` }}</option>
         </select>
+        <div class="label">{{ selectedProtocolDescription }}</div>
+        <div v-if="protocolAvailabilityHint" class="availability-hint">{{ protocolAvailabilityHint }}</div>
       </div>
-    </div>
-
-    <div class="card">
-      <div class="section-title">Inicio de la aplicación</div>
-      <div class="row">
-        <div>
-          <div style="font-size:14px;">Iniciar minimizado en la bandeja</div>
-          <div class="label" style="margin-top:4px;">Al iniciar sesión, oculta la ventana solo si el escritorio ofrece bandeja del sistema.</div>
-        </div>
-        <button class="toggle" :class="{ on: startMinimized }" @click="toggleStartMinimized"></button>
-      </div>
-      <div v-if="uiSettingsError" class="error" style="margin-top:8px;">{{ uiSettingsError }}</div>
     </div>
 
     <div class="card">
@@ -53,25 +40,18 @@
         </div>
         <button class="toggle" :class="{ on: autostart }" @click="toggleAutostart"></button>
       </div>
+      <div class="row nested-setting">
+        <div>
+          <div style="font-size:14px;">{{ t('settings.startMinimized') }}</div>
+          <div class="label" style="margin-top:4px;">{{ t('settings.startMinimizedHint') }}</div>
+        </div>
+        <button class="toggle" :class="{ on: startMinimized }" :disabled="!autostart" @click="toggleStartMinimized"></button>
+      </div>
       <div v-if="autostartError" class="error" style="margin-top:8px;">{{ autostartError }}</div>
+      <div v-if="uiSettingsError" class="error" style="margin-top:8px;">{{ uiSettingsError }}</div>
     </div>
 
-    <div class="card">
-      <div class="section-title">{{ t('settings.sectionAgent') }}</div>
-      <div class="row" style="margin-bottom:12px;">
-        <div class="label">{{ t('settings.localPort') }}</div>
-        <div class="value">{{ rpcPort ?? '—' }}</div>
-      </div>
-      <div class="row">
-        <div class="label">{{ t('settings.proxyPort') }}</div>
-        <div class="value">{{ proxyPort ?? '—' }}</div>
-      </div>
-      <div class="row" style="margin-top:12px;">
-        <div class="label">{{ t('settings.tokenStore') }}</div>
-        <div class="value">{{ tokenStoreDisplay }}</div>
-      </div>
-      <div v-if="tokenStoreDegraded" class="error" style="margin-top:8px;">{{ t('settings.tokenStoreFallback') }}</div>
-    </div>
+    <div class="card"><LanguageSelect /></div>
 
     <div class="card">
       <div class="section-title">{{ t('settings.sectionAbout') }}</div>
@@ -116,6 +96,9 @@ import { agent, invokePlatform } from '../lib/agent'
 import { useCaps } from '../composables/useCaps'
 import { toErrorMessage } from '../lib/error'
 import QuitButton from '../components/QuitButton.vue'
+import LanguageSelect from '../components/LanguageSelect.vue'
+import { useVpnStore } from '../stores/vpn'
+import type { VPNTransportProtocol } from '../lib/agent'
 
 const { t } = useI18n()
 const appVersion = __APP_VERSION__
@@ -127,15 +110,29 @@ const selectedProtocolPolicy = ref('smart_auto')
 const autostartError = ref<string | null>(null)
 const meshSettingsError = ref<string | null>(null)
 const uiSettingsError = ref<string | null>(null)
-const tokenStoreLabel = ref('—')
-const tokenStoreDegraded = ref(false)
-const rpcPort = ref<number | null>(null)
-const proxyPort = ref<number | null>(null)
+const vpn = useVpnStore()
 const { featuresLocked, capsGranted, capsGranting, capsError, revertCaps } = useCaps()
 const revertResult = ref<'idle' | 'ok' | 'err'>('idle')
-const tokenStoreDisplay = computed(() =>
-  tokenStoreLabel.value === 'unknown' ? t('settings.unknown') : tokenStoreLabel.value
-)
+type ProtocolPolicy = VPNTransportProtocol | 'smart_auto'
+
+const protocolOptions = computed(() => {
+  const supports = (protocol: VPNTransportProtocol) => vpn.servers.some((server) => {
+    if (protocol === 'wireguard') return server.supports_wireguard
+    return server.transports?.some((item) => item.protocol === protocol && item.enabled && item.health_status === 'healthy')
+  })
+  return (['smart_auto', 'wireguard', 'wss', 'masque', 'openvpn', 'ikev2'] as ProtocolPolicy[]).map((value) => ({
+    value,
+    label: t(`settings.protocols.${value}.name`),
+    available: value === 'smart_auto' || supports(value),
+  }))
+})
+
+const selectedProtocolDescription = computed(() => t(`settings.protocols.${selectedProtocolPolicy.value}.description`))
+const protocolAvailabilityHint = computed(() => {
+  return protocolOptions.value.some((option) => !option.available)
+    ? t('settings.protocolUnavailableHint')
+    : ''
+})
 
 function saveProtocolPolicy() {
   localStorage.setItem('midori_protocol_policy', selectedProtocolPolicy.value)
@@ -160,6 +157,13 @@ onMounted(async () => {
     selectedProtocolPolicy.value = storedPolicy
   }
 
+  if (vpn.servers.length === 0) await vpn.fetchServers()
+  const selected = protocolOptions.value.find((option) => option.value === selectedProtocolPolicy.value)
+  if (!selected?.available) {
+    selectedProtocolPolicy.value = 'smart_auto'
+    saveProtocolPolicy()
+  }
+
   // Autostart status comes from the OS (XDG autostart file presence).
   try {
     autostart.value = await invokePlatform<boolean>('autostart_is_enabled')
@@ -173,16 +177,6 @@ onMounted(async () => {
     startMinimized.value = s?.ui?.start_minimized ?? false
   } catch (e) {
     meshSettingsError.value = toErrorMessage(e)
-  }
-  try {
-    const snapshot = await agent.status()
-    rpcPort.value = snapshot.local_rpc?.port ?? null
-    proxyPort.value = snapshot.local_proxy?.port ?? null
-    tokenStoreLabel.value = snapshot.security?.token_store ?? 'unknown'
-    tokenStoreDegraded.value = snapshot.security?.token_store_degraded ?? true
-  } catch {
-    tokenStoreLabel.value = 'unknown'
-    tokenStoreDegraded.value = true
   }
 })
 
@@ -244,5 +238,19 @@ async function toggleStartMinimized() {
 }
 .select-field:focus {
   border-color: var(--midori-500);
+}
+.select-field option:disabled { color: var(--muted-2); }
+.availability-hint {
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+.nested-setting {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
 }
 </style>

@@ -13,5 +13,5 @@ func restartSelf() error {
 	if err != nil {
 		return err
 	}
-	return unix.Exec(executable, os.Args, os.Environ())
+	return unix.Exec(executable, restartArgs(os.Args), os.Environ())
 }

@@ -63,11 +63,17 @@ func setNetAdminInheritable() {
 // in the child process, so nft can use netlink without being root.
 // setNetAdminInheritable() must have been called first in the parent.
 func nftRun(nft string, args ...string) ([]byte, error) {
-	cmd := exec.Command(nft, args...)
+	cmd := netAdminCommand(nft, args...)
+	return cmd.CombinedOutput()
+}
+
+func netAdminCommand(binary string, args ...string) *exec.Cmd {
+	setNetAdminInheritable()
+	cmd := exec.Command(binary, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		AmbientCaps: []uintptr{unix.CAP_NET_ADMIN},
 	}
-	return cmd.CombinedOutput()
+	return cmd
 }
 
 // EnableNAT enables IPv4 forwarding and sets up MASQUERADE for the given WAN
@@ -149,13 +155,13 @@ func enableNATnft(nft, outIface string) error {
 }
 
 func enableNATiptables(ipt, outIface string) error {
-	if exec.Command(ipt, "-t", "nat", "-C", "POSTROUTING", "-o", outIface, "-j", "MASQUERADE").Run() != nil {
-		if out, err := exec.Command(ipt, "-t", "nat", "-A", "POSTROUTING", "-o", outIface, "-j", "MASQUERADE").CombinedOutput(); err != nil {
+	if netAdminCommand(ipt, "-t", "nat", "-C", "POSTROUTING", "-o", outIface, "-j", "MASQUERADE").Run() != nil {
+		if out, err := netAdminCommand(ipt, "-t", "nat", "-A", "POSTROUTING", "-o", outIface, "-j", "MASQUERADE").CombinedOutput(); err != nil {
 			return fmt.Errorf("iptables MASQUERADE: %w (%s)", err, strings.TrimSpace(string(out)))
 		}
 	}
-	if exec.Command(ipt, "-C", "FORWARD", "-j", "ACCEPT").Run() != nil {
-		if out, err := exec.Command(ipt, "-A", "FORWARD", "-j", "ACCEPT").CombinedOutput(); err != nil {
+	if netAdminCommand(ipt, "-C", "FORWARD", "-j", "ACCEPT").Run() != nil {
+		if out, err := netAdminCommand(ipt, "-A", "FORWARD", "-j", "ACCEPT").CombinedOutput(); err != nil {
 			return fmt.Errorf("iptables FORWARD: %w (%s)", err, strings.TrimSpace(string(out)))
 		}
 	}
@@ -167,7 +173,7 @@ func enableNATiptables(ipt, outIface string) error {
 func DisableNAT(outIface string) {
 	nft := findBin(nftBin, "/usr/sbin/nft", "/usr/bin/nft")
 	if nft != "" {
-		exec.Command(nft, "delete", "table", "ip", nftTable).Run() //nolint:errcheck
+		netAdminCommand(nft, "delete", "table", "ip", nftTable).Run() //nolint:errcheck
 		slog.Info("mesh: NAT disabled (nft table removed)")
 		return
 	}
@@ -175,7 +181,7 @@ func DisableNAT(outIface string) {
 		if outIface == "" {
 			outIface, _ = defaultRouteIface()
 		}
-		exec.Command(ipt, "-t", "nat", "-D", "POSTROUTING", "-o", outIface, "-j", "MASQUERADE").Run() //nolint:errcheck
+		netAdminCommand(ipt, "-t", "nat", "-D", "POSTROUTING", "-o", outIface, "-j", "MASQUERADE").Run() //nolint:errcheck
 		slog.Info("mesh: NAT disabled (iptables rules removed)")
 	}
 }

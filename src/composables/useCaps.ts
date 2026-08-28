@@ -35,39 +35,6 @@ export function useCaps() {
     * On success, restarts the agent process so it picks up the newly-applied
     * file capabilities in its effective set.
    */
-  async function grantCaps(): Promise<boolean> {
-    capsGranting.value = true
-    capsError.value = ''
-    try {
-      const ok = await invokePlatform<boolean>('grant_agent_permissions')
-      if (ok) {
-        // The currently running agent may still have CapEff=0 if it was
-        // started before setcap. Restart it so create TUN succeeds.
-        try {
-          await invokePlatform('restart_agent_cmd')
-        } catch {
-          // If restart fails we'll still expose granted state; callers surface
-          // runtime errors and the user can retry.
-        }
-
-        capsGranted.value = await invokePlatform<boolean>('agent_has_caps')
-        if (!capsGranted.value) {
-          capsError.value = text('errors.capsVerifyFailed')
-          return false
-        }
-        return true
-      } else {
-        capsError.value = text('errors.capsApplyFailed')
-        return false
-      }
-    } catch (e) {
-      capsError.value = String(e)
-      return false
-    } finally {
-      capsGranting.value = false
-    }
-  }
-
   /**
    * Single-prompt grant. On Linux we always request the extended cap set so
    * the agent can manage DNS regardless of the host's resolver (systemd-
@@ -79,20 +46,7 @@ export function useCaps() {
     capsGranting.value = true
     capsError.value = ''
     try {
-      let ok = false
-      try {
-        ok = await invokePlatform<boolean>('grant_dns_protection_caps')
-      } catch {
-        ok = false
-      }
-      if (!ok) {
-        try {
-          ok = await invokePlatform<boolean>('grant_agent_permissions')
-        } catch (err) {
-          capsError.value = String(err)
-          return false
-        }
-      }
+      const ok = await invokePlatform<boolean>('grant_dns_protection_caps')
       if (!ok) {
         capsError.value = text('errors.capsApplyFailed')
         return false
@@ -144,7 +98,6 @@ export function useCaps() {
     capsError,
     featuresLocked,
     checkCaps,
-    grantCaps,
     grantCapsSmart,
     revertCaps,
   }

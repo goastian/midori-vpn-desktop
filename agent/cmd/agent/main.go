@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/goastian/midorivpn-agent/internal/dns"
 	"github.com/goastian/midorivpn-agent/internal/rpc"
 	"github.com/goastian/midorivpn-agent/internal/state"
 )
@@ -151,6 +152,10 @@ func main() {
 		os.Exit(1)
 	}
 	defer releaseLock()
+
+	if err := dns.RecoverStaleResolvconf(); err != nil {
+		slog.Warn("cannot recover DNS state from an unclean previous exit", "err", err)
+	}
 
 	var browserTokenFile string
 	var browserToken string
