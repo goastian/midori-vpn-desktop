@@ -44,6 +44,7 @@ type Config struct {
 type Client struct {
 	charon            *exec.Cmd
 	charonDone        chan error
+	charonOutput      *boundedOutput
 	files             *devicepki.RuntimeFiles
 	swanctl           string
 	configPath        string
@@ -51,13 +52,55 @@ type Client struct {
 	closeOnce         sync.Once
 }
 
+const charonDiagnosticLimit = 16 * 1024
+
+// boundedOutput retains only the latest strongSwan diagnostics. charon can run
+// for hours, so attaching an unbounded buffer would leak memory over time.
+type boundedOutput struct {
+	mu    sync.Mutex
+	limit int
+	data  []byte
+}
+
+func newBoundedOutput(limit int) *boundedOutput { return &boundedOutput{limit: limit} }
+
+func (b *boundedOutput) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	written := len(p)
+	if b.limit <= 0 {
+		return written, nil
+	}
+	if len(p) >= b.limit {
+		b.data = append(b.data[:0], p[len(p)-b.limit:]...)
+		return written, nil
+	}
+	overflow := len(b.data) + len(p) - b.limit
+	if overflow > 0 {
+		copy(b.data, b.data[overflow:])
+		b.data = b.data[:len(b.data)-overflow]
+	}
+	b.data = append(b.data, p...)
+	return written, nil
+}
+
+func (b *boundedOutput) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return strings.TrimSpace(string(b.data))
+}
+
 func Start(ctx context.Context, config Config) (*Client, error) {
 	if err := validateConfig(config); err != nil {
 		return nil, err
 	}
-	charonPath, err := findExecutable("/usr/libexec/ipsec/charon", "/usr/lib/ipsec/charon")
+	charonVersionPath, err := findExecutable("/usr/libexec/ipsec/charon", "/usr/lib/ipsec/charon")
 	if err != nil {
 		return nil, errors.New("strongSwan 6 is not installed")
+	}
+	charonPath, err := findExecutable("/usr/sbin/charon-systemd", "/usr/libexec/ipsec/charon-systemd")
+	if err != nil {
+		return nil, errors.New("strongSwan charon-systemd is not installed")
 	}
 	swanctlPath, err := findExecutable("/usr/sbin/swanctl", "/usr/bin/swanctl")
 	if err != nil {
@@ -67,12 +110,15 @@ func Start(ctx context.Context, config Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	client := &Client{files: files, swanctl: swanctlPath, charonDone: make(chan error, 1)}
+	client := &Client{
+		files: files, swanctl: swanctlPath, charonDone: make(chan error, 1),
+		charonOutput: newBoundedOutput(charonDiagnosticLimit),
+	}
 	if err := client.prepareRuntime(config); err != nil {
 		client.Close()
 		return nil, err
 	}
-	if err := requireVersion(ctx, charonPath, client.configPath); err != nil {
+	if err := requireVersion(ctx, charonVersionPath, client.configPath); err != nil {
 		client.Close()
 		return nil, err
 	}
@@ -82,8 +128,13 @@ func Start(ctx context.Context, config Config) (*Client, error) {
 	}
 	client.charon = exec.Command(charonPath)
 	client.charon.Env = append(os.Environ(), "STRONGSWAN_CONF="+client.configPath)
-	setNetworkCapsInheritable()
+	if err := setNetworkCapsInheritable(); err != nil {
+		client.Close()
+		return nil, fmt.Errorf("prepare strongSwan network capabilities: %w", err)
+	}
 	client.charon.SysProcAttr = &syscall.SysProcAttr{AmbientCaps: []uintptr{unix.CAP_NET_ADMIN, unix.CAP_NET_RAW}}
+	client.charon.Stdout = client.charonOutput
+	client.charon.Stderr = client.charonOutput
 	if err := client.charon.Start(); err != nil {
 		client.Close()
 		return nil, fmt.Errorf("start strongSwan charon: %w", err)
@@ -192,6 +243,14 @@ func buildStrongSwanConfig(viciSocket string) string {
     vici { socket = unix://%s }
   }
 }
+charon-systemd {
+  filelog {
+    stderr {
+      default = 2
+      flush_line = yes
+    }
+  }
+}
 swanctl {
   socket = unix://%s
 }
@@ -254,10 +313,14 @@ func (c *Client) waitForVICI(ctx context.Context, configuredTimeout time.Duratio
 	for {
 		select {
 		case err := <-c.charonDone:
-			if err == nil {
-				return errors.New("strongSwan charon exited during startup")
+			diagnostic := c.charonOutput.String()
+			if diagnostic != "" {
+				diagnostic = ": " + diagnostic
 			}
-			return fmt.Errorf("strongSwan charon exited during startup: %w", err)
+			if err == nil {
+				return errors.New("strongSwan charon exited during startup" + diagnostic)
+			}
+			return fmt.Errorf("strongSwan charon exited during startup: %w%s", err, diagnostic)
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-deadline.C:
@@ -331,7 +394,9 @@ func runIP(arguments ...string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	setNetworkCapsInheritable()
+	if err := setNetworkCapsInheritable(); err != nil {
+		return nil, fmt.Errorf("prepare ip network capabilities: %w", err)
+	}
 	command := exec.Command(ipPath, arguments...)
 	command.Env = []string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin"}
 	command.SysProcAttr = &syscall.SysProcAttr{AmbientCaps: []uintptr{unix.CAP_NET_ADMIN}}
@@ -342,15 +407,15 @@ func runIP(arguments ...string) ([]byte, error) {
 	return output, nil
 }
 
-func setNetworkCapsInheritable() {
+func setNetworkCapsInheritable() error {
 	var header unix.CapUserHeader
 	header.Version = unix.LINUX_CAPABILITY_VERSION_3
 	var data [2]unix.CapUserData
 	if err := unix.Capget(&header, &data[0]); err != nil {
-		return
+		return err
 	}
 	data[0].Inheritable |= 1<<unix.CAP_NET_ADMIN | 1<<unix.CAP_NET_RAW
-	_ = unix.Capset(&header, &data[0])
+	return unix.Capset(&header, &data[0])
 }
 
 func requireVersion(ctx context.Context, binary, configPath string) error {

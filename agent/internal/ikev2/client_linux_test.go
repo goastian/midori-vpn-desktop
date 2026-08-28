@@ -39,7 +39,8 @@ func TestBuildStrongSwanConfigUsesRandomPortsAndPrivateVICI(t *testing.T) {
 	for _, required := range []string{
 		"initiator_only = yes", "port = 0", "port_nat_t = 0",
 		"install_routes_xfrmi = yes", "install_virtual_ip_on = midorivpn-ike",
-		"unix:///run/user/1000/test/charon.vici",
+		"unix:///run/user/1000/test/charon.vici", "charon-systemd {",
+		"filelog {", "stderr {", "flush_line = yes",
 	} {
 		if !strings.Contains(generated, required) {
 			t.Errorf("strongSwan configuration omits %q", required)
@@ -71,5 +72,24 @@ func TestValidateConfigRejectsIPCertificateName(t *testing.T) {
 	}
 	if err := validateConfig(Config{Endpoint: "vpn.example.test:500", ServerName: "vpn.example.test", Credential: credential}); err != nil {
 		t.Fatalf("valid IKEv2 configuration rejected: %v", err)
+	}
+}
+
+func TestBoundedOutputRetainsLatestDiagnostics(t *testing.T) {
+	output := newBoundedOutput(8)
+	for _, value := range []string{"12345", "678", "90"} {
+		written, err := output.Write([]byte(value))
+		if err != nil || written != len(value) {
+			t.Fatalf("Write(%q) = (%d, %v)", value, written, err)
+		}
+	}
+	if got := output.String(); got != "34567890" {
+		t.Fatalf("String() = %q, want latest bounded output", got)
+	}
+	if _, err := output.Write([]byte("abcdefghijk")); err != nil {
+		t.Fatal(err)
+	}
+	if got := output.String(); got != "defghijk" {
+		t.Fatalf("String() after oversized write = %q", got)
 	}
 }
