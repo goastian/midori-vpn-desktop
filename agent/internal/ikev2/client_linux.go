@@ -32,7 +32,7 @@ const (
 )
 
 var safeServerName = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$`)
-var safeDeviceIdentity = regexp.MustCompile(`^urn:midorivpn:device:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+var safeCertificateID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 type Config struct {
 	Endpoint   string
@@ -47,6 +47,7 @@ type Client struct {
 	charonOutput      *boundedOutput
 	files             *devicepki.RuntimeFiles
 	swanctl           string
+	swanctlDirectory  string
 	configPath        string
 	swanctlConfigPath string
 	closeOnce         sync.Once
@@ -160,7 +161,8 @@ func Start(ctx context.Context, config Config) (*Client, error) {
 }
 
 func validateConfig(config Config) error {
-	if config.Credential == nil || !safeDeviceIdentity.MatchString(config.Credential.Identity) {
+	if config.Credential == nil || !safeCertificateID.MatchString(config.Credential.CertificateID) ||
+		config.Credential.Identity != "urn:midorivpn:device:"+config.Credential.CertificateID {
 		return errors.New("IKEv2 device credential is required")
 	}
 	host, port, err := net.SplitHostPort(config.Endpoint)
@@ -224,6 +226,7 @@ func (c *Client) prepareRuntime(config Config) error {
 		return fmt.Errorf("write swanctl runtime configuration: %w", err)
 	}
 	c.configPath = configPath
+	c.swanctlDirectory = credentialRoot
 	c.swanctlConfigPath = swanctlPath
 	return nil
 }
@@ -259,6 +262,11 @@ swanctl {
 
 func buildSwanctlConfig(config Config) string {
 	host, port, _ := net.SplitHostPort(config.Endpoint)
+	// strongSwan parses a URN containing ':' as KEY_ID, while the certificate
+	// carries that value as a URI SAN. These identity types do not match during
+	// EAP-TLS certificate selection. Use the certificate's exact subject DN,
+	// which remains uniquely bound to the same random certificate identifier.
+	eapIdentity := "O=MidoriVPN, CN=device:" + config.Credential.CertificateID
 	return fmt.Sprintf(`connections {
   %s {
     version = 2
@@ -270,9 +278,9 @@ func buildSwanctlConfig(config Config) string {
     mobike = yes
     encap = yes
     local {
-      auth = eap-tls
-      id = %s
-      eap_id = %s
+      auth = eap
+      id = "%s"
+      eap_id = "%s"
       certs = device.crt
     }
     remote {
@@ -297,7 +305,7 @@ func buildSwanctlConfig(config Config) string {
 secrets {
   private-device { file = device.key }
 }
-`, connectionName, host, port, config.Credential.Identity, config.Credential.Identity, config.ServerName, childName, xfrmInterfaceID, xfrmInterfaceID)
+`, connectionName, host, port, eapIdentity, eapIdentity, config.ServerName, childName, xfrmInterfaceID, xfrmInterfaceID)
 }
 
 func (c *Client) waitForVICI(ctx context.Context, configuredTimeout time.Duration) error {
@@ -342,7 +350,7 @@ func (c *Client) runSwanctl(parent context.Context, timeout time.Duration, argum
 	uri := "unix://" + filepath.Join(c.files.Directory, "charon.vici")
 	arguments = append(arguments, "--uri", uri)
 	command := exec.CommandContext(ctx, c.swanctl, arguments...)
-	command.Env = append(os.Environ(), "STRONGSWAN_CONF="+c.configPath)
+	command.Env = append(os.Environ(), "STRONGSWAN_CONF="+c.configPath, "SWANCTL_DIR="+c.swanctlDirectory)
 	output, err := command.CombinedOutput()
 	if ctx.Err() != nil {
 		return "", c.withCharonDiagnostic(ctx.Err())

@@ -13,20 +13,26 @@ import (
 	"github.com/goastian/midorivpn-agent/internal/devicepki"
 )
 
-func TestBuildSwanctlConfigUsesEAPTLSAndXFRM(t *testing.T) {
+func TestBuildSwanctlConfigUsesEAPClientAuthAndXFRM(t *testing.T) {
 	config := Config{
 		Endpoint: "vpn.example.test:500", ServerName: "vpn.example.test",
-		Credential: &devicepki.Credential{Identity: "urn:midorivpn:device:12345678-1234-1234-1234-123456789abc"},
+		Credential: &devicepki.Credential{CertificateID: "12345678-1234-1234-1234-123456789abc", Identity: "urn:midorivpn:device:12345678-1234-1234-1234-123456789abc"},
 	}
 	generated := buildSwanctlConfig(config)
 	for _, required := range []string{
-		"auth = eap-tls", "eap_id = urn:midorivpn:device:12345678-1234-1234-1234-123456789abc",
+		"auth = eap", `eap_id = "O=MidoriVPN, CN=device:12345678-1234-1234-1234-123456789abc"`,
 		"remote_ts = 0.0.0.0/0", "if_id_in = 42", "if_id_out = 42",
 		"aes256gcm16", "cacerts = client-ca.pem", "id = vpn.example.test",
 	} {
 		if !strings.Contains(generated, required) {
 			t.Errorf("swanctl configuration omits %q", required)
 		}
+	}
+	if strings.Contains(generated, "auth = eap-tls") {
+		t.Fatal("client configuration selects the responder-side EAP-TLS auth keyword")
+	}
+	if strings.Contains(generated, "urn:midorivpn:device:") {
+		t.Fatal("URI SAN identity was reused as an incompatible strongSwan KEY_ID")
 	}
 	for _, forbidden := range []string{"eap-mschapv2", "3des", "modp1024", "password"} {
 		if strings.Contains(strings.ToLower(generated), forbidden) {
@@ -67,7 +73,7 @@ func TestRequireVersionUsesPrivateConfiguration(t *testing.T) {
 }
 
 func TestValidateConfigRejectsIPCertificateName(t *testing.T) {
-	credential := &devicepki.Credential{Identity: "urn:midorivpn:device:12345678-1234-1234-1234-123456789abc"}
+	credential := &devicepki.Credential{CertificateID: "12345678-1234-1234-1234-123456789abc", Identity: "urn:midorivpn:device:12345678-1234-1234-1234-123456789abc"}
 	if err := validateConfig(Config{Endpoint: "vpn.example.test:500", ServerName: "192.0.2.1", Credential: credential}); err == nil {
 		t.Fatal("IP server certificate identity was accepted")
 	}
