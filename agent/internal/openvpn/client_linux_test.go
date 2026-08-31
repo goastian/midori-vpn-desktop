@@ -3,12 +3,30 @@
 package openvpn
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/goastian/midorivpn-agent/internal/devicepki"
 )
+
+func TestFindOpenVPNExecutableIgnoresGraphicalSessionPath(t *testing.T) {
+	temporary := t.TempDir()
+	executable := filepath.Join(temporary, "openvpn")
+	if err := os.WriteFile(executable, []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", filepath.Join(temporary, "empty"))
+	path, err := findExecutable([]string{filepath.Join(temporary, "missing"), executable}, "openvpn")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path != executable {
+		t.Fatalf("OpenVPN path = %q, want %q", path, executable)
+	}
+}
 
 func TestBuildArgsEnforcesModernDCOCompatibleProfile(t *testing.T) {
 	credential := &devicepki.Credential{}

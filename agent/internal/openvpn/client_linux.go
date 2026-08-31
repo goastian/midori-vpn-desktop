@@ -50,7 +50,7 @@ func Start(ctx context.Context, config Config) (*Client, error) {
 	if err := validateConfig(config); err != nil {
 		return nil, err
 	}
-	openvpnPath, err := exec.LookPath("openvpn")
+	openvpnPath, err := findOpenVPNExecutable()
 	if err != nil {
 		return nil, errors.New("OpenVPN 2.7 is not installed")
 	}
@@ -114,6 +114,22 @@ func Start(ctx context.Context, config Config) (*Client, error) {
 		client.Close()
 		return nil, errors.New("OpenVPN handshake timed out")
 	}
+}
+
+func findOpenVPNExecutable() (string, error) {
+	// Graphical user sessions commonly omit /usr/sbin from PATH even though
+	// distributions install OpenVPN there. Prefer the packaged system paths and
+	// retain PATH lookup for distributions that place it elsewhere.
+	return findExecutable([]string{"/usr/sbin/openvpn", "/usr/bin/openvpn"}, "openvpn")
+}
+
+func findExecutable(candidates []string, fallback string) (string, error) {
+	for _, candidate := range candidates {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
+			return candidate, nil
+		}
+	}
+	return exec.LookPath(fallback)
 }
 
 func setNetworkCapsInheritable() error {
