@@ -27,6 +27,7 @@ import (
 const (
 	interfaceName   = "midorivpn-ike"
 	xfrmInterfaceID = "42"
+	routingTable    = "220"
 	connectionName  = "midori-client"
 	childName       = "midori-full"
 )
@@ -50,6 +51,7 @@ type Client struct {
 	swanctlDirectory  string
 	configPath        string
 	swanctlConfigPath string
+	routeExclusions   []string
 	closeOnce         sync.Once
 }
 
@@ -154,6 +156,10 @@ func Start(ctx context.Context, config Config) (*Client, error) {
 		return nil, fmt.Errorf("complete IKEv2 EAP-TLS handshake: %w", err)
 	}
 	if err := client.waitForAssignedIP(ctx, 3*time.Second); err != nil {
+		client.Close()
+		return nil, err
+	}
+	if err := client.installEndpointRouteExclusions(ctx, config.Endpoint); err != nil {
 		client.Close()
 		return nil, err
 	}
@@ -407,6 +413,60 @@ func createXFRMInterface() error {
 	return nil
 }
 
+// installEndpointRouteExclusions prevents the encrypted outer packets from
+// following strongSwan's full-tunnel default route back into the XFRM
+// interface. A throw route continues policy lookup in the main table, where
+// the physical route to the IKE peer is available.
+func (c *Client) installEndpointRouteExclusions(ctx context.Context, endpoint string) error {
+	host, _, err := net.SplitHostPort(endpoint)
+	if err != nil {
+		return fmt.Errorf("prepare IKEv2 endpoint route: %w", err)
+	}
+	ips, err := resolveEndpointIPv4s(ctx, host)
+	if err != nil {
+		return fmt.Errorf("resolve IKEv2 endpoint route: %w", err)
+	}
+	for _, ip := range ips {
+		prefix := ip + "/32"
+		if _, err := runIP("route", "replace", "throw", prefix, "table", routingTable); err != nil {
+			return fmt.Errorf("exclude IKEv2 endpoint %s from tunnel route: %w", ip, err)
+		}
+		c.routeExclusions = append(c.routeExclusions, prefix)
+	}
+	return nil
+}
+
+func resolveEndpointIPv4s(ctx context.Context, host string) ([]string, error) {
+	if ip := net.ParseIP(host); ip != nil {
+		if ipv4 := ip.To4(); ipv4 != nil {
+			return []string{ipv4.String()}, nil
+		}
+		return nil, errors.New("IKEv2 full-tunnel routing currently requires an IPv4 endpoint")
+	}
+	addresses, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]struct{}, len(addresses))
+	result := make([]string, 0, len(addresses))
+	for _, address := range addresses {
+		ipv4 := address.IP.To4()
+		if ipv4 == nil {
+			continue
+		}
+		value := ipv4.String()
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	if len(result) == 0 {
+		return nil, errors.New("IKEv2 endpoint did not resolve to IPv4")
+	}
+	return result, nil
+}
+
 func deleteXFRMInterface() error {
 	_, err := runIP("link", "delete", interfaceName)
 	return err
@@ -517,6 +577,10 @@ func (c *Client) Close() {
 				_ = c.charon.Process.Kill()
 			}
 		}
+		for _, prefix := range c.routeExclusions {
+			_, _ = runIP("route", "delete", "throw", prefix, "table", routingTable)
+		}
+		c.routeExclusions = nil
 		_ = deleteXFRMInterface()
 		if c.files != nil {
 			_ = c.files.Close()

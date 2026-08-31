@@ -82,6 +82,19 @@ func TestValidateConfigRejectsIPCertificateName(t *testing.T) {
 	}
 }
 
+func TestResolveEndpointIPv4sNormalizesLiteralAddress(t *testing.T) {
+	addresses, err := resolveEndpointIPv4s(context.Background(), "192.0.2.40")
+	if err != nil {
+		t.Fatalf("resolveEndpointIPv4s() error = %v", err)
+	}
+	if len(addresses) != 1 || addresses[0] != "192.0.2.40" {
+		t.Fatalf("resolveEndpointIPv4s() = %v", addresses)
+	}
+	if _, err := resolveEndpointIPv4s(context.Background(), "2001:db8::1"); err == nil {
+		t.Fatal("IPv6 endpoint was accepted for the IPv4-only full tunnel")
+	}
+}
+
 func TestBoundedOutputRetainsLatestDiagnostics(t *testing.T) {
 	output := newBoundedOutput(8)
 	for _, value := range []string{"12345", "678", "90"} {
