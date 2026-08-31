@@ -41,6 +41,26 @@ func TestEnrollDeviceCertificateSendsCSRWithoutPrivateKey(t *testing.T) {
 	}
 }
 
+func TestListDeviceCertificatesPreservesRevocationState(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/control/certificates" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "data": []map[string]any{{
+			"id": "cert-one", "server_id": "server-one", "device_name": "linux-one",
+			"not_before": "2026-01-01T00:00:00Z", "not_after": "2026-02-01T00:00:00Z",
+			"revoked_at": "2026-01-15T00:00:00Z", "revocation_reason": "cessation_of_operation",
+		}}})
+	}))
+	defer server.Close()
+	client := New(server.URL, "client", func() string { return "token" }, nil)
+	result, err := client.ListDeviceCertificates(context.Background())
+	if err != nil || len(result) != 1 || result[0].RevokedAt == nil {
+		t.Fatalf("ListDeviceCertificates() = %+v, %v", result, err)
+	}
+}
+
 func TestOriginFromBaseURL(t *testing.T) {
 	tests := []struct {
 		name    string

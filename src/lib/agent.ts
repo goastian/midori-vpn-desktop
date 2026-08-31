@@ -151,6 +151,20 @@ export interface ExitNode {
   is_active: boolean
 }
 
+export interface DeviceCertificate {
+  id: string
+  server_id: string
+  device_name: string
+  serial_number: string
+  public_key_sha256: string
+  not_before: string
+  not_after: string
+  revoked_at?: string | null
+  revocation_reason?: string | null
+  created_at: string
+  is_this_device: boolean
+}
+
 export type AgentEvent =
   | { type: 'vpn_status'; data: VPNStatus }
   | { type: 'mesh_status'; data: MeshStatus }
@@ -408,6 +422,11 @@ export const agent = {
 
   servers: {
     list: () => get<Server[]>('servers'),
+  },
+
+  certificates: {
+    list: () => get<DeviceCertificate[]>('certificates'),
+    revoke: (certificateId: string) => del<{ ok: boolean; local_credential_removed: boolean }>(`certificates/${encodeURIComponent(certificateId)}`),
   },
 
   vpn: {

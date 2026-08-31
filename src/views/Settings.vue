@@ -32,6 +32,33 @@
     </div>
 
     <div class="card">
+      <div class="section-title">{{ t('settings.certificates.title') }}</div>
+      <div class="label certificate-hint">{{ t('settings.certificates.hint') }}</div>
+      <div v-if="certificatesLoading" class="label">{{ t('settings.certificates.loading') }}</div>
+      <div v-else-if="activeCertificates.length === 0" class="label">{{ t('settings.certificates.empty') }}</div>
+      <div v-else class="certificate-list">
+        <div v-for="certificate in activeCertificates" :key="certificate.id" class="certificate-row">
+          <div class="certificate-copy">
+            <div class="certificate-name">
+              {{ certificate.device_name }}
+              <span v-if="certificate.is_this_device" class="current-badge">{{ t('settings.certificates.thisDevice') }}</span>
+            </div>
+            <div class="label">{{ t('settings.certificates.expires', { date: formatCertificateDate(certificate.not_after) }) }}</div>
+          </div>
+          <button
+            class="btn btn-secondary certificate-revoke"
+            :disabled="revokingCertificateId === certificate.id || (certificate.is_this_device && vpn.connected)"
+            @click="revokeCertificate(certificate)"
+          >
+            {{ revokingCertificateId === certificate.id ? t('settings.certificates.revoking') : t('settings.certificates.revoke') }}
+          </button>
+        </div>
+      </div>
+      <div v-if="certificateError" class="error certificate-message">{{ certificateError }}</div>
+      <div v-if="certificateNotice" class="success-message certificate-message">{{ certificateNotice }}</div>
+    </div>
+
+    <div class="card">
       <div class="section-title">{{ t('settings.sectionAutoStart') }}</div>
       <div class="row">
         <div>
@@ -98,9 +125,9 @@ import { toErrorMessage } from '../lib/error'
 import QuitButton from '../components/QuitButton.vue'
 import LanguageSelect from '../components/LanguageSelect.vue'
 import { useVpnStore } from '../stores/vpn'
-import type { VPNTransportProtocol } from '../lib/agent'
+import type { DeviceCertificate, VPNTransportProtocol } from '../lib/agent'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const appVersion = __APP_VERSION__
 
 const autostart = ref(false)
@@ -113,7 +140,14 @@ const uiSettingsError = ref<string | null>(null)
 const vpn = useVpnStore()
 const { featuresLocked, capsGranted, capsGranting, capsError, revertCaps } = useCaps()
 const revertResult = ref<'idle' | 'ok' | 'err'>('idle')
+const certificates = ref<DeviceCertificate[]>([])
+const certificatesLoading = ref(false)
+const revokingCertificateId = ref<string | null>(null)
+const certificateError = ref<string | null>(null)
+const certificateNotice = ref<string | null>(null)
 type ProtocolPolicy = VPNTransportProtocol | 'smart_auto'
+
+const activeCertificates = computed(() => certificates.value.filter((certificate) => !certificate.revoked_at))
 
 const protocolOptions = computed(() => {
   const supports = (protocol: VPNTransportProtocol) => vpn.servers.some((server) => {
@@ -138,6 +172,42 @@ function saveProtocolPolicy() {
   localStorage.setItem('midori_protocol_policy', selectedProtocolPolicy.value)
 }
 
+function formatCertificateDate(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return t('settings.unknown')
+  return new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium' }).format(date)
+}
+
+async function loadCertificates() {
+  certificatesLoading.value = true
+  certificateError.value = null
+  try {
+    certificates.value = await agent.certificates.list()
+  } catch (e) {
+    certificateError.value = toErrorMessage(e)
+  } finally {
+    certificatesLoading.value = false
+  }
+}
+
+async function revokeCertificate(certificate: DeviceCertificate) {
+  if (!window.confirm(t('settings.certificates.confirm', { device: certificate.device_name }))) return
+  revokingCertificateId.value = certificate.id
+  certificateError.value = null
+  certificateNotice.value = null
+  try {
+    const result = await agent.certificates.revoke(certificate.id)
+    certificates.value = certificates.value.filter((item) => item.id !== certificate.id)
+    certificateNotice.value = result.local_credential_removed
+      ? t('settings.certificates.revokedThisDevice')
+      : t('settings.certificates.revoked')
+  } catch (e) {
+    certificateError.value = toErrorMessage(e)
+  } finally {
+    revokingCertificateId.value = null
+  }
+}
+
 async function handleRevertCaps() {
   revertResult.value = 'idle'
   const ok = await revertCaps()
@@ -158,6 +228,7 @@ onMounted(async () => {
   }
 
   if (vpn.servers.length === 0) await vpn.fetchServers()
+  await loadCertificates()
   const selected = protocolOptions.value.find((option) => option.value === selectedProtocolPolicy.value)
   if (!selected?.available) {
     selectedProtocolPolicy.value = 'smart_auto'
@@ -253,4 +324,29 @@ async function toggleStartMinimized() {
   padding-top: 14px;
   border-top: 1px solid var(--border);
 }
+.certificate-hint { margin-bottom: 12px; }
+.certificate-list { display: flex; flex-direction: column; gap: 10px; }
+.certificate-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.certificate-copy { min-width: 0; }
+.certificate-name { color: var(--ink); font-size: 13px; overflow-wrap: anywhere; }
+.current-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--midori-500) 14%, transparent);
+  color: var(--midori-500);
+  font-size: 10px;
+  font-weight: 700;
+}
+.certificate-revoke { flex: 0 0 auto; }
+.certificate-message { margin-top: 10px; }
+.success-message { color: var(--midori-500); font-size: 12px; }
 </style>

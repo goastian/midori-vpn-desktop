@@ -29,7 +29,9 @@
     "capsVerifyFailed": "Permissions were applied, but the agent could not verify them.",
     "capsRevertFailed": "Could not revoke permissions. Run \"sudo setcap -r /usr/local/bin/midorivpn-agent\" manually.",
     "deviceNameActive": "A device with this name is already connected.",
-    "deviceLimitReached": "Device limit reached for your account.",
+    "deviceLimitReached": "Device limit reached. Revoke an older certificate in Settings → Device certificates, then try again.",
+    "certificateInUse": "Disconnect the VPN before revoking this device certificate.",
+    "certificateLocalCleanup": "The certificate was revoked, but its local credential could not be removed.",
     "tooManyRequests": "Too many connection requests. Please wait a moment.",
     "serverFull": "The selected server is full or inactive.",
     "meshFirewallWarning": "Mesh is active, but firewall configuration failed: {warning}",
@@ -191,7 +193,20 @@
     "revertErr": "Could not revoke.",
     "language": "Language",
     "languageHint": "Interface language. Takes effect immediately.",
-    "unknown": "Unknown"
+    "unknown": "Unknown",
+    "certificates": {
+      "title": "Device certificates",
+      "hint": "OpenVPN and IKEv2 use one certificate per device. Revoke an old device here when your plan limit is reached.",
+      "loading": "Loading certificates…",
+      "empty": "No active device certificates.",
+      "thisDevice": "This device",
+      "expires": "Expires {date}",
+      "revoke": "Revoke",
+      "revoking": "Revoking…",
+      "confirm": "Revoke the certificate for {device}? That device will lose OpenVPN and IKEv2 access.",
+      "revoked": "Certificate revoked. A slot is now available for another device.",
+      "revokedThisDevice": "This device certificate was revoked and removed locally. It will enroll again when you reconnect."
+    }
   },
   "quit": {
     "label": "Quit MidoriVPN",

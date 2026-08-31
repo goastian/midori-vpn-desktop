@@ -31,6 +31,16 @@ export function extractErrorMessage(raw: string): string {
   if (!raw) return ''
   let cleaned = raw.trim()
 
+  // Structured local-agent errors carry a stable code alongside a fallback
+  // message. Resolve the code before extracting that message so the selected
+  // UI language remains authoritative.
+  if (cleaned.includes('ERR_CERTIFICATE_IN_USE')) {
+    return i18n.global.t('errors.certificateInUse')
+  }
+  if (cleaned.includes('ERR_LOCAL_CREDENTIAL_DELETE_FAILED')) {
+    return i18n.global.t('errors.certificateLocalCleanup')
+  }
+
   const jsonMatch = cleaned.match(/\{.*"error"\s*:\s*"([^"]+)".*\}/)
   if (jsonMatch && jsonMatch[1]) {
     cleaned = jsonMatch[1]

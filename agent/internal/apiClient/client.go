@@ -155,14 +155,17 @@ type TunnelCredentials struct {
 // DeviceCertificate is the public portion of a certificate issued for one
 // local device. Private keys are generated and retained by the desktop agent.
 type DeviceCertificate struct {
-	ID              string    `json:"id"`
-	ServerID        string    `json:"server_id"`
-	DeviceName      string    `json:"device_name"`
-	SerialNumber    string    `json:"serial_number"`
-	CertificatePEM  string    `json:"certificate_pem"`
-	PublicKeySHA256 string    `json:"public_key_sha256"`
-	NotBefore       time.Time `json:"not_before"`
-	NotAfter        time.Time `json:"not_after"`
+	ID               string     `json:"id"`
+	ServerID         string     `json:"server_id"`
+	DeviceName       string     `json:"device_name"`
+	SerialNumber     string     `json:"serial_number"`
+	CertificatePEM   string     `json:"certificate_pem"`
+	PublicKeySHA256  string     `json:"public_key_sha256"`
+	NotBefore        time.Time  `json:"not_before"`
+	NotAfter         time.Time  `json:"not_after"`
+	RevokedAt        *time.Time `json:"revoked_at,omitempty"`
+	RevocationReason *string    `json:"revocation_reason,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
 }
 
 type DeviceCertificateEnrollment struct {
@@ -255,6 +258,14 @@ func (c *Client) EnrollDeviceCertificate(ctx context.Context, serverID, deviceNa
 
 func (c *Client) RevokeDeviceCertificate(ctx context.Context, certificateID string) error {
 	return c.delete(ctx, "/api/v1/control/certificates/"+url.PathEscape(certificateID))
+}
+
+func (c *Client) ListDeviceCertificates(ctx context.Context) ([]DeviceCertificate, error) {
+	var result []DeviceCertificate
+	if err := c.get(ctx, "/api/v1/control/certificates", &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // ListConnections returns the user's active VPN connections.

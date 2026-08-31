@@ -148,6 +148,8 @@ func (s *Server) newMux(agentToken string) http.Handler {
 	mux.Handle("GET /servers", wrap(http.HandlerFunc(s.handleListServers)))
 	mux.Handle("GET /connections", wrap(http.HandlerFunc(s.handleListConnections)))
 	mux.Handle("DELETE /connections/{id}", wrap(http.HandlerFunc(s.handleDeleteConnection)))
+	mux.Handle("GET /certificates", wrap(http.HandlerFunc(s.handleListDeviceCertificates)))
+	mux.Handle("DELETE /certificates/{id}", wrap(http.HandlerFunc(s.handleRevokeDeviceCertificate)))
 
 	mux.Handle("POST /vpn/connect", wrap(http.HandlerFunc(s.handleVPNConnect)))
 	mux.Handle("POST /vpn/disconnect", wrap(http.HandlerFunc(s.handleVPNDisconnect)))

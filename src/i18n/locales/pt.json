@@ -25,6 +25,9 @@
   },
   "errors": {
     "meshCountryUnavailable": "Não foi possível determinar temporariamente o seu país de origem. A rede Mesh não foi ativada; tente novamente mais tarde.",
+    "deviceLimitReached": "Limite de dispositivos atingido. Revogue um certificado antigo em Configurações → Certificados de dispositivos e tente novamente.",
+    "certificateInUse": "Desconecte a VPN antes de revogar o certificado deste dispositivo.",
+    "certificateLocalCleanup": "O certificado foi revogado, mas a credencial local não pôde ser removida.",
     "capsApplyFailed": "Não foi possível aplicar. Execute o comando manualmente como root.",
     "capsVerifyFailed": "Permissões aplicadas, mas o agente não conseguiu verificá-las.",
     "capsRevertFailed": "Não foi possível revogar. Execute \"sudo setcap -r /usr/local/bin/midorivpn-agent\" manualmente.",
@@ -187,7 +190,20 @@
     "revertErr": "Não foi possível revogar.",
     "language": "Idioma",
     "languageHint": "Idioma da interface. Aplicado imediatamente.",
-    "unknown": "Desconhecido"
+    "unknown": "Desconhecido",
+    "certificates": {
+      "title": "Certificados de dispositivos",
+      "hint": "OpenVPN e IKEv2 usam um certificado por dispositivo. Revogue aqui um dispositivo antigo quando atingir o limite do plano.",
+      "loading": "Carregando certificados…",
+      "empty": "Nenhum certificado de dispositivo ativo.",
+      "thisDevice": "Este dispositivo",
+      "expires": "Expira em {date}",
+      "revoke": "Revogar",
+      "revoking": "Revogando…",
+      "confirm": "Revogar o certificado de {device}? Esse dispositivo perderá o acesso a OpenVPN e IKEv2.",
+      "revoked": "Certificado revogado. Há uma vaga disponível para outro dispositivo.",
+      "revokedThisDevice": "O certificado deste dispositivo foi revogado e removido localmente. Ele será emitido novamente na próxima conexão."
+    }
   },
   "quit": {
     "label": "Sair do MidoriVPN",

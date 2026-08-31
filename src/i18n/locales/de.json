@@ -25,6 +25,9 @@
   },
   "errors": {
     "meshCountryUnavailable": "Ihr Herkunftsland konnte vorübergehend nicht ermittelt werden. Mesh wurde nicht aktiviert; versuchen Sie es später erneut.",
+    "deviceLimitReached": "Gerätelimit erreicht. Widerrufen Sie unter Einstellungen → Gerätezertifikate ein älteres Zertifikat und versuchen Sie es erneut.",
+    "certificateInUse": "Trennen Sie die VPN-Verbindung, bevor Sie das Zertifikat dieses Geräts widerrufen.",
+    "certificateLocalCleanup": "Das Zertifikat wurde widerrufen, aber die lokale Anmeldeinformation konnte nicht entfernt werden.",
     "capsApplyFailed": "Konnte nicht angewendet werden. Führe den Befehl manuell als root aus.",
     "capsVerifyFailed": "Berechtigungen wurden angewendet, konnten aber vom Agent nicht verifiziert werden.",
     "capsRevertFailed": "Konnte nicht widerrufen werden. Führe \"sudo setcap -r /usr/local/bin/midorivpn-agent\" manuell aus.",
@@ -187,7 +190,20 @@
     "revertErr": "Konnte nicht widerrufen.",
     "language": "Sprache",
     "languageHint": "Oberflächensprache. Wird sofort übernommen.",
-    "unknown": "Unbekannt"
+    "unknown": "Unbekannt",
+    "certificates": {
+      "title": "Gerätezertifikate",
+      "hint": "OpenVPN und IKEv2 verwenden ein Zertifikat pro Gerät. Widerrufen Sie hier ein altes Gerät, wenn das Tariflimit erreicht ist.",
+      "loading": "Zertifikate werden geladen…",
+      "empty": "Keine aktiven Gerätezertifikate.",
+      "thisDevice": "Dieses Gerät",
+      "expires": "Gültig bis {date}",
+      "revoke": "Widerrufen",
+      "revoking": "Wird widerrufen…",
+      "confirm": "Zertifikat für {device} widerrufen? Dieses Gerät verliert den OpenVPN- und IKEv2-Zugriff.",
+      "revoked": "Zertifikat widerrufen. Ein Platz für ein anderes Gerät ist jetzt frei.",
+      "revokedThisDevice": "Das Zertifikat dieses Geräts wurde widerrufen und lokal entfernt. Beim nächsten Verbindungsversuch wird es neu registriert."
+    }
   },
   "quit": {
     "label": "MidoriVPN beenden",

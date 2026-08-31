@@ -29,7 +29,9 @@
     "capsVerifyFailed": "Permisos aplicados, pero no se pudieron verificar en el agente.",
     "capsRevertFailed": "No se pudo revertir. Ejecuta \"sudo setcap -r /usr/local/bin/midorivpn-agent\" manualmente.",
     "deviceNameActive": "Ya tienes un dispositivo con este nombre conectado.",
-    "deviceLimitReached": "Límite de dispositivos alcanzado para tu cuenta.",
+    "deviceLimitReached": "Alcanzaste el límite de dispositivos. Revoca un certificado anterior en Ajustes → Certificados de dispositivos y vuelve a intentar.",
+    "certificateInUse": "Desconecta la VPN antes de revocar el certificado de este dispositivo.",
+    "certificateLocalCleanup": "El certificado fue revocado, pero no se pudo retirar su credencial local.",
     "tooManyRequests": "Demasiadas solicitudes de conexión. Espera un momento.",
     "serverFull": "El servidor seleccionado está lleno o inactivo.",
     "meshFirewallWarning": "Mesh activo, pero falló la configuración de firewall: {warning}",
@@ -191,7 +193,20 @@
     "revertErr": "No se pudo revertir.",
     "language": "Idioma",
     "languageHint": "Idioma de la interfaz. Se aplica inmediatamente.",
-    "unknown": "Desconocido"
+    "unknown": "Desconocido",
+    "certificates": {
+      "title": "Certificados de dispositivos",
+      "hint": "OpenVPN e IKEv2 usan un certificado por dispositivo. Revoca aquí un equipo anterior cuando alcances el límite de tu plan.",
+      "loading": "Cargando certificados…",
+      "empty": "No hay certificados de dispositivos activos.",
+      "thisDevice": "Este dispositivo",
+      "expires": "Vence el {date}",
+      "revoke": "Revocar",
+      "revoking": "Revocando…",
+      "confirm": "¿Revocar el certificado de {device}? Ese dispositivo perderá acceso a OpenVPN e IKEv2.",
+      "revoked": "Certificado revocado. Ya hay un cupo disponible para otro dispositivo.",
+      "revokedThisDevice": "El certificado de este dispositivo fue revocado y retirado localmente. Se emitirá otro al volver a conectar."
+    }
   },
   "quit": {
     "label": "Salir de MidoriVPN",

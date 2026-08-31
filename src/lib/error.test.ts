@@ -68,4 +68,12 @@ describe('error helpers', () => {
     expect(parsed.category).toBe('tun_permission')
     expect(parsed.action).toBe('grant_caps')
   })
+
+  it('localizes structured certificate management errors by stable code', () => {
+    const inUse = '{"error":"Desconecta la VPN.","code":"ERR_CERTIFICATE_IN_USE"}'
+    const cleanup = '{"error":"No se pudo retirar.","code":"ERR_LOCAL_CREDENTIAL_DELETE_FAILED"}'
+
+    expect(toErrorMessage(inUse)).toBe('Disconnect the VPN before revoking this device certificate.')
+    expect(toErrorMessage(cleanup)).toBe('The certificate was revoked, but its local credential could not be removed.')
+  })
 })
