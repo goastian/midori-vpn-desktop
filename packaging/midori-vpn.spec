@@ -91,6 +91,9 @@ install -m 0644 %{source_dir}/packaging/apparmor/usr.libexec.midorivpn-agent %{b
 /usr/share/polkit-1/actions/org.astian.midorivpn.policy
 
 %changelog
+* Mon Aug 31 2026 Astian, Inc. <support@astian.org> - 2.0.0-1
+- Bind disconnect requests to the active tunnel and preserve it across settings refreshes.
+
 * Thu Aug 27 2026 Astian, Inc. <support@astian.org> - 2.0.0-1
 - Enforce one tray instance and use the packaged MidoriVPN icon.
 - Keep permission restarts in the current browser tab and require complete DNS capabilities.

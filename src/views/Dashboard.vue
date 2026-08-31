@@ -385,7 +385,7 @@ async function selectServer(key: string) {
   if (activeConnected.value) {
     switching.value = true
     try {
-      if (vpn.connected) await vpn.disconnect()
+      if (vpn.connected && !(await vpn.disconnect('server_switch'))) return
       if (mesh.fullTunnel) await mesh.clearExitNode()
       connectionType.value = ''
       activeMeshExitIp.value = ''
@@ -405,7 +405,7 @@ async function toggleConnection() {
       connectionType.value = ''
       activeMeshExitIp.value = ''
       await Promise.all([
-        vpn.connected ? vpn.disconnect() : Promise.resolve(),
+        vpn.connected ? vpn.disconnect('user_request') : Promise.resolve(),
         mesh.fullTunnel ? mesh.clearExitNode() : Promise.resolve(),
       ])
       return

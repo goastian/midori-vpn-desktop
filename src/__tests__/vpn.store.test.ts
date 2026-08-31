@@ -5,16 +5,20 @@ import { useVpnStore } from '../stores/vpn'
 
 const mocks = vi.hoisted(() => ({
   connect: vi.fn(),
+  disconnect: vi.fn(),
+  listServers: vi.fn(async () => []),
+  refreshServers: vi.fn(async () => []),
 }))
 
 vi.mock('../lib/agent', () => ({
   agent: {
     servers: {
-      list: vi.fn(async () => []),
+      list: mocks.listServers,
+      refresh: mocks.refreshServers,
     },
     vpn: {
       connect: mocks.connect,
-      disconnect: vi.fn(async () => undefined),
+      disconnect: mocks.disconnect,
     },
   },
 }))
@@ -23,6 +27,8 @@ describe('vpn store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     mocks.connect.mockReset()
+    mocks.disconnect.mockReset()
+    mocks.disconnect.mockResolvedValue(undefined)
   })
 
   it('keeps session state local and shows a readable origin rejection error', async () => {
@@ -50,5 +56,74 @@ describe('vpn store', () => {
     expect(vpn.connected).toBe(false)
     expect(vpn.error).toBe(VPN_SERVER_UNAVAILABLE_MESSAGE)
     expect(vpn.error).not.toContain('502 Bad Gateway')
+  })
+
+  it('does not disconnect an active tunnel while refreshing servers', async () => {
+    const vpn = useVpnStore()
+    vpn.applyStatus({
+      connected: true,
+      connection_id: 'active-connection',
+      server_name: 'Main',
+      server_id: 'server-id',
+      assigned_ip: '10.86.0.2',
+      server_public_ip: '192.0.2.10',
+      mesh_ip: '',
+      bytes_sent: 10,
+      bytes_recv: 20,
+      active_protocol: 'openvpn',
+    })
+
+    await vpn.fetchServers(true)
+
+    expect(vpn.connected).toBe(true)
+    expect(vpn.connectionId).toBe('active-connection')
+    expect(mocks.disconnect).not.toHaveBeenCalled()
+  })
+
+  it('sends the active connection identity and explicit user intent', async () => {
+    const vpn = useVpnStore()
+    vpn.applyStatus({
+      connected: true,
+      connection_id: 'active-connection',
+      server_name: 'Main',
+      server_id: 'server-id',
+      assigned_ip: '10.86.0.2',
+      server_public_ip: '192.0.2.10',
+      mesh_ip: '',
+      bytes_sent: 10,
+      bytes_recv: 20,
+      active_protocol: 'openvpn',
+    })
+
+    const disconnected = await vpn.disconnect('user_request')
+
+    expect(disconnected).toBe(true)
+    expect(mocks.disconnect).toHaveBeenCalledWith('active-connection', 'user_request')
+    expect(vpn.connected).toBe(false)
+    expect(vpn.connectionId).toBe('')
+  })
+
+  it('preserves the active state when the disconnect request is rejected', async () => {
+    mocks.disconnect.mockRejectedValueOnce(new Error('ERR_VPN_CONNECTION_CHANGED'))
+    const vpn = useVpnStore()
+    vpn.applyStatus({
+      connected: true,
+      connection_id: 'active-connection',
+      server_name: 'Main',
+      server_id: 'server-id',
+      assigned_ip: '10.86.0.2',
+      server_public_ip: '192.0.2.10',
+      mesh_ip: '',
+      bytes_sent: 10,
+      bytes_recv: 20,
+      active_protocol: 'openvpn',
+    })
+
+    const disconnected = await vpn.disconnect('server_switch')
+
+    expect(disconnected).toBe(false)
+    expect(vpn.connected).toBe(true)
+    expect(vpn.connectionId).toBe('active-connection')
+    expect(vpn.error).toBeTruthy()
   })
 })

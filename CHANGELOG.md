@@ -29,6 +29,7 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
 - Settings removes internal agent ports and duplicated startup cards, localizes the transport strategy, shows only the selected transport explanation, and greys out transports that no healthy server advertises.
 - The agent persists the original resolver state before changing `/etc/resolv.conf`, restores it after an unclean prior exit, and receives `SIGTERM` when its owning Qt shell disappears.
 - Privileged Linux child processes now receive only their required ambient capabilities: nftables firewall rules, OpenVPN, NAT cleanup/iptables fallback and resolver immutability no longer lose the agent's file capabilities across `exec`.
+- Active tunnels now carry an opaque per-connection identity. Disconnect requests must name that identity and an explicit user action, preventing stale dashboard state from terminating a newer tunnel. Settings refreshes preserve the active transport, rejected disconnects no longer produce an optimistic false-off state, and local logs distinguish user disconnects, server switches, logout and process shutdown.
 
 ### Build and validation
 

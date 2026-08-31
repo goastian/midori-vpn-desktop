@@ -46,9 +46,11 @@ export async function initAgentToken(): Promise<void> {
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export type VPNTransportProtocol = 'wireguard' | 'wss' | 'masque' | 'openvpn' | 'ikev2'
+export type VPNDisconnectReason = 'user_request' | 'server_switch'
 
 export interface VPNStatus {
   connected: boolean
+  connection_id?: string
   server_name: string
   server_id: string
   peer_id?: string
@@ -433,7 +435,8 @@ export const agent = {
   vpn: {
     connect: (server_id: string, protocol = 'smart_auto') =>
       post<void>('vpn/connect', { server_id, protocol }),
-    disconnect: () => post<void>('vpn/disconnect'),
+    disconnect: (connection_id: string, reason: VPNDisconnectReason) =>
+      post<void>('vpn/disconnect', { connection_id, reason }),
   },
 
   mesh: {

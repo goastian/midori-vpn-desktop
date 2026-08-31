@@ -57,6 +57,11 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 	if req.Protocol == "" {
 		req.Protocol = "smart_auto"
 	}
+	connectionID, err := newVPNConnectionID()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "connection identity unavailable")
+		return
+	}
 
 	// Validate server_id is a UUID to prevent path injection to the backend API.
 	if !isValidUUID(req.ServerID) {
@@ -134,11 +139,11 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Protocol == "openvpn" {
-		s.handleOpenVPNConnect(w, ctx, server, candidates[0], mySeq)
+		s.handleOpenVPNConnect(w, ctx, server, candidates[0], mySeq, connectionID)
 		return
 	}
 	if req.Protocol == "ikev2" {
-		s.handleIKEv2Connect(w, ctx, server, candidates[0], mySeq)
+		s.handleIKEv2Connect(w, ctx, server, candidates[0], mySeq, connectionID)
 		return
 	}
 	if !server.SupportsWireGuard {
@@ -352,6 +357,7 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 
 	s.agent.SetVPN(state.VPNStatus{
 		Connected:      true,
+		ConnectionID:   connectionID,
 		ServerName:     server.Name,
 		ServerID:       req.ServerID,
 		PeerID:         connCfg.PeerID,
@@ -384,12 +390,37 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleVPNDisconnect(w http.ResponseWriter, r *http.Request) {
-	s.stopVPNStatsLoop()
-	snap := s.agent.Snapshot()
-	peerID := ""
-	if vpn, ok := snap["vpn"].(state.VPNStatus); ok {
-		peerID = vpn.PeerID
+	req, err := decodeVPNDisconnectRequest(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_disconnect_request")
+		return
 	}
+
+	snap := s.agent.Snapshot()
+	vpn, ok := snap["vpn"].(state.VPNStatus)
+	if !ok || !vpn.Connected {
+		writeStructuredError(w, http.StatusConflict, "ERR_VPN_NOT_CONNECTED", "No hay un túnel VPN activo para desconectar.")
+		return
+	}
+	if vpn.ConnectionID == "" || vpn.ConnectionID != req.ConnectionID {
+		slog.Warn("stale vpn disconnect rejected", "reason", req.Reason, "protocol", vpn.ActiveProtocol)
+		writeStructuredError(w, http.StatusConflict, "ERR_VPN_CONNECTION_CHANGED", "La conexión VPN activa cambió; actualiza el estado antes de desconectarla.")
+		return
+	}
+
+	slog.Info("vpn disconnect requested", "reason", req.Reason, "protocol", vpn.ActiveProtocol, "server_id", vpn.ServerID)
+	// Invalidate a pending connection attempt before tearing down the current
+	// transport so it cannot become active after this explicit user action.
+	s.connectMu.Lock()
+	if s.connectCancel != nil {
+		s.connectCancel()
+		s.connectCancel = nil
+	}
+	s.connectSeq++
+	s.connectMu.Unlock()
+
+	s.stopVPNStatsLoop()
+	peerID := vpn.PeerID
 	// Disconnect locally and respond immediately — don't block on cloud API.
 	s.closeTransportRelay()
 	s.restoreExternalDNS()

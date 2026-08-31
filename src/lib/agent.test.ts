@@ -114,4 +114,15 @@ describe('agent event relay client', () => {
       body: '{}',
     })
   })
+
+  it('binds a disconnect request to the active tunnel and user intent', async () => {
+    mocks.invoke.mockResolvedValueOnce(undefined)
+
+    await agent.vpn.disconnect('active-connection', 'user_request')
+
+    expect(mocks.invoke).toHaveBeenCalledWith('agent_post', {
+      path: 'vpn/disconnect',
+      body: JSON.stringify({ connection_id: 'active-connection', reason: 'user_request' }),
+    })
+  })
 })

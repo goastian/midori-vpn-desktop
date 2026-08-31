@@ -11,6 +11,7 @@ import (
 // VPNStatus represents the current VPN connection state.
 type VPNStatus struct {
 	Connected      bool   `json:"connected"`
+	ConnectionID   string `json:"connection_id,omitempty"`
 	ServerName     string `json:"server_name"`
 	ServerID       string `json:"server_id"`
 	PeerID         string `json:"peer_id,omitempty"`

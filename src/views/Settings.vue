@@ -125,7 +125,8 @@ import { toErrorMessage } from '../lib/error'
 import QuitButton from '../components/QuitButton.vue'
 import LanguageSelect from '../components/LanguageSelect.vue'
 import { useVpnStore } from '../stores/vpn'
-import type { DeviceCertificate, VPNTransportProtocol } from '../lib/agent'
+import type { DeviceCertificate } from '../lib/agent'
+import { protocolIsAvailable, type ProtocolPolicy } from '../lib/protocol'
 
 const { t, locale } = useI18n()
 const appVersion = __APP_VERSION__
@@ -145,19 +146,16 @@ const certificatesLoading = ref(false)
 const revokingCertificateId = ref<string | null>(null)
 const certificateError = ref<string | null>(null)
 const certificateNotice = ref<string | null>(null)
-type ProtocolPolicy = VPNTransportProtocol | 'smart_auto'
 
 const activeCertificates = computed(() => certificates.value.filter((certificate) => !certificate.revoked_at))
 
 const protocolOptions = computed(() => {
-  const supports = (protocol: VPNTransportProtocol) => vpn.servers.some((server) => {
-    if (protocol === 'wireguard') return server.supports_wireguard
-    return server.transports?.some((item) => item.protocol === protocol && item.enabled && item.health_status === 'healthy')
-  })
   return (['smart_auto', 'wireguard', 'wss', 'masque', 'openvpn', 'ikev2'] as ProtocolPolicy[]).map((value) => ({
     value,
     label: t(`settings.protocols.${value}.name`),
-    available: value === 'smart_auto' || supports(value),
+    // A refresh may temporarily hide a transport in Control, but it must not
+    // invalidate or relabel a tunnel that is already carrying user traffic.
+    available: protocolIsAvailable(value, vpn.servers, vpn.connected, vpn.activeProtocol),
   }))
 })
 
@@ -230,7 +228,7 @@ onMounted(async () => {
   await vpn.fetchServers(true)
   await loadCertificates()
   const selected = protocolOptions.value.find((option) => option.value === selectedProtocolPolicy.value)
-  if (!selected?.available) {
+  if (!selected?.available && !vpn.connected) {
     selectedProtocolPolicy.value = 'smart_auto'
     saveProtocolPolicy()
   }

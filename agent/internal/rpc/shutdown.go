@@ -22,6 +22,9 @@ func (s *Server) gracefulShutdown() {
 			slog.Error("gracefulShutdown panic", "recover", r)
 		}
 	}()
+	if vpn, ok := s.agent.Snapshot()["vpn"].(state.VPNStatus); ok && vpn.Connected {
+		slog.Info("vpn disconnect requested", "reason", "process_shutdown", "protocol", vpn.ActiveProtocol, "server_id", vpn.ServerID)
+	}
 
 	// Disconnect VPN tunnel if up.
 	s.stopVPNStatsLoop()

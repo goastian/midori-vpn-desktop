@@ -12,7 +12,7 @@ import (
 	"github.com/goastian/midorivpn-agent/internal/state"
 )
 
-func (s *Server) handleIKEv2Connect(w http.ResponseWriter, ctx context.Context, server *apiClient.Server, candidate vpnTransportCandidate, sequence uint64) {
+func (s *Server) handleIKEv2Connect(w http.ResponseWriter, ctx context.Context, server *apiClient.Server, candidate vpnTransportCandidate, sequence uint64, connectionID string) {
 	serverName, ok := metadataString(candidate.metadata, "server_name")
 	if !ok {
 		writeStructuredError(w, http.StatusBadGateway, "ERR_TRANSPORT_CONFIGURATION_INVALID", "IKEv2 no tiene un nombre de certificado de gateway configurado.")
@@ -78,7 +78,7 @@ func (s *Server) handleIKEv2Connect(w http.ResponseWriter, ctx context.Context, 
 	}
 	connectionMS := time.Since(started).Milliseconds()
 	s.agent.SetVPN(state.VPNStatus{
-		Connected: true, ServerName: server.Name, ServerID: server.ID,
+		Connected: true, ConnectionID: connectionID, ServerName: server.Name, ServerID: server.ID,
 		AssignedIP: assignedIP, ServerPublicIP: serverPublicIP,
 		ServerEndpoint: endpoint, ActiveProtocol: "ikev2", ConnectionMS: connectionMS,
 	})

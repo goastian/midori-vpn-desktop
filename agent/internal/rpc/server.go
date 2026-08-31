@@ -363,6 +363,9 @@ func (s *Server) setMeshDegraded(err error) {
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	s.stopVPNStatsLoop()
+	if vpn, ok := s.agent.Snapshot()["vpn"].(state.VPNStatus); ok && vpn.Connected {
+		slog.Info("vpn disconnect requested", "reason", "logout", "protocol", vpn.ActiveProtocol, "server_id", vpn.ServerID)
+	}
 
 	// Cancel any in-progress VPN connect so it cannot race with cleanup.
 	s.connectMu.Lock()

@@ -1,10 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { agent, type Server, type VPNStatus, type VPNTransportProtocol } from '../lib/agent'
+import { agent, type Server, type VPNDisconnectReason, type VPNStatus, type VPNTransportProtocol } from '../lib/agent'
 import { toErrorMessage } from '../lib/error'
 
 export const useVpnStore = defineStore('vpn', () => {
   const connected = ref(false)
+  const connectionId = ref('')
   const serverName = ref('')
   const serverIp = ref('')
   const assignedIp = ref('')
@@ -20,6 +21,7 @@ export const useVpnStore = defineStore('vpn', () => {
 
   function applyStatus(s: VPNStatus) {
     connected.value = s.connected
+    connectionId.value = s.connection_id ?? ''
     serverName.value = s.server_name
     serverIp.value = s.server_id
     assignedIp.value = s.assigned_ip
@@ -64,17 +66,31 @@ export const useVpnStore = defineStore('vpn', () => {
     }
   }
 
-  async function disconnect() {
-    // Optimistic UI reset first, then await the actual agent call
-    connected.value = false
-    serverName.value = ''
-    serverIp.value = ''
-    assignedIp.value = ''
-    serverPublicIp.value = ''
-    bytesUp.value = 0
-    bytesDown.value = 0
+  async function disconnect(reason: VPNDisconnectReason) {
+    if (!connected.value) return true
+    if (!connectionId.value) {
+      error.value = toErrorMessage(new Error('ERR_VPN_CONNECTION_CHANGED'))
+      return false
+    }
+    loading.value = true
     error.value = null
-    await agent.vpn.disconnect().catch(() => {/* best-effort */})
+    try {
+      await agent.vpn.disconnect(connectionId.value, reason)
+      connected.value = false
+      connectionId.value = ''
+      serverName.value = ''
+      serverIp.value = ''
+      assignedIp.value = ''
+      serverPublicIp.value = ''
+      bytesUp.value = 0
+      bytesDown.value = 0
+      return true
+    } catch (e) {
+      error.value = toErrorMessage(e)
+      return false
+    } finally {
+      loading.value = false
+    }
   }
 
   function clearServers() {
@@ -82,7 +98,7 @@ export const useVpnStore = defineStore('vpn', () => {
   }
 
   return {
-    connected, serverName, serverIp, assignedIp, serverPublicIp,
+    connected, connectionId, serverName, serverIp, assignedIp, serverPublicIp,
     bytesUp, bytesDown, connectedAt, activeProtocol, fallbackReason,
     loading, error, servers,
     applyStatus, fetchServers, connect, disconnect, clearServers,
