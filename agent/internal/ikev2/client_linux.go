@@ -52,6 +52,7 @@ type Client struct {
 	configPath        string
 	swanctlConfigPath string
 	routeExclusions   []string
+	endpoint          string
 	closeOnce         sync.Once
 }
 
@@ -97,6 +98,11 @@ func Start(ctx context.Context, config Config) (*Client, error) {
 	if err := validateConfig(config); err != nil {
 		return nil, err
 	}
+	resolvedEndpoint, endpointIPs, err := resolveEndpoint(ctx, config.Endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("resolve IKEv2 endpoint: %w", err)
+	}
+	config.Endpoint = resolvedEndpoint
 	charonVersionPath, err := findExecutable("/usr/libexec/ipsec/charon", "/usr/lib/ipsec/charon")
 	if err != nil {
 		return nil, errors.New("strongSwan 6 is not installed")
@@ -115,7 +121,7 @@ func Start(ctx context.Context, config Config) (*Client, error) {
 	}
 	client := &Client{
 		files: files, swanctl: swanctlPath, charonDone: make(chan error, 1),
-		charonOutput: newBoundedOutput(charonDiagnosticLimit),
+		charonOutput: newBoundedOutput(charonDiagnosticLimit), endpoint: resolvedEndpoint,
 	}
 	if err := client.prepareRuntime(config); err != nil {
 		client.Close()
@@ -151,15 +157,15 @@ func Start(ctx context.Context, config Config) (*Client, error) {
 		client.Close()
 		return nil, fmt.Errorf("load strongSwan connection: %w", err)
 	}
+	if err := client.installEndpointRouteExclusions(endpointIPs); err != nil {
+		client.Close()
+		return nil, err
+	}
 	if _, err := client.runSwanctl(ctx, config.Timeout, "--initiate", "--ike", connectionName, "--child", childName); err != nil {
 		client.Close()
 		return nil, fmt.Errorf("complete IKEv2 EAP-TLS handshake: %w", err)
 	}
 	if err := client.waitForAssignedIP(ctx, 3*time.Second); err != nil {
-		client.Close()
-		return nil, err
-	}
-	if err := client.installEndpointRouteExclusions(ctx, config.Endpoint); err != nil {
 		client.Close()
 		return nil, err
 	}
@@ -417,15 +423,7 @@ func createXFRMInterface() error {
 // following strongSwan's full-tunnel default route back into the XFRM
 // interface. A throw route continues policy lookup in the main table, where
 // the physical route to the IKE peer is available.
-func (c *Client) installEndpointRouteExclusions(ctx context.Context, endpoint string) error {
-	host, _, err := net.SplitHostPort(endpoint)
-	if err != nil {
-		return fmt.Errorf("prepare IKEv2 endpoint route: %w", err)
-	}
-	ips, err := resolveEndpointIPv4s(ctx, host)
-	if err != nil {
-		return fmt.Errorf("resolve IKEv2 endpoint route: %w", err)
-	}
+func (c *Client) installEndpointRouteExclusions(ips []string) error {
 	for _, ip := range ips {
 		prefix := ip + "/32"
 		if _, err := runIP("route", "replace", "throw", prefix, "table", routingTable); err != nil {
@@ -434,6 +432,18 @@ func (c *Client) installEndpointRouteExclusions(ctx context.Context, endpoint st
 		c.routeExclusions = append(c.routeExclusions, prefix)
 	}
 	return nil
+}
+
+func resolveEndpoint(ctx context.Context, endpoint string) (string, []string, error) {
+	host, port, err := net.SplitHostPort(endpoint)
+	if err != nil {
+		return "", nil, err
+	}
+	ips, err := resolveEndpointIPv4s(ctx, host)
+	if err != nil {
+		return "", nil, err
+	}
+	return net.JoinHostPort(ips[0], port), ips, nil
 }
 
 func resolveEndpointIPv4s(ctx context.Context, host string) ([]string, error) {
@@ -532,6 +542,8 @@ func findExecutable(paths ...string) (string, error) {
 }
 
 func (c *Client) InterfaceName() string { return interfaceName }
+
+func (c *Client) Endpoint() string { return c.endpoint }
 
 func (c *Client) AssignedIP() string {
 	iface, err := net.InterfaceByName(interfaceName)

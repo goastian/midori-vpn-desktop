@@ -57,7 +57,7 @@ func (s *Server) handleIKEv2Connect(w http.ResponseWriter, ctx context.Context, 
 		writeError(w, http.StatusInternalServerError, "IKEv2 DNS: "+err.Error())
 		return
 	}
-	if err := s.guard.Enable(s.netguardScopeForInterface(client.InterfaceName(), endpoint, assignedIP)); err != nil {
+	if err := s.guard.Enable(s.netguardScopeForInterface(client.InterfaceName(), client.Endpoint(), assignedIP)); err != nil {
 		cleanup()
 		writeError(w, http.StatusInternalServerError, "kill switch: "+err.Error())
 		return
@@ -80,7 +80,7 @@ func (s *Server) handleIKEv2Connect(w http.ResponseWriter, ctx context.Context, 
 	s.agent.SetVPN(state.VPNStatus{
 		Connected: true, ConnectionID: connectionID, ServerName: server.Name, ServerID: server.ID,
 		AssignedIP: assignedIP, ServerPublicIP: serverPublicIP,
-		ServerEndpoint: endpoint, ActiveProtocol: "ikev2", ConnectionMS: connectionMS,
+		ServerEndpoint: client.Endpoint(), ActiveProtocol: "ikev2", ConnectionMS: connectionMS,
 	})
 	s.startVPNStatsLoop()
 	s.agent.SetProtection(state.ProtectionStatus{KillSwitchActive: true, DNSProtected: true, Mode: "ikev2"})

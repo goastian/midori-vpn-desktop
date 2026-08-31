@@ -95,6 +95,19 @@ func TestResolveEndpointIPv4sNormalizesLiteralAddress(t *testing.T) {
 	}
 }
 
+func TestResolveEndpointReturnsLiteralSocketAndAllRouteExclusions(t *testing.T) {
+	endpoint, addresses, err := resolveEndpoint(context.Background(), "192.0.2.40:500")
+	if err != nil {
+		t.Fatalf("resolveEndpoint() error = %v", err)
+	}
+	if endpoint != "192.0.2.40:500" {
+		t.Fatalf("resolveEndpoint() endpoint = %q", endpoint)
+	}
+	if len(addresses) != 1 || addresses[0] != "192.0.2.40" {
+		t.Fatalf("resolveEndpoint() addresses = %v", addresses)
+	}
+}
+
 func TestBoundedOutputRetainsLatestDiagnostics(t *testing.T) {
 	output := newBoundedOutput(8)
 	for _, value := range []string{"12345", "678", "90"} {
