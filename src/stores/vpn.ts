@@ -31,11 +31,13 @@ export const useVpnStore = defineStore('vpn', () => {
     connectedAt.value = null
   }
 
-  async function fetchServers() {
+  async function fetchServers(forceRefresh = false) {
     loading.value = true
     error.value = null
     try {
-      servers.value = await agent.servers.list()
+      servers.value = forceRefresh
+        ? await agent.servers.refresh()
+        : await agent.servers.list()
     } catch (e) {
       error.value = toErrorMessage(e)
     } finally {

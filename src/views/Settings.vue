@@ -227,7 +227,7 @@ onMounted(async () => {
     selectedProtocolPolicy.value = storedPolicy
   }
 
-  if (vpn.servers.length === 0) await vpn.fetchServers()
+  await vpn.fetchServers(true)
   await loadCertificates()
   const selected = protocolOptions.value.find((option) => option.value === selectedProtocolPolicy.value)
   if (!selected?.available) {

@@ -13,11 +13,19 @@ import (
 )
 
 func (s *Server) handleListServers(w http.ResponseWriter, r *http.Request) {
+	s.writeServers(w, r, false)
+}
+
+func (s *Server) handleRefreshServers(w http.ResponseWriter, r *http.Request) {
+	s.writeServers(w, r, true)
+}
+
+func (s *Server) writeServers(w http.ResponseWriter, r *http.Request, force bool) {
 	if !s.authMgr.LoggedIn() {
 		writeError(w, http.StatusUnauthorized, "not authenticated")
 		return
 	}
-	servers, err := s.listServersCached(r.Context(), false)
+	servers, err := s.listServersCached(r.Context(), force)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return

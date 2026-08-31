@@ -103,4 +103,15 @@ describe('agent event relay client', () => {
     expect(status.backend).toBe('resolvconf')
     expect(status.caps_ok).toBe(false)
   })
+
+  it('refreshes server capabilities through the explicit bridge route', async () => {
+    mocks.invoke.mockResolvedValueOnce([])
+
+    await agent.servers.refresh()
+
+    expect(mocks.invoke).toHaveBeenCalledWith('agent_post', {
+      path: 'servers/refresh',
+      body: '{}',
+    })
+  })
 })

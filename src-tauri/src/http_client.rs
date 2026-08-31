@@ -27,7 +27,7 @@ fn read_token(app: &AppHandle) -> String {
     lock_safe(&app.state::<AgentToken>().0).clone()
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 enum AgentMethod {
     Get,
     Post,
@@ -46,16 +46,24 @@ fn is_allowed_agent_path(method: AgentMethod, path: &str) -> bool {
         return false;
     }
 
+    if method == AgentMethod::Delete {
+        if let Some(id) = path.strip_prefix("certificates/") {
+            return is_canonical_uuid(id);
+        }
+    }
+
     matches!(
         (method, path),
         (AgentMethod::Get, "status")
             | (AgentMethod::Get, "servers")
+            | (AgentMethod::Get, "certificates")
             | (AgentMethod::Get, "settings")
             | (AgentMethod::Get, "mesh/exit-nodes")
             | (AgentMethod::Get, "public-ip")
             | (AgentMethod::Get, "dns/status")
             | (AgentMethod::Post, "auth/set-tokens")
             | (AgentMethod::Post, "auth/refresh")
+            | (AgentMethod::Post, "servers/refresh")
             | (AgentMethod::Post, "vpn/connect")
             | (AgentMethod::Post, "vpn/disconnect")
             | (AgentMethod::Post, "mesh/enable")
@@ -68,6 +76,14 @@ fn is_allowed_agent_path(method: AgentMethod, path: &str) -> bool {
             | (AgentMethod::Delete, "auth/logout")
             | (AgentMethod::Delete, "mesh/exit-node")
     )
+}
+
+fn is_canonical_uuid(value: &str) -> bool {
+    value.len() == 36
+        && value.bytes().enumerate().all(|(index, byte)| match index {
+            8 | 13 | 18 | 23 => byte == b'-',
+            _ => byte.is_ascii_hexdigit(),
+        })
 }
 
 async fn read_json_response(resp: reqwest::Response) -> Result<Value, String> {
@@ -201,6 +217,12 @@ mod tests {
         assert!(is_allowed_agent_path(AgentMethod::Get, "status"));
         assert!(is_allowed_agent_path(AgentMethod::Get, "dns/status"));
         assert!(is_allowed_agent_path(AgentMethod::Post, "vpn/connect"));
+        assert!(is_allowed_agent_path(AgentMethod::Post, "servers/refresh"));
+        assert!(is_allowed_agent_path(AgentMethod::Get, "certificates"));
+        assert!(is_allowed_agent_path(
+            AgentMethod::Delete,
+            "certificates/3689af6a-ceb2-4d1d-8c95-3f4c904093d1"
+        ));
         assert!(is_allowed_agent_path(AgentMethod::Delete, "mesh/exit-node"));
 
         assert!(!is_allowed_agent_path(AgentMethod::Get, "/status"));
@@ -211,6 +233,10 @@ mod tests {
         assert!(!is_allowed_agent_path(AgentMethod::Get, "status?token=x"));
         assert!(!is_allowed_agent_path(AgentMethod::Get, "../status"));
         assert!(!is_allowed_agent_path(AgentMethod::Post, "servers"));
+        assert!(!is_allowed_agent_path(
+            AgentMethod::Delete,
+            "certificates/not-a-uuid"
+        ));
         assert!(!is_allowed_agent_path(AgentMethod::Delete, "settings"));
     }
 

@@ -146,6 +146,7 @@ func (s *Server) newMux(agentToken string) http.Handler {
 	mux.Handle("POST /auth/refresh", wrap(http.HandlerFunc(s.handleRefreshToken)))
 
 	mux.Handle("GET /servers", wrap(http.HandlerFunc(s.handleListServers)))
+	mux.Handle("POST /servers/refresh", wrap(http.HandlerFunc(s.handleRefreshServers)))
 	mux.Handle("GET /connections", wrap(http.HandlerFunc(s.handleListConnections)))
 	mux.Handle("DELETE /connections/{id}", wrap(http.HandlerFunc(s.handleDeleteConnection)))
 	mux.Handle("GET /certificates", wrap(http.HandlerFunc(s.handleListDeviceCertificates)))

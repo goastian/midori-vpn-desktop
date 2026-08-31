@@ -422,6 +422,7 @@ export const agent = {
 
   servers: {
     list: () => get<Server[]>('servers'),
+    refresh: () => post<Server[]>('servers/refresh'),
   },
 
   certificates: {
