@@ -29,8 +29,9 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
 
 ### Build and validation
 
+- Desktop tooling and RPM builders now use exact Node 24.20.0, Go 1.27.0 and Fedora 44 image digests; cargo-audit is fixed at 0.22.2 instead of resolving the newest crate during each rebuild.
 - Regenerated `Cargo.lock` from the manifest and made the Podman Rust runner use an executable target volume; `cargo check --locked` is now reproducible.
-- RPM builds use Node 24.19.0 and npm 12.0.2 inside a rootless multistage builder; an incompatible Node 22 build is rejected rather than distributed.
+- RPM builds use Node 24.20.0 and npm 12.0.2 inside a rootless multistage builder; an incompatible Node 22 build is rejected rather than distributed.
 - The packaged status UI reads its local RPC and proxy ports from the agent response instead of embedding them in the Vue view.
 
 ### Major Changes
