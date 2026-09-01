@@ -46,10 +46,21 @@ export async function initAgentToken(): Promise<void> {
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export type VPNTransportProtocol = 'wireguard' | 'wss' | 'masque' | 'openvpn' | 'ikev2'
+export type VPNRequestedProtocol = VPNTransportProtocol | 'smart_auto'
+export type VPNConnectionPhase =
+  | 'disconnected'
+  | 'preparing'
+  | 'authenticating'
+  | 'negotiating'
+  | 'protecting'
+  | 'connected'
+  | 'disconnecting'
+  | 'error'
 export type VPNDisconnectReason = 'user_request' | 'server_switch'
 
 export interface VPNStatus {
   connected: boolean
+  phase?: VPNConnectionPhase
   connection_id?: string
   server_name: string
   server_id: string
@@ -60,6 +71,7 @@ export interface VPNStatus {
   bytes_sent: number
   bytes_recv: number
   active_protocol?: VPNTransportProtocol
+  requested_protocol?: VPNRequestedProtocol
   fallback_reason?: string
   connection_ms?: number
 }

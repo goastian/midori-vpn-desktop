@@ -8,24 +8,39 @@ import (
 	"github.com/goastian/midorivpn-agent/internal/apiClient"
 )
 
+type VPNPhase string
+
+const (
+	VPNPhaseDisconnected   VPNPhase = "disconnected"
+	VPNPhasePreparing      VPNPhase = "preparing"
+	VPNPhaseAuthenticating VPNPhase = "authenticating"
+	VPNPhaseNegotiating    VPNPhase = "negotiating"
+	VPNPhaseProtecting     VPNPhase = "protecting"
+	VPNPhaseConnected      VPNPhase = "connected"
+	VPNPhaseDisconnecting  VPNPhase = "disconnecting"
+	VPNPhaseError          VPNPhase = "error"
+)
+
 // VPNStatus represents the current VPN connection state.
 type VPNStatus struct {
-	Connected      bool   `json:"connected"`
-	ConnectionID   string `json:"connection_id,omitempty"`
-	ServerName     string `json:"server_name"`
-	ServerID       string `json:"server_id"`
-	PeerID         string `json:"peer_id,omitempty"`
-	AssignedIP     string `json:"assigned_ip"`
-	ServerPublicIP string `json:"server_public_ip"`
-	ServerEndpoint string `json:"server_endpoint,omitempty"`
-	MeshIP         string `json:"mesh_ip"`
-	BytesSent      int64  `json:"bytes_sent"`
-	BytesRecv      int64  `json:"bytes_recv"`
-	ActiveProtocol string `json:"active_protocol,omitempty"`
-	FallbackReason string `json:"fallback_reason,omitempty"`
-	ConnectionMS   int64  `json:"connection_ms,omitempty"`
-	PostQuantum    bool   `json:"post_quantum,omitempty"`
-	PQAlgorithm    string `json:"pq_algorithm,omitempty"`
+	Connected         bool     `json:"connected"`
+	Phase             VPNPhase `json:"phase"`
+	ConnectionID      string   `json:"connection_id,omitempty"`
+	ServerName        string   `json:"server_name"`
+	ServerID          string   `json:"server_id"`
+	PeerID            string   `json:"peer_id,omitempty"`
+	AssignedIP        string   `json:"assigned_ip"`
+	ServerPublicIP    string   `json:"server_public_ip"`
+	ServerEndpoint    string   `json:"server_endpoint,omitempty"`
+	MeshIP            string   `json:"mesh_ip"`
+	BytesSent         int64    `json:"bytes_sent"`
+	BytesRecv         int64    `json:"bytes_recv"`
+	ActiveProtocol    string   `json:"active_protocol,omitempty"`
+	RequestedProtocol string   `json:"requested_protocol,omitempty"`
+	FallbackReason    string   `json:"fallback_reason,omitempty"`
+	ConnectionMS      int64    `json:"connection_ms,omitempty"`
+	PostQuantum       bool     `json:"post_quantum,omitempty"`
+	PQAlgorithm       string   `json:"pq_algorithm,omitempty"`
 }
 
 // MeshStatus represents the current mesh node state.
@@ -82,7 +97,7 @@ type Event struct {
 
 // NewAgent creates a new Agent with default state.
 func NewAgent() *Agent {
-	return &Agent{}
+	return &Agent{VPN: VPNStatus{Phase: VPNPhaseDisconnected}}
 }
 
 // Snapshot returns a safe copy of all state for JSON serialization.
@@ -111,10 +126,66 @@ func (a *Agent) SetAuth(s AuthStatus) {
 
 // SetVPN atomically updates VPN state and broadcasts.
 func (a *Agent) SetVPN(s VPNStatus) {
+	if s.Phase == "" {
+		if s.Connected {
+			s.Phase = VPNPhaseConnected
+		} else {
+			s.Phase = VPNPhaseDisconnected
+		}
+	}
 	a.mu.Lock()
 	a.VPN = s
 	a.mu.Unlock()
 	a.broadcast(Event{Type: "vpn_status"})
+}
+
+// BeginVPNConnection publishes a new connection attempt before any network
+// work starts. The opaque connection ID also prevents an older attempt from
+// overwriting the state owned by a newer request.
+func (a *Agent) BeginVPNConnection(connectionID, serverID, requestedProtocol string) {
+	a.SetVPN(VPNStatus{
+		Phase: VPNPhasePreparing, ConnectionID: connectionID, ServerID: serverID,
+		RequestedProtocol: requestedProtocol,
+	})
+}
+
+// UpdateVPNConnection advances the attempt only while it still owns the
+// published connection identity.
+func (a *Agent) UpdateVPNConnection(connectionID string, phase VPNPhase, activeProtocol, fallbackReason string) bool {
+	a.mu.Lock()
+	if a.VPN.ConnectionID != connectionID || a.VPN.Connected {
+		a.mu.Unlock()
+		return false
+	}
+	a.VPN.Phase = phase
+	if activeProtocol != "" {
+		a.VPN.ActiveProtocol = activeProtocol
+	}
+	if fallbackReason != "" {
+		a.VPN.FallbackReason = fallbackReason
+	}
+	a.mu.Unlock()
+	a.broadcast(Event{Type: "vpn_status"})
+	return true
+}
+
+// FailVPNConnection publishes a terminal failure only if this attempt still
+// owns the state. A superseded request therefore cannot erase a newer attempt
+// or an established tunnel.
+func (a *Agent) FailVPNConnection(connectionID string) bool {
+	a.mu.Lock()
+	if a.VPN.ConnectionID != connectionID || a.VPN.Connected {
+		a.mu.Unlock()
+		return false
+	}
+	a.VPN = VPNStatus{
+		Phase: VPNPhaseError, ServerID: a.VPN.ServerID,
+		RequestedProtocol: a.VPN.RequestedProtocol,
+		ActiveProtocol:    a.VPN.ActiveProtocol, FallbackReason: a.VPN.FallbackReason,
+	}
+	a.mu.Unlock()
+	a.broadcast(Event{Type: "vpn_status"})
+	return true
 }
 
 // SetMesh atomically updates mesh state and broadcasts.

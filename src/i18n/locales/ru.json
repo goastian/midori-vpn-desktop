@@ -71,7 +71,14 @@
     "connected": "Подключено",
     "disconnected": "Отключено",
     "connect": "Подключить",
-    "disconnect": "Отключить"
+    "disconnect": "Отключить",
+    "phases": {
+      "preparing": "Подготовка подключения…",
+      "authenticating": "Подготовка защищённых учётных данных…",
+      "negotiating": "Согласование туннеля…",
+      "protecting": "Включение защиты от утечек…",
+      "disconnecting": "Отключение…"
+    }
   },
   "stats": {
     "server": "Сервер",

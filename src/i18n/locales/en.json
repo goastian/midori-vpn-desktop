@@ -74,7 +74,14 @@
     "connected": "Connected",
     "disconnected": "Disconnected",
     "connect": "Connect",
-    "disconnect": "Disconnect"
+    "disconnect": "Disconnect",
+    "phases": {
+      "preparing": "Preparing connection…",
+      "authenticating": "Preparing secure credentials…",
+      "negotiating": "Negotiating tunnel…",
+      "protecting": "Enabling leak protection…",
+      "disconnecting": "Disconnecting…"
+    }
   },
   "stats": {
     "server": "Server",

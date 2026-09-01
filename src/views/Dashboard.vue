@@ -79,7 +79,7 @@
       <div class="conn-row">
         <div class="conn-status">
           <span class="status-dot" :class="activeConnected ? 'connected' : 'disconnected'"></span>
-          <span class="conn-label">{{ activeConnected ? t('vpn.connected') : t('vpn.disconnected') }}</span>
+          <span class="conn-label">{{ connectionStatusLabel }}</span>
         </div>
         <button
           class="btn" :class="activeConnected ? 'btn-danger' : 'btn-primary'"
@@ -293,8 +293,14 @@ const activeConnectionType = computed<'vpn' | 'mesh' | ''>(() => {
   return connectionType.value
 })
 
+const connectionStatusLabel = computed(() => {
+  if (mesh.enabled && mesh.fullTunnel) return t('vpn.connected')
+  if (vpn.connectionInProgress) return t(`vpn.phases.${vpn.phase}`)
+  return vpn.connected ? t('vpn.connected') : t('vpn.disconnected')
+})
+
 const connectDisabled = computed(() => {
-  if (vpn.loading || toggleInProgress.value) return true
+  if (vpn.loading || vpn.connectionInProgress || toggleInProgress.value) return true
   if (activeConnected.value) return false
   return !auth.authenticated || serversLoading.value || !selectedServer.value
 })

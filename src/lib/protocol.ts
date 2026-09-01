@@ -6,7 +6,7 @@ export function protocolIsAvailable(
   policy: ProtocolPolicy,
   servers: Server[],
   connected: boolean,
-  activeProtocol: VPNTransportProtocol,
+  activeProtocol: VPNTransportProtocol | null,
 ): boolean {
   if (policy === 'smart_auto') return true
   if (connected && activeProtocol === policy) return true

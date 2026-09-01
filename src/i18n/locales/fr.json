@@ -71,7 +71,14 @@
     "connected": "Connecté",
     "disconnected": "Déconnecté",
     "connect": "Connecter",
-    "disconnect": "Déconnecter"
+    "disconnect": "Déconnecter",
+    "phases": {
+      "preparing": "Préparation de la connexion…",
+      "authenticating": "Préparation des identifiants sécurisés…",
+      "negotiating": "Négociation du tunnel…",
+      "protecting": "Activation de la protection contre les fuites…",
+      "disconnecting": "Déconnexion…"
+    }
   },
   "stats": {
     "server": "Serveur",

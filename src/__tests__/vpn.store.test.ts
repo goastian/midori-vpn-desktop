@@ -8,10 +8,12 @@ const mocks = vi.hoisted(() => ({
   disconnect: vi.fn(),
   listServers: vi.fn(async () => []),
   refreshServers: vi.fn(async () => []),
+  status: vi.fn(),
 }))
 
 vi.mock('../lib/agent', () => ({
   agent: {
+    status: mocks.status,
     servers: {
       list: mocks.listServers,
       refresh: mocks.refreshServers,
@@ -29,6 +31,8 @@ describe('vpn store', () => {
     mocks.connect.mockReset()
     mocks.disconnect.mockReset()
     mocks.disconnect.mockResolvedValue(undefined)
+    mocks.status.mockReset()
+    mocks.status.mockRejectedValue(new Error('status unavailable'))
   })
 
   it('keeps session state local and shows a readable origin rejection error', async () => {
@@ -56,6 +60,59 @@ describe('vpn store', () => {
     expect(vpn.connected).toBe(false)
     expect(vpn.error).toBe(VPN_SERVER_UNAVAILABLE_MESSAGE)
     expect(vpn.error).not.toContain('502 Bad Gateway')
+    expect(mocks.status).not.toHaveBeenCalled()
+  })
+
+  it('reconciles an ambiguous network error when the requested tunnel is already connected', async () => {
+    mocks.connect.mockRejectedValueOnce(new TypeError('NetworkError when attempting to fetch resource.'))
+    mocks.status.mockResolvedValueOnce({
+      vpn: {
+        connected: true,
+        phase: 'connected',
+        connection_id: 'ike-session',
+        server_name: 'Main',
+        server_id: 'server-id',
+        assigned_ip: '10.85.0.1',
+        server_public_ip: '192.0.2.10',
+        mesh_ip: '',
+        bytes_sent: 0,
+        bytes_recv: 0,
+        requested_protocol: 'ikev2',
+        active_protocol: 'ikev2',
+      },
+    })
+    const vpn = useVpnStore()
+
+    await vpn.connect('server-id')
+
+    expect(vpn.error).toBeNull()
+    expect(vpn.connected).toBe(true)
+    expect(vpn.phase).toBe('connected')
+    expect(vpn.requestedProtocol).toBe('ikev2')
+    expect(vpn.activeProtocol).toBe('ikev2')
+    expect(mocks.status).toHaveBeenCalledOnce()
+  })
+
+  it('does not submit another connection while the agent is still negotiating', async () => {
+    const vpn = useVpnStore()
+    vpn.applyStatus({
+      connected: false,
+      phase: 'negotiating',
+      connection_id: 'pending-session',
+      server_name: '',
+      server_id: 'server-id',
+      assigned_ip: '',
+      server_public_ip: '',
+      mesh_ip: '',
+      bytes_sent: 0,
+      bytes_recv: 0,
+      requested_protocol: 'ikev2',
+    })
+
+    await vpn.connect('server-id')
+
+    expect(vpn.connectionInProgress).toBe(true)
+    expect(mocks.connect).not.toHaveBeenCalled()
   })
 
   it('does not disconnect an active tunnel while refreshing servers', async () => {

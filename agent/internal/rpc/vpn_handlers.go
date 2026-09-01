@@ -57,6 +57,10 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 	if req.Protocol == "" {
 		req.Protocol = "smart_auto"
 	}
+	if req.Protocol != "wireguard" && req.Protocol != "smart_auto" && req.Protocol != "wss" && req.Protocol != "masque" && req.Protocol != "openvpn" && req.Protocol != "ikev2" {
+		writeStructuredError(w, http.StatusBadRequest, "ERR_TRANSPORT_UNAVAILABLE", "El transporte solicitado no está disponible en este servidor.")
+		return
+	}
 	connectionID, err := newVPNConnectionID()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "connection identity unavailable")
@@ -66,6 +70,10 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 	// Validate server_id is a UUID to prevent path injection to the backend API.
 	if !isValidUUID(req.ServerID) {
 		writeError(w, http.StatusBadRequest, "invalid server_id format")
+		return
+	}
+	if current, ok := s.agent.Snapshot()["vpn"].(state.VPNStatus); ok && current.Connected {
+		writeStructuredError(w, http.StatusConflict, "ERR_VPN_ALREADY_CONNECTED", "Desconecta el túnel actual antes de iniciar otro.")
 		return
 	}
 
@@ -78,7 +86,9 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 	mySeq := s.connectSeq
 	ctx, cancel := context.WithCancel(r.Context())
 	s.connectCancel = cancel
+	s.agent.BeginVPNConnection(connectionID, req.ServerID, req.Protocol)
 	s.connectMu.Unlock()
+	slog.Info("vpn connection attempt started", "requested_protocol", req.Protocol, "server_id", req.ServerID)
 
 	// Release ownership on exit; always cancel the derived context.
 	defer func() {
@@ -89,6 +99,7 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		}
 		s.connectMu.Unlock()
 	}()
+	defer s.agent.FailVPNConnection(connectionID)
 
 	// cleanupCtx is used for backend cleanup after a failure so that it is not
 	// affected by a cancelled ctx (e.g. superseded by a newer connect request).
@@ -105,11 +116,6 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "not authenticated: please sign in")
 		return
 	}
-	if current, ok := s.agent.Snapshot()["vpn"].(state.VPNStatus); ok && current.Connected {
-		writeStructuredError(w, http.StatusConflict, "ERR_VPN_ALREADY_CONNECTED", "Desconecta el túnel actual antes de iniciar otro.")
-		return
-	}
-
 	// Resolve and validate the requested transport before provisioning any
 	// protocol-specific credential. In particular, certificate transports must
 	// never create an unrelated WireGuard peer as a side effect.
@@ -129,15 +135,16 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
-	if req.Protocol != "wireguard" && req.Protocol != "smart_auto" && req.Protocol != "wss" && req.Protocol != "masque" && req.Protocol != "openvpn" && req.Protocol != "ikev2" {
-		writeStructuredError(w, http.StatusBadRequest, "ERR_TRANSPORT_UNAVAILABLE", "El transporte solicitado no está disponible en este servidor.")
-		return
-	}
 	candidates := selectTransportCandidates(server.Transports, req.Protocol)
 	if len(candidates) == 0 {
 		writeStructuredError(w, http.StatusBadRequest, "ERR_TRANSPORT_UNAVAILABLE", "No hay transportes saludables disponibles en este servidor.")
 		return
 	}
+	candidateNames := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		candidateNames = append(candidateNames, candidate.protocol)
+	}
+	slog.Info("vpn transport candidates selected", "requested_protocol", req.Protocol, "candidates", candidateNames)
 	if req.Protocol == "openvpn" {
 		s.handleOpenVPNConnect(w, ctx, server, candidates[0], mySeq, connectionID)
 		return
@@ -150,6 +157,7 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "server does not support WireGuard full tunnel")
 		return
 	}
+	s.agent.UpdateVPNConnection(connectionID, state.VPNPhaseAuthenticating, "", "")
 
 	// Generate WireGuard and ML-KEM-768 keypairs locally. Private key material
 	// never leaves the client process.
@@ -231,6 +239,7 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 	connectionStarted := time.Now()
 	var connectionErr error
 	for index, candidate := range candidates {
+		s.agent.UpdateVPNConnection(connectionID, state.VPNPhaseNegotiating, "", fallbackReason)
 		candidateEndpoint := net.JoinHostPort(candidate.host, strconv.Itoa(candidate.port))
 		wgConfig := baseWGConfig
 		wgConfig.Endpoint = candidateEndpoint
@@ -292,6 +301,7 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 			}
 			if req.Protocol == "smart_auto" && index+1 < len(candidates) {
 				fallbackReason = candidate.protocol + "_handshake_failed"
+				s.agent.UpdateVPNConnection(connectionID, state.VPNPhaseNegotiating, "", fallbackReason)
 			}
 			continue
 		}
@@ -319,6 +329,7 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	connectionDurationMS := time.Since(connectionStarted).Milliseconds()
+	s.agent.UpdateVPNConnection(connectionID, state.VPNPhaseProtecting, activeProtocol, fallbackReason)
 
 	if err := s.guard.Enable(s.netguardScope(netguardEndpoint, assignedIP)); err != nil {
 		s.wgMgr.Disconnect()
@@ -356,19 +367,21 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.agent.SetVPN(state.VPNStatus{
-		Connected:      true,
-		ConnectionID:   connectionID,
-		ServerName:     server.Name,
-		ServerID:       req.ServerID,
-		PeerID:         connCfg.PeerID,
-		AssignedIP:     assignedIP,
-		ServerPublicIP: serverPublicIP,
-		ServerEndpoint: serverEndpoint,
-		ActiveProtocol: activeProtocol,
-		FallbackReason: fallbackReason,
-		ConnectionMS:   connectionDurationMS,
-		PostQuantum:    isPostQuantum,
-		PQAlgorithm:    pqAlgo,
+		Connected:         true,
+		Phase:             state.VPNPhaseConnected,
+		ConnectionID:      connectionID,
+		ServerName:        server.Name,
+		ServerID:          req.ServerID,
+		PeerID:            connCfg.PeerID,
+		AssignedIP:        assignedIP,
+		ServerPublicIP:    serverPublicIP,
+		ServerEndpoint:    serverEndpoint,
+		ActiveProtocol:    activeProtocol,
+		RequestedProtocol: req.Protocol,
+		FallbackReason:    fallbackReason,
+		ConnectionMS:      connectionDurationMS,
+		PostQuantum:       isPostQuantum,
+		PQAlgorithm:       pqAlgo,
 	})
 	s.startVPNStatsLoop()
 	s.agent.SetProtection(state.ProtectionStatus{
@@ -409,6 +422,8 @@ func (s *Server) handleVPNDisconnect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("vpn disconnect requested", "reason", req.Reason, "protocol", vpn.ActiveProtocol, "server_id", vpn.ServerID)
+	vpn.Phase = state.VPNPhaseDisconnecting
+	s.agent.SetVPN(vpn)
 	// Invalidate a pending connection attempt before tearing down the current
 	// transport so it cannot become active after this explicit user action.
 	s.connectMu.Lock()
@@ -426,7 +441,7 @@ func (s *Server) handleVPNDisconnect(w http.ResponseWriter, r *http.Request) {
 	s.restoreExternalDNS()
 	s.wgMgr.Disconnect()
 	_ = s.guard.Disable()
-	s.agent.SetVPN(state.VPNStatus{Connected: false})
+	s.agent.SetVPN(state.VPNStatus{Phase: state.VPNPhaseDisconnected})
 	s.agent.SetProtection(state.ProtectionStatus{})
 	writeJSON(w, map[string]bool{"ok": true})
 	// Deregister peer from backend in the background.

@@ -71,7 +71,14 @@
     "connected": "Verbunden",
     "disconnected": "Getrennt",
     "connect": "Verbinden",
-    "disconnect": "Trennen"
+    "disconnect": "Trennen",
+    "phases": {
+      "preparing": "Verbindung wird vorbereitet…",
+      "authenticating": "Sichere Anmeldedaten werden vorbereitet…",
+      "negotiating": "Tunnel wird ausgehandelt…",
+      "protecting": "Schutz vor Datenlecks wird aktiviert…",
+      "disconnecting": "Verbindung wird getrennt…"
+    }
   },
   "stats": {
     "server": "Server",

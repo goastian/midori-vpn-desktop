@@ -13,6 +13,7 @@ import (
 )
 
 func (s *Server) handleIKEv2Connect(w http.ResponseWriter, ctx context.Context, server *apiClient.Server, candidate vpnTransportCandidate, sequence uint64, connectionID string) {
+	s.agent.UpdateVPNConnection(connectionID, state.VPNPhaseAuthenticating, "", "")
 	serverName, ok := metadataString(candidate.metadata, "server_name")
 	if !ok {
 		writeStructuredError(w, http.StatusBadGateway, "ERR_TRANSPORT_CONFIGURATION_INVALID", "IKEv2 no tiene un nombre de certificado de gateway configurado.")
@@ -30,6 +31,7 @@ func (s *Server) handleIKEv2Connect(w http.ResponseWriter, ctx context.Context, 
 	}
 	endpoint := net.JoinHostPort(candidate.host, strconv.Itoa(candidate.port))
 	started := time.Now()
+	s.agent.UpdateVPNConnection(connectionID, state.VPNPhaseNegotiating, "", "")
 	client, err := ikev2.Start(ctx, ikev2.Config{
 		Endpoint: endpoint, ServerName: serverName, Credential: credential, Timeout: candidate.timeout,
 	})
@@ -42,6 +44,7 @@ func (s *Server) handleIKEv2Connect(w http.ResponseWriter, ctx context.Context, 
 		s.restoreExternalDNS()
 		client.Close()
 	}
+	s.agent.UpdateVPNConnection(connectionID, state.VPNPhaseProtecting, "ikev2", "")
 	assignedIP := client.AssignedIP()
 	if assignedIP == "" {
 		cleanup()
@@ -78,9 +81,9 @@ func (s *Server) handleIKEv2Connect(w http.ResponseWriter, ctx context.Context, 
 	}
 	connectionMS := time.Since(started).Milliseconds()
 	s.agent.SetVPN(state.VPNStatus{
-		Connected: true, ConnectionID: connectionID, ServerName: server.Name, ServerID: server.ID,
+		Connected: true, Phase: state.VPNPhaseConnected, ConnectionID: connectionID, ServerName: server.Name, ServerID: server.ID,
 		AssignedIP: assignedIP, ServerPublicIP: serverPublicIP,
-		ServerEndpoint: client.Endpoint(), ActiveProtocol: "ikev2", ConnectionMS: connectionMS,
+		ServerEndpoint: client.Endpoint(), ActiveProtocol: "ikev2", RequestedProtocol: "ikev2", ConnectionMS: connectionMS,
 	})
 	s.startVPNStatsLoop()
 	s.agent.SetProtection(state.ProtectionStatus{KillSwitchActive: true, DNSProtected: true, Mode: "ikev2"})
