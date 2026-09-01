@@ -40,6 +40,12 @@ export function extractErrorMessage(raw: string): string {
   if (cleaned.includes('ERR_LOCAL_CREDENTIAL_DELETE_FAILED')) {
     return i18n.global.t('errors.certificateLocalCleanup')
   }
+  if (cleaned.includes('device_limit_reached')) {
+    return i18n.global.t('errors.deviceLimitReached')
+  }
+  if (cleaned.includes('rate_limited')) {
+    return i18n.global.t('errors.tooManyRequests')
+  }
 
   const jsonMatch = cleaned.match(/\{.*"error"\s*:\s*"([^"]+)".*\}/)
   if (jsonMatch && jsonMatch[1]) {

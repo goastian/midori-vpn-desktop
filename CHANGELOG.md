@@ -6,6 +6,9 @@ All notable MidoriVPN Desktop changes are documented here.
 
 Major Release with a verified WireGuard transport contract, native Go 1.27 agent, and hardened Linux RPM package.
 
+- Core API failures now carry their stable code through the native agent, and
+  the Vue client localizes quota and rate-limit failures by code rather than
+  backend prose.
 - Linux RPM is the sole production artifact. Windows and macOS builds are disabled while their platform agents remain experimental source only.
 - The RPM now declares AGPL-3.0-or-later licensing, publisher, homepage and descriptive metadata; its rootless build workspace is cleared of non-Linux binary artifacts before packaging.
 - The Linux RPM serves the Vue application from the authenticated loopback Go agent and contains no Tauri/WebKitGTK runtime.

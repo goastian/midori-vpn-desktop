@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/goastian/midorivpn-agent/internal/config"
@@ -163,5 +164,8 @@ func TestClientReturnsStructuredAPIError(t *testing.T) {
 	}
 	if apiErr.StatusCode != http.StatusServiceUnavailable || apiErr.Code != "origin_country_unavailable" || apiErr.Message != "country lookup unavailable" {
 		t.Fatalf("unexpected APIError: %+v", apiErr)
+	}
+	if !strings.Contains(err.Error(), "[origin_country_unavailable]") {
+		t.Fatalf("APIError.Error() = %q, want stable code", err.Error())
 	}
 }

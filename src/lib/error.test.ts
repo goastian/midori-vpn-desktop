@@ -76,4 +76,11 @@ describe('error helpers', () => {
     expect(toErrorMessage(inUse)).toBe('Disconnect the VPN before revoking this device certificate.')
     expect(toErrorMessage(cleanup)).toBe('The certificate was revoked, but its local credential could not be removed.')
   })
+
+  it('localizes backend failures from their stable code instead of prose', () => {
+    expect(toErrorMessage('{"ok":false,"error":"quota text may change","code":"device_limit_reached"}'))
+      .toBe('Device limit reached. Revoke an older certificate in Settings → Device certificates, then try again.')
+    expect(toErrorMessage('api error 429 [rate_limited]: slow down'))
+      .toBe('Too many connection requests. Please wait a moment.')
+  })
 })
