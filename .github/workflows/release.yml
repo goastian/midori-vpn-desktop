@@ -1,26 +1,29 @@
-name: Release - Desktop Linux RPM
+name: Build - Desktop RPM release evidence
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
+    inputs:
+      core_license_commit:
+        description: Exact midorivpn-core commit containing the release license
+        required: true
+        type: string
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release-linux-rpm:
-    name: Build Desktop Linux RPM
+  build-evidence:
+    name: Build and sign private RPM evidence
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - name: Checkout the project license
-        uses: actions/checkout@v6
+      - name: Checkout the project license at an exact commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: goastian/midorivpn-core
+          ref: ${{ inputs.core_license_commit }}
           path: .release-license
           sparse-checkout: LICENSE
           persist-credentials: false
@@ -28,27 +31,26 @@ jobs:
       - name: Install rootless Podman and RPM signing tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y podman rpm gnupg
+          sudo apt-get install -y gnupg jq podman rpm
 
       - name: Import RPM signing key
         env:
           RPM_SIGNING_PRIVATE_KEY: ${{ secrets.RPM_SIGNING_PRIVATE_KEY }}
         run: printf '%s' "$RPM_SIGNING_PRIVATE_KEY" | gpg --batch --import
 
-      - name: Build and sign Linux RPM in rootless Podman
+      - name: Define reproducible build epoch
+        run: echo "SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)" >> "$GITHUB_ENV"
+
+      - name: Build signed RPM and release evidence
         env:
           MIDORIVPN_LICENSE_FILE: ${{ github.workspace }}/.release-license/LICENSE
           RPM_SIGNING_KEY_ID: ${{ secrets.RPM_SIGNING_KEY_ID }}
         run: bash scripts/build-rpm.sh
 
-      - name: Generate checksums
-        run: sha256sum dist-packages/*.rpm dist-packages/RPM-GPG-KEY-midorivpn > dist-packages/SHA256SUMS
-
-      - name: Publish Linux RPM release
-        uses: softprops/action-gh-release@v2
+      - name: Retain evidence for release review
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          files: |
-            dist-packages/*.rpm
-            dist-packages/RPM-GPG-KEY-midorivpn
-            dist-packages/SHA256SUMS
-          generate_release_notes: true
+          name: midorivpn-desktop-2.0.0-build-evidence
+          path: dist-packages/
+          if-no-files-found: error
+          retention-days: 14

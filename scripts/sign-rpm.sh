@@ -46,7 +46,7 @@ done
 
 podman run --rm --userns=keep-id:uid=0,gid=0 \
     -v "$DIST_DIR:/artifacts:ro,Z" \
-    docker.io/library/fedora:latest \
+    docker.io/library/fedora:44@sha256:be9d65e2344d805cc11114319c685ecaa96b6d9b4350a0a6460cdb931babbd19 \
     bash -c 'set -Eeuo pipefail
       rpm --dbpath /tmp/rpmdb --initdb
       rpm --dbpath /tmp/rpmdb --import /artifacts/RPM-GPG-KEY-midorivpn

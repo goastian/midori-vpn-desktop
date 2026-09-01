@@ -44,4 +44,7 @@ podman run --rm --userns=keep-id:uid=0,gid=0 \
 echo "==> Firmando paquete RPM generado..."
 bash "$ROOT_DIR/scripts/sign-rpm.sh"
 
+echo "==> Generando SBOM, procedencia y sumas verificables..."
+bash "$ROOT_DIR/scripts/create-release-evidence.sh"
+
 echo "==> Paquete RPM Linux sin GTK3 generado y firmado en dist-packages/"

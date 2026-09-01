@@ -6,6 +6,9 @@ All notable MidoriVPN Desktop changes are documented here.
 
 Major Release with a verified WireGuard transport contract, native Go 1.27 agent, and hardened Linux RPM package.
 
+- RPM release preparation now pins its verification environment, checks the
+  signature against an isolated trust database, and emits SPDX, provenance and
+  checksums before retaining private build evidence for review.
 - Core API failures now carry their stable code through the native agent, and
   the Vue client localizes quota and rate-limit failures by code rather than
   backend prose.
