@@ -5,6 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DESKTOP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 DIST_DIR="$DESKTOP_DIR/dist-packages"
 KEY_ID="${RPM_SIGNING_KEY_ID:-}"
+EXPECTED_PRIMARY_FINGERPRINT="BE000EFBCD8F4CDA53FC1A9F13FC1FEEE3315359"
+EXPECTED_SIGNING_FINGERPRINT="84218F95A58E644EDB6947336CF4082EE316F221"
 
 if [ -z "$KEY_ID" ]; then
     echo "error: RPM_SIGNING_KEY_ID is required" >&2
@@ -19,6 +21,15 @@ for command_name in rpmsign gpg podman; do
         exit 1
     fi
 done
+
+normalized_key_id="${KEY_ID^^}"
+if [[ "${normalized_key_id}" != "${EXPECTED_PRIMARY_FINGERPRINT}" && \
+      "${normalized_key_id}" != "${EXPECTED_SIGNING_FINGERPRINT}" ]]; then
+    echo "error: RPM_SIGNING_KEY_ID does not match the established MidoriVPN trust identity" >&2
+    exit 1
+fi
+
+RPM_SIGNING_KEY_ID="${normalized_key_id}" bash "$SCRIPT_DIR/check-rpm-signing-identity.sh"
 
 if ! gpg --batch --list-secret-keys "$KEY_ID" >/dev/null 2>&1; then
     echo "error: RPM signing secret key $KEY_ID is unavailable" >&2

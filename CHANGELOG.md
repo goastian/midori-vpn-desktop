@@ -6,6 +6,9 @@ All notable MidoriVPN Desktop changes are documented here.
 
 Major Release with a verified WireGuard transport contract, native Go 1.27 agent, and hardened Linux RPM package.
 
+- Desktop signing now requires the annotated release tag, a protected signing
+  environment and the exact established OpenPGP primary/signing-subkey
+  fingerprints before the RPM build is allowed to begin.
 - RPM release preparation now pins its verification environment, checks the
   signature against an isolated trust database, and emits SPDX, provenance and
   checksums before retaining private build evidence for review.

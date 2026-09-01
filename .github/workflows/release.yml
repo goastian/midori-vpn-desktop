@@ -1,28 +1,68 @@
-name: Build - Desktop RPM release evidence
+name: Build - approved signed Desktop RPM evidence
 
 on:
   workflow_dispatch:
     inputs:
       core_license_commit:
-        description: Exact midorivpn-core commit containing the release license
+        description: Exact 40-character Core commit containing the release license
+        required: true
+        type: string
+      confirm_signing:
+        description: Type sign-v2.0.0 to enter the protected signing gate
         required: true
         type: string
 
 permissions:
   contents: read
 
+concurrency:
+  group: midorivpn-desktop-v2.0.0-signing
+  cancel-in-progress: false
+
 jobs:
-  build-evidence:
-    name: Build and sign private RPM evidence
+  validate-release-ref:
+    name: Validate the immutable release ref
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout the selected ref
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Require the approved tag and explicit confirmation
+        env:
+          CONFIRM_SIGNING: ${{ inputs.confirm_signing }}
+          CORE_LICENSE_COMMIT: ${{ inputs.core_license_commit }}
+        run: |
+          set -Eeuo pipefail
+          test "$GITHUB_REF" = "refs/tags/v2.0.0"
+          test "$CONFIRM_SIGNING" = "sign-v2.0.0"
+          test "$(node -p "require('./package.json').version")" = "2.0.0"
+          git tag --points-at HEAD | grep -Fx "v2.0.0"
+          test "$(git cat-file -t refs/tags/v2.0.0)" = "tag"
+          [[ "$CORE_LICENSE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+
+  build-signed-evidence:
+    name: Build and sign private RPM evidence
+    needs: validate-release-ref
+    runs-on: ubuntu-latest
+    environment:
+      name: release-signing
+    steps:
+      - name: Checkout the approved tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Require the environment signing switch
+        env:
+          RELEASE_SIGNING_ENABLED: ${{ vars.RELEASE_SIGNING_ENABLED }}
+        run: test "$RELEASE_SIGNING_ENABLED" = "true"
 
       - name: Checkout the project license at an exact commit
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          repository: goastian/midorivpn-core
+          repository: goastian/midori-vpn-core
           ref: ${{ inputs.core_license_commit }}
           path: .release-license
           sparse-checkout: LICENSE
@@ -33,24 +73,32 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gnupg jq podman rpm
 
-      - name: Import RPM signing key
+      - name: Import the established RPM signing identity
         env:
           RPM_SIGNING_PRIVATE_KEY: ${{ secrets.RPM_SIGNING_PRIVATE_KEY }}
-        run: printf '%s' "$RPM_SIGNING_PRIVATE_KEY" | gpg --batch --import
+        run: |
+          set -Eeuo pipefail
+          test -n "$RPM_SIGNING_PRIVATE_KEY"
+          printf '%s' "$RPM_SIGNING_PRIVATE_KEY" | gpg --batch --import
 
-      - name: Define reproducible build epoch
+      - name: Verify the exact trust identity before building
+        env:
+          RPM_SIGNING_KEY_ID: BE000EFBCD8F4CDA53FC1A9F13FC1FEEE3315359
+        run: bash scripts/check-rpm-signing-identity.sh
+
+      - name: Define the reproducible build epoch
         run: echo "SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)" >> "$GITHUB_ENV"
 
       - name: Build signed RPM and release evidence
         env:
           MIDORIVPN_LICENSE_FILE: ${{ github.workspace }}/.release-license/LICENSE
-          RPM_SIGNING_KEY_ID: ${{ secrets.RPM_SIGNING_KEY_ID }}
+          RPM_SIGNING_KEY_ID: BE000EFBCD8F4CDA53FC1A9F13FC1FEEE3315359
         run: bash scripts/build-rpm.sh
 
-      - name: Retain evidence for release review
+      - name: Retain signed evidence for release review
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: midorivpn-desktop-2.0.0-build-evidence
+          name: midorivpn-desktop-2.0.0-signed-evidence
           path: dist-packages/
           if-no-files-found: error
           retention-days: 14
