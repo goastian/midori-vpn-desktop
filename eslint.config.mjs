@@ -9,7 +9,6 @@ export default [
       'agent/**',
       'dist/**',
       'node_modules/**',
-      'src-tauri/**',
       '*.config.js',
       '*.config.mjs',
     ],

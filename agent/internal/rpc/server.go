@@ -1,5 +1,5 @@
-// Package rpc implements the local HTTP API server that the Tauri shell and
-// Vue UI use to communicate with the Go agent. It also serves an SSE stream
+// Package rpc implements the local HTTP API server used by the Vue dashboard
+// and Qt shell to communicate with the Go agent. It also serves an SSE stream
 // for real-time state updates.
 package rpc
 
@@ -59,7 +59,7 @@ type Server struct {
 	// User-controlled preferences (mesh.start_disabled, autostart, …).
 	settings *settings.Store
 
-	// Configurable from env / Tauri startup args.
+	// Configurable from the environment and process arguments.
 	apiURL  string
 	jwksURL string
 	uiDir   string
@@ -101,7 +101,7 @@ type Server struct {
 }
 
 // SetUIDir enables the Linux browser UI from an immutable package directory.
-// An empty path leaves static serving disabled for Tauri-based targets.
+// An empty path leaves static serving disabled.
 func (s *Server) SetUIDir(path string) {
 	s.uiDir = strings.TrimSpace(path)
 }

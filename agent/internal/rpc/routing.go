@@ -14,17 +14,7 @@ import (
 	"time"
 )
 
-var allowedDesktopOrigins = map[string]struct{}{
-	"tauri://localhost":     {},
-	"http://localhost:1420": {},
-}
-
-const defaultCORSOrigin = "tauri://localhost"
-
 func isAllowedDesktopOrigin(origin, host string) bool {
-	if _, ok := allowedDesktopOrigins[origin]; ok {
-		return true
-	}
 	return origin == "http://"+host
 }
 
@@ -61,16 +51,14 @@ func isLoopbackRemote(remoteAddr string) bool {
 func withLocalCORS(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		setLocalSecurityHeaders(w)
-		corsOrigin := defaultCORSOrigin
 		if origin := r.Header.Get("Origin"); origin != "" {
 			if isAllowedDesktopOrigin(origin, r.Host) {
-				corsOrigin = origin
+				w.Header().Set("Access-Control-Allow-Origin", origin)
 			} else if r.Method == http.MethodOptions {
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
 		}
-		w.Header().Set("Access-Control-Allow-Origin", corsOrigin)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Agent-Token")
 		if r.Method == http.MethodOptions {

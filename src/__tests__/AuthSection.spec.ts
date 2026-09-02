@@ -7,10 +7,6 @@ import { nextTick } from 'vue'
 import AuthSection from '../components/dashboard/AuthSection.vue'
 import { useAuthStore } from '../stores/auth'
 
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(async () => undefined),
-}))
-
 vi.mock('../lib/agent', () => ({
   agent: {
     auth: {

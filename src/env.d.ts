@@ -15,4 +15,3 @@ declare module '*.svg' {
 }
 
 declare const __APP_VERSION__: string
-declare const __LINUX_BROWSER_SHELL__: boolean

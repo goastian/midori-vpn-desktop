@@ -1,6 +1,6 @@
 # MidoriVPN Desktop 2.0.0
 
-The production Linux client is a native Go 1.27 agent plus a Qt 6 tray integration. The dashboard is the same authenticated Vue UI served by the local agent at `127.0.0.1`, so the Linux experience matches the existing client instead of maintaining a second UI. It works across X11 and Wayland desktops, offers a tray menu when the desktop exposes one, and never links Tauri, GTK3 or WebKitGTK. Windows and macOS source remains in `src-tauri` and platform files, but those targets are blocked from CI and release until certified.
+The production client is a native Linux Go 1.27 agent plus a Qt 6 tray integration. The dashboard is the same authenticated Vue UI served by the local agent at `127.0.0.1`, so the Linux experience matches the existing client instead of maintaining a second UI. It works across X11 and Wayland desktops, offers a tray menu when the desktop exposes one, and does not link GTK3 or WebKitGTK. Linux x86_64 RPM is the only supported release target.
 
 ## Linux transports
 
@@ -96,7 +96,6 @@ desktop-qt/            Qt 6 native Linux tray integration
 src/                   retained authenticated loopback UI
 packaging/             RPM spec, policy, MAC and maintainer files
 scripts/build-rpm.sh   rootless production package pipeline
-src-tauri/             retained non-Linux source; excluded from Linux RPM
 ```
 
 ## License

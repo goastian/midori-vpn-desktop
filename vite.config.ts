@@ -7,20 +7,12 @@ export default defineConfig(async () => ({
   plugins: [vue()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
-    __LINUX_BROWSER_SHELL__: JSON.stringify(process.env.MIDORIVPN_LINUX_BROWSER_SHELL === '1'),
   },
 
-  // Tauri: prevent Vite from obscuring Rust errors
   clearScreen: false,
-  // Dev server bound to localhost:1420 to match tauri.conf.json
   server: {
     port: 1420,
     strictPort: true,
-    watch: {
-      // File-system polling is only needed on Windows (slow native FS events)
-      // and inside Docker bind-mounts. Native events on Linux/macOS are faster.
-      usePolling: process.platform === 'win32',
-    },
   },
 
   build: {
@@ -32,7 +24,6 @@ export default defineConfig(async () => ({
       output: {
         manualChunks(id: string) {
           if (!id.includes('node_modules')) return
-          if (id.includes('@tauri-apps')) return 'tauri'
           if (id.includes('vue-i18n') || id.includes('@intlify')) return 'i18n'
           if (
             id.includes('/vue/') ||

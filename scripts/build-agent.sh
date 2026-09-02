@@ -44,12 +44,9 @@ usage() {
 Usage: scripts/build-agent.sh [target]
 
 Targets:
-  host           Build Linux x86_64 as the canonical Tauri resource
+  host           Build the canonical Linux x86_64 agent
   linux-amd64    Build Linux x86_64 as agent
   linux-arm64    Build Linux arm64 as agent-linux-arm64
-  darwin-arm64   Disabled: macOS is experimental and has no supported release
-  darwin-amd64   Disabled: macOS is experimental and has no supported release
-  windows-amd64  Disabled: Windows is experimental and has no supported release
   all            Build Linux production targets only
 
 Environment:
@@ -73,11 +70,6 @@ host_target() {
   build_agent linux amd64 "$OUT_DIR/agent"
 }
 
-unsupported_platform() {
-  echo "error: $1 is preserved as experimental source only; Linux RPM is the sole production target" >&2
-  exit 3
-}
-
 case "$TARGET" in
   host)
     host_target
@@ -88,15 +80,6 @@ case "$TARGET" in
   linux-arm64)
     build_agent linux arm64 "$OUT_DIR/agent"
     cp "$OUT_DIR/agent" "$OUT_DIR/agent-linux-arm64"
-    ;;
-  darwin-arm64)
-    unsupported_platform "macOS"
-    ;;
-  darwin-amd64)
-    unsupported_platform "macOS"
-    ;;
-  windows-amd64)
-    unsupported_platform "Windows"
     ;;
   all)
     build_agent linux amd64 "$OUT_DIR/agent"

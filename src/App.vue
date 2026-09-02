@@ -84,7 +84,7 @@ const authStore = useAuthStore()
 const protectionStore = useProtectionStore()
 const securityIssues = ref<SecurityIssue[]>([])
 
-/** Status emitted by the Rust agent supervisor: "running" | "restarting" | "failed" */
+/** Status emitted by the local agent supervisor: "running" | "restarting" | "failed" */
 const agentStatus = ref<'running' | 'restarting' | 'failed'>('running')
 const SNAPSHOT_RETRY_MS = 300
 

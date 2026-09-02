@@ -18,20 +18,19 @@ const capsError = ref('')
 
 export function useCaps() {
   /**
-   * Query the Tauri backend for whether the agent binary has CAP_NET_ADMIN.
+   * Query the local agent for whether its binary has CAP_NET_ADMIN.
    * Should be called once on mount and once after successful login.
    */
   async function checkCaps() {
     try {
       capsGranted.value = await invokePlatform<boolean>('agent_has_caps')
     } catch {
-      // Non-Linux platforms (macOS, Windows) don't need caps.
-      capsGranted.value = true
+      capsGranted.value = false
     }
   }
 
   /**
-   * Invoke pkexec setcap via the Tauri backend.
+   * Ask the local agent to invoke pkexec setcap.
     * On success, restarts the agent process so it picks up the newly-applied
     * file capabilities in its effective set.
    */

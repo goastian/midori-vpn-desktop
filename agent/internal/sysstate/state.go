@@ -1,5 +1,5 @@
 // Package sysstate tracks runtime system mutations made by the agent so they
-// can be atomically reverted on shutdown (SIGTERM, explicit cleanup, or Tauri
+// can be atomically reverted on shutdown (SIGTERM, explicit cleanup, or shell
 // exit). All operations are idempotent and best-effort: each step logs its
 // outcome but does not block other steps.
 package sysstate

@@ -1,21 +1,16 @@
 /**
  * agent.ts — typed client for the local Go agent at localhost:7071.
  *
- * HTTP calls (GET/POST/DELETE) go through the Tauri Rust commands
- * (agent_get / agent_post / agent_delete → reqwest) because direct
- * fetch from the WebView to http:// is blocked by Tauri's security model.
- *
- * Tauri targets relay events through Rust. The Linux browser shell receives
- * the ephemeral token in a URL fragment, removes it immediately, and sends it
- * only in authenticated same-origin request headers.
+ * The browser dashboard receives the ephemeral token in a URL fragment,
+ * removes it immediately, and sends it only in authenticated same-origin
+ * request headers.
  */
 
-export const tauriRuntime = !__LINUX_BROWSER_SHELL__ && '__TAURI_INTERNALS__' in window
 let browserAgentToken = ''
 const browserTokenStorageKey = 'midorivpn.agent_token'
 
 function loadBrowserAgentToken(): void {
-  if (tauriRuntime || browserAgentToken) return
+  if (browserAgentToken) return
   const hash = window.location.hash.replace(/^#/, '')
   const fragment = new URLSearchParams(hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : hash)
   browserAgentToken = fragment.get('agent_token') ?? ''
@@ -33,12 +28,12 @@ function loadBrowserAgentToken(): void {
 loadBrowserAgentToken()
 
 /**
- * Backwards-compatible no-op kept for callers that initialise the agent
- * client before subscribing. The RPC token now stays inside Rust/Tauri.
+ * Initialise the authenticated local session before subscribing. The RPC
+ * token stays in memory and this browser tab's session storage.
  */
 export async function initAgentToken(): Promise<void> {
   loadBrowserAgentToken()
-  if (!tauriRuntime && !browserAgentToken) {
+  if (!browserAgentToken) {
     throw new Error('local_ui_session_missing')
   }
 }
@@ -191,7 +186,7 @@ interface AgentRelayEvent {
   data: AgentSnapshot
 }
 
-// ── Tauri IPC helpers ─────────────────────────────────────────────────────────
+// ── Authenticated local RPC helpers ───────────────────────────────────────────
 
 async function browserRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
   loadBrowserAgentToken()
@@ -217,28 +212,18 @@ async function browserRequest<T>(method: string, path: string, body?: unknown): 
 }
 
 async function get<T>(path: string): Promise<T> {
-  if (!tauriRuntime) return browserRequest<T>('GET', path)
-  const { invoke } = await import('@tauri-apps/api/core')
-  return invoke<T>('agent_get', { path })
+  return browserRequest<T>('GET', path)
 }
 
 async function post<T>(path: string, body?: unknown): Promise<T> {
-  if (!tauriRuntime) return browserRequest<T>('POST', path, body ?? {})
-  const { invoke } = await import('@tauri-apps/api/core')
-  return invoke<T>('agent_post', { path, body: body !== undefined ? JSON.stringify(body) : '{}' })
+  return browserRequest<T>('POST', path, body ?? {})
 }
 
 async function del<T>(path: string): Promise<T> {
-  if (!tauriRuntime) return browserRequest<T>('DELETE', path)
-  const { invoke } = await import('@tauri-apps/api/core')
-  return invoke<T>('agent_delete', { path })
+  return browserRequest<T>('DELETE', path)
 }
 
 export async function invokePlatform<T>(command: string, args: Record<string, unknown> = {}): Promise<T> {
-  if (tauriRuntime) {
-    const { invoke } = await import('@tauri-apps/api/core')
-    return invoke<T>(command, args)
-  }
   switch (command) {
     case 'security_check':
       return browserRequest<T>('GET', 'system/security')
@@ -278,41 +263,25 @@ export async function listenPlatform<T>(
   eventName: string,
   callback: (event: { payload: T }) => void,
 ): Promise<() => void> {
-  if (!tauriRuntime) return () => undefined
-  const { listen } = await import('@tauri-apps/api/event')
-  return listen<T>(eventName, callback)
+  void eventName
+  void callback
+  return () => undefined
 }
 
 export async function revealPlatformWindow(): Promise<void> {
-  if (!tauriRuntime) {
-    window.focus()
-    return
-  }
-  const { getCurrentWindow } = await import('@tauri-apps/api/window')
-  const current = getCurrentWindow()
-  await current.show()
-  await current.setFocus()
+  window.focus()
 }
 
 export async function minimizePlatformWindow(): Promise<void> {
-  if (!tauriRuntime) return
-  const { getCurrentWindow } = await import('@tauri-apps/api/window')
-  await getCurrentWindow().minimize()
+  return
 }
 
 export async function hidePlatformWindow(): Promise<void> {
-  if (!tauriRuntime) {
-    window.close()
-    return
-  }
-  const { getCurrentWindow } = await import('@tauri-apps/api/window')
-  await getCurrentWindow().hide()
+  window.close()
 }
 
 export async function startPlatformDragging(): Promise<void> {
-  if (!tauriRuntime) return
-  const { getCurrentWindow } = await import('@tauri-apps/api/window')
-  await getCurrentWindow().startDragging()
+  return
 }
 
 async function relayBrowserEvents(signal: AbortSignal, dispatch: (payload: AgentRelayEvent) => void): Promise<void> {
@@ -406,20 +375,11 @@ export const agent = {
       }
     }
 
-    if (tauriRuntime) {
-      void import('@tauri-apps/api/event').then(({ listen }) =>
-        listen<AgentRelayEvent>('agent://event', (event) => dispatch(event.payload)),
-      ).then((fn) => {
-        if (stopped) fn()
-        else unlisten = fn
-      }).catch((e) => cb({ type: 'error', data: { message: String(e) } }))
-    } else {
-      const controller = new AbortController()
-      unlisten = () => controller.abort()
-      void relayBrowserEventsWithReconnect(controller.signal, dispatch, (error) => {
-        if (!stopped) cb({ type: 'error', data: { message: String(error) } })
-      })
-    }
+    const controller = new AbortController()
+    unlisten = () => controller.abort()
+    void relayBrowserEventsWithReconnect(controller.signal, dispatch, (error) => {
+      if (!stopped) cb({ type: 'error', data: { message: String(error) } })
+    })
 
     return () => {
       stopped = true
@@ -469,8 +429,7 @@ export const agent = {
 
   settings: {
     get: () => get<UserSettings>('settings'),
-    // Backend exposes the same handler under POST /settings so we can use
-    // the existing Tauri `agent_post` bridge here.
+    // Backend exposes the same handler under POST /settings.
     put: (s: UserSettings) => post<UserSettings>('settings', s),
   },
 

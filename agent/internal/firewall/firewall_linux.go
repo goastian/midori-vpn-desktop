@@ -75,7 +75,7 @@ func findExe(name string) string {
 }
 
 // Detect returns the first available firewall backend on $PATH or common sbin
-// directories (the agent may run with a restricted PATH from Tauri).
+// directories (the agent may run with a restricted desktop-session PATH).
 func Detect() Backend {
 	if fwCmd := findExe("firewall-cmd"); fwCmd != "" {
 		// Verify the daemon is actually running, not just installed.

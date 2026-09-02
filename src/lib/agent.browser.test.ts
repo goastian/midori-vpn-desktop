@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 describe('browser agent client', () => {
   beforeEach(() => {
     vi.resetModules()
-    Reflect.deleteProperty(window, '__TAURI_INTERNALS__')
     sessionStorage.clear()
     window.history.replaceState(null, '', '/#/?agent_token=browser-secret')
   })
@@ -17,11 +16,10 @@ describe('browser agent client', () => {
     }))
     vi.stubGlobal('fetch', fetchMock)
 
-    const { agent, initAgentToken, tauriRuntime } = await import('./agent')
+    const { agent, initAgentToken } = await import('./agent')
     await initAgentToken()
     await agent.status()
 
-    expect(tauriRuntime).toBe(false)
     expect(window.location.hash).toBe('')
     expect(sessionStorage.getItem('midorivpn.agent_token')).toBe('browser-secret')
     expect(fetchMock).toHaveBeenCalledWith('/status', expect.objectContaining({
@@ -50,5 +48,34 @@ describe('browser agent client', () => {
     expect(fetchMock).toHaveBeenCalledWith('/status', expect.objectContaining({
       headers: expect.objectContaining({ 'X-Agent-Token': 'browser-secret' }),
     }))
+  })
+
+  it('uses authenticated same-origin requests for agent operations', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        backend: 'resolvconf',
+        needs_extra_caps: true,
+        caps_missing: ['cap_dac_override'],
+        caps_ok: false,
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { agent } = await import('./agent')
+    const dns = await agent.dns.status()
+    await agent.servers.refresh()
+    await agent.vpn.disconnect('active-connection', 'user_request')
+
+    expect(dns.backend).toBe('resolvconf')
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/dns/status', expect.objectContaining({ method: 'GET' }))
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/servers/refresh', expect.objectContaining({ method: 'POST', body: '{}' }))
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/vpn/disconnect', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ connection_id: 'active-connection', reason: 'user_request' }),
+    }))
+    for (const [, request] of fetchMock.mock.calls) {
+      expect(request.headers).toEqual(expect.objectContaining({ 'X-Agent-Token': 'browser-secret' }))
+    }
   })
 })

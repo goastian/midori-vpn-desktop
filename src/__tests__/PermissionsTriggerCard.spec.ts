@@ -7,10 +7,6 @@ import { nextTick } from 'vue'
 import PermissionsTriggerCard from '../components/dashboard/PermissionsTriggerCard.vue'
 import { useAuthStore } from '../stores/auth'
 
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(async () => undefined),
-}))
-
 vi.mock('../lib/agent', () => ({
   agent: { auth: { status: vi.fn(async () => ({ logged_in: false })) } },
 }))

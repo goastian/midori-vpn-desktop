@@ -38,7 +38,7 @@ func (e *DefiniteAuthError) Error() string { return "auth definitively failed: "
 func (e *DefiniteAuthError) Unwrap() error { return e.Err }
 
 // Notifier is invoked whenever the authenticated state changes. The desktop
-// agent uses it to broadcast SSE events to the Tauri UI.
+// agent uses it to broadcast SSE events to the browser dashboard.
 type Notifier func(t Tokens, loggedIn bool)
 
 // Manager coordinates token storage and refresh. Safe for concurrent use.

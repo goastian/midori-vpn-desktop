@@ -46,14 +46,14 @@ func TestConstantTimeTokenEqual(t *testing.T) {
 	}
 }
 
-func TestRequireLocalAuthAllowsLoopbackOriginAndHeaderToken(t *testing.T) {
+func TestRequireLocalAuthAllowsSameOriginAndHeaderToken(t *testing.T) {
 	h := requireLocalAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
 	}), "secret", false)
 
 	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/status", nil)
 	req.RemoteAddr = "127.0.0.1:54321"
-	req.Header.Set("Origin", "tauri://localhost")
+	req.Header.Set("Origin", "http://127.0.0.1")
 	req.Header.Set("X-Agent-Token", "secret")
 	rec := httptest.NewRecorder()
 
@@ -89,7 +89,7 @@ func TestRequireLocalAuthRejectsNonLoopbackRemote(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/status", nil)
 	req.RemoteAddr = "192.0.2.10:54321"
-	req.Header.Set("Origin", "tauri://localhost")
+	req.Header.Set("Origin", "http://127.0.0.1")
 	req.Header.Set("X-Agent-Token", "secret")
 	rec := httptest.NewRecorder()
 

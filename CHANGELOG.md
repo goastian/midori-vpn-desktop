@@ -6,6 +6,10 @@ All notable MidoriVPN Desktop changes are documented here.
 
 Major Release with a verified WireGuard transport contract, native Go 1.27 agent, and hardened Linux RPM package.
 
+- Removed the abandoned Tauri/Rust and non-Linux Desktop targets. The active
+  client now contains only the Linux Go agent, Qt tray and authenticated Vue
+  loopback UI; RPM icons and PolicyKit resources live under neutral packaging
+  paths.
 - Desktop signing now requires the annotated release tag, a protected signing
   environment and the exact established OpenPGP primary/signing-subkey
   fingerprints before the RPM build is allowed to begin.
@@ -15,15 +19,20 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
 - Core API failures now carry their stable code through the native agent, and
   the Vue client localizes quota and rate-limit failures by code rather than
   backend prose.
-- Linux RPM is the sole production artifact. Windows and macOS builds are disabled while their platform agents remain experimental source only.
+- Linux x86_64 RPM is the sole Desktop artifact; non-Linux client sources and
+  build targets are no longer part of the release tree.
 - The RPM now declares AGPL-3.0-or-later licensing, publisher, homepage and descriptive metadata; its rootless build workspace is cleared of non-Linux binary artifacts before packaging.
-- The Linux RPM serves the Vue application from the authenticated loopback Go agent and contains no Tauri/WebKitGTK runtime.
+- The Linux RPM serves the Vue application from the authenticated loopback Go
+  agent and contains only the native Go, Qt and Vue runtime.
 - A Qt 6 tray integration opens that same Vue dashboard, avoiding a second Linux interface. OAuth uses one browser tab: dashboard, Authentik, loopback callback, then dashboard again with the per-tab local session restored.
 - The packaged agent carries the public PKCE identity used by MidoriVPN Control, so normal installations do not require an Authentik configuration file or client secret.
 - Auto-Mesh recognizes Core's `origin_country_unavailable` degraded state, stops retrying permanent failures, and reports the condition in the Vue dashboard instead of logging once per minute forever.
 - Device certificate private keys are generated as ECDSA P-256 keys in the agent, stored only in Secret Service and submitted to Core exclusively as CSRs. Invalid or unpersistable enrollments fail closed and are revoked.
 - Settings now lists active OpenVPN/IKEv2 device certificates and lets people revoke an old device securely when their plan limit is reached. The agent prevents revoking a certificate used by a live tunnel, removes matching local credentials after revocation, and localizes the complete workflow.
-- Opening Settings now refreshes server capabilities explicitly, so newly certified transports no longer remain disabled behind the five-minute agent cache. The Tauri bridge also allowlists the refresh and certificate-management routes with strict UUID validation.
+- Opening Settings now refreshes server capabilities explicitly, so newly
+  certified transports no longer remain disabled behind the five-minute agent
+  cache. Local RPC validates the refresh and certificate-management routes
+  with strict UUID handling.
 - The Linux agent includes a real OpenVPN 2.7 adapter with an AEAD-only TLS 1.3 profile, certificate-name validation, handshake detection, DNS/kill-switch integration, runtime credential cleanup and mandatory DCO interface verification. It remains server-health gated until the gateway E2E is certified.
 - The Linux agent includes a private strongSwan 6 client for IKEv2 EAP-TLS. It reuses the device-owned certificate, creates an isolated VICI runtime and XFRM interface, loads `swanctl.conf` and credentials explicitly from that private directory, validates the gateway DNS identity, and integrates assigned IP, DNS, kill switch, counters and deterministic cleanup without creating a persistent system profile.
 - The private IKE client now launches `charon-systemd`, avoiding the global `/run/strongswan/charon.pid` used by a host daemon. Child capabilities are prepared fail-closed and a bounded stderr diagnostic tail exposes both startup and handshake failures without allowing daemon output to grow memory indefinitely.
@@ -45,14 +54,15 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
 
 ### Build and validation
 
-- Desktop tooling and RPM builders now use exact Node 24.20.0, Go 1.27.0 and Fedora 44 image digests; cargo-audit is fixed at 0.22.2 instead of resolving the newest crate during each rebuild.
-- Regenerated `Cargo.lock` from the manifest and made the Podman Rust runner use an executable target volume; `cargo check --locked` is now reproducible.
+- Desktop tooling and RPM builders use exact Node 24.20.0, Go 1.27.0 and Fedora
+  44 image digests.
 - RPM builds use Node 24.20.0 and npm 12.0.2 inside a rootless multistage builder; an incompatible Node 22 build is rejected rather than distributed.
 - The packaged status UI reads its local RPC and proxy ports from the agent response instead of embedding them in the Vue view.
 
 ### Major Changes
 - **Go 1.27 Native Agent**: Compilación y ejecución nativa sobre Go 1.27 para la gestión del kernel WireGuard (`wg0`).
-- **Shell Linux local**: interfaz Vue servida por el agente Go en loopback; el código Tauri queda bloqueado para Windows y macOS.
+- **Shell Linux local**: interfaz Vue servida por el agente Go en loopback y
+  bandeja Qt 6 nativa.
 - **Empaquetado RPM Blindado para openSUSE Tumbleweed**: Scripts de post-instalación y desinstalación (`postinst`, `prerm`) estrictos con aislamiento Polkit y AppArmor en modo complain.
 - **WSS autenticado y verificable**: WireGuard puede usar un relay WSS con token efímero ligado a usuario, dispositivo y servidor; solo se ofrece cuando el servidor lo anuncia explícitamente.
 - **MASQUE RFC 9298 real**: el agente usa HTTP/3 CONNECT-UDP, TLS 1.3 y datagramas QUIC para transportar WireGuard, con MTU y ruta pública específicos.

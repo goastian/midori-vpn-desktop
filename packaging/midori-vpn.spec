@@ -59,11 +59,11 @@ install -m 0644 %{source_dir}/config.env.example %{buildroot}/usr/share/doc/mido
 install -m 0644 %{license_file} %{buildroot}/usr/share/licenses/midori-vpn/LICENSE
 install -m 0644 %{source_dir}/packaging/launcher.env.example %{buildroot}/etc/midorivpn/launcher.env
 install -m 0644 %{source_dir}/packaging/launcher/midorivpn.desktop %{buildroot}/usr/share/applications/midorivpn.desktop
-install -m 0644 %{source_dir}/src-tauri/icons/32x32.png %{buildroot}/usr/share/icons/hicolor/32x32/apps/midorivpn.png
-install -m 0644 %{source_dir}/src-tauri/icons/128x128.png %{buildroot}/usr/share/icons/hicolor/128x128/apps/midorivpn.png
-install -m 0644 %{source_dir}/src-tauri/icons/128x128@2x.png %{buildroot}/usr/share/icons/hicolor/256x256/apps/midorivpn.png
-install -m 0644 %{source_dir}/src-tauri/polkit/org.astian.midorivpn.policy %{buildroot}/usr/share/polkit-1/actions/org.astian.midorivpn.policy
-install -m 0644 %{source_dir}/src-tauri/polkit/49-midorivpn.rules %{buildroot}/etc/polkit-1/rules.d/49-midorivpn.rules
+install -m 0644 %{source_dir}/packaging/icons/midorivpn-32.png %{buildroot}/usr/share/icons/hicolor/32x32/apps/midorivpn.png
+install -m 0644 %{source_dir}/packaging/icons/midorivpn-128.png %{buildroot}/usr/share/icons/hicolor/128x128/apps/midorivpn.png
+install -m 0644 %{source_dir}/packaging/icons/midorivpn-256.png %{buildroot}/usr/share/icons/hicolor/256x256/apps/midorivpn.png
+install -m 0644 %{source_dir}/packaging/polkit/org.astian.midorivpn.policy %{buildroot}/usr/share/polkit-1/actions/org.astian.midorivpn.policy
+install -m 0644 %{source_dir}/packaging/polkit/49-midorivpn.rules %{buildroot}/etc/polkit-1/rules.d/49-midorivpn.rules
 install -m 0644 %{source_dir}/packaging/selinux/midorivpn.te %{buildroot}/usr/share/midorivpn/selinux/midorivpn.te
 install -m 0644 %{source_dir}/packaging/selinux/midorivpn.fc %{buildroot}/usr/share/midorivpn/selinux/midorivpn.fc
 install -m 0644 %{source_dir}/packaging/apparmor/usr.libexec.midorivpn-agent %{buildroot}/etc/apparmor.d/usr.libexec.midorivpn-agent

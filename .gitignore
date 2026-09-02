@@ -8,18 +8,11 @@ coverage/
 .parcel-cache
 .cache/
 
-# ── Rust / Cargo ──────────────────────────────────────────────────────────────
-src-tauri/target/
-
 # ── Go agent build artefacts ─────────────────────────────────────────────────
 bin/
 agent/target/
 agent/coverage.out
 desktop-qt/build/
-src-tauri/binaries/
-
-# ── Tauri generated (mobile targets) ─────────────────────────────────────────
-src-tauri/gen/
 
 # ── Compiled installers / bundles ─────────────────────────────────────────────
 # (kept out of VCS — produced by CI)
@@ -27,11 +20,6 @@ dist-packages/
 *.deb
 *.rpm
 !packaging/Containerfile.rpm
-*.AppImage
-*.dmg
-*.msi
-*.exe
-*.app
 *.tar.xz
 *.tar.gz
 *.zip
