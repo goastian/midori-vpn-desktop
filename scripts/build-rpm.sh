@@ -44,7 +44,7 @@ podman run --rm --userns=keep-id:uid=0,gid=0 \
   npm run build:qt-shell && \
   npm run build-agent:host && \
   mkdir -p /tmp/rpmbuild/RPMS /tmp/rpmbuild/BUILD /tmp/rpmbuild/BUILDROOT /tmp/rpmbuild/SOURCES /tmp/rpmbuild/SPECS /tmp/rpmbuild/SRPMS && \
-  rpmbuild -bb --define '_topdir /tmp/rpmbuild' --define 'use_source_date_epoch_as_buildtime 1' --define 'source_dir /app' --define 'license_file /project-license' /app/packaging/midori-vpn.spec && \
+  rpmbuild -bb --define '_topdir /tmp/rpmbuild' --define '_buildhost reproducible.astian.org' --define 'use_source_date_epoch_as_buildtime 1' --define 'source_dir /app' --define 'license_file /project-license' /app/packaging/midori-vpn.spec && \
   cp -a /tmp/rpmbuild/RPMS/x86_64/. /src/dist-packages/"
 
 echo "==> Firmando paquete RPM generado..."
