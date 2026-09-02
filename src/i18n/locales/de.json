@@ -25,7 +25,10 @@
   },
   "errors": {
     "meshCountryUnavailable": "Ihr Herkunftsland konnte vorübergehend nicht ermittelt werden. Mesh wurde nicht aktiviert; versuchen Sie es später erneut.",
+    "deviceNameActive": "Ein Gerät mit diesem Namen ist bereits verbunden.",
     "deviceLimitReached": "Gerätelimit erreicht. Widerrufen Sie unter Einstellungen → Gerätezertifikate ein älteres Zertifikat und versuchen Sie es erneut.",
+    "serverFull": "Der ausgewählte Server ist ausgelastet oder inaktiv.",
+    "tooManyRequests": "Zu viele Verbindungsanfragen. Bitte warten Sie einen Moment.",
     "certificateInUse": "Trennen Sie die VPN-Verbindung, bevor Sie das Zertifikat dieses Geräts widerrufen.",
     "certificateLocalCleanup": "Das Zertifikat wurde widerrufen, aber die lokale Anmeldeinformation konnte nicht entfernt werden.",
     "capsApplyFailed": "Konnte nicht angewendet werden. Führe den Befehl manuell als root aus.",
@@ -65,6 +68,7 @@
     "switching": "Server wird gewechselt…",
     "loading": "Server werden geladen…",
     "empty": "Keine Server verfügbar",
+    "choose": "VPN-Server oder Mesh-Peer auswählen",
     "meshName": "Mesh · {ip}"
   },
   "vpn": {

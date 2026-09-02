@@ -68,6 +68,7 @@
     "switching": "Cambiando servidor…",
     "loading": "Cargando servidores…",
     "empty": "No hay servidores disponibles",
+    "choose": "Elige un servidor VPN o par Mesh",
     "meshName": "Mesh · {ip}"
   },
   "vpn": {

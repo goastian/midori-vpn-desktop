@@ -7,9 +7,9 @@
           <div style="font-size:14px;">{{ t('settings.meshAutoStart') }}</div>
           <div class="label" style="margin-top:4px;">{{ t('settings.meshAutoStartHint') }}</div>
         </div>
-        <button class="toggle" :class="{ on: meshAutoStart }" :disabled="featuresLocked" @click="toggleMeshAutoStart"></button>
+        <ToggleSwitch :checked="meshAutoStart" :label="t('settings.meshAutoStart')" :disabled="featuresLocked" @change="toggleMeshAutoStart" />
       </div>
-      <div v-if="meshSettingsError" class="error" style="margin-top:8px;">{{ meshSettingsError }}</div>
+      <div v-if="meshSettingsError" class="error" style="margin-top:8px;" role="alert">{{ meshSettingsError }}</div>
     </div>
 
     <div class="card">
@@ -54,8 +54,8 @@
           </button>
         </div>
       </div>
-      <div v-if="certificateError" class="error certificate-message">{{ certificateError }}</div>
-      <div v-if="certificateNotice" class="success-message certificate-message">{{ certificateNotice }}</div>
+      <div v-if="certificateError" class="error certificate-message" role="alert">{{ certificateError }}</div>
+      <div v-if="certificateNotice" class="success-message certificate-message" role="status" aria-live="polite">{{ certificateNotice }}</div>
     </div>
 
     <div class="card">
@@ -65,17 +65,17 @@
           <div style="font-size:14px;">{{ t('settings.autoStart') }}</div>
           <div class="label" style="margin-top:4px;">{{ t('settings.autoStartHint') }}</div>
         </div>
-        <button class="toggle" :class="{ on: autostart }" @click="toggleAutostart"></button>
+        <ToggleSwitch :checked="autostart" :label="t('settings.autoStart')" @change="toggleAutostart" />
       </div>
       <div class="row nested-setting">
         <div>
           <div style="font-size:14px;">{{ t('settings.startMinimized') }}</div>
           <div class="label" style="margin-top:4px;">{{ t('settings.startMinimizedHint') }}</div>
         </div>
-        <button class="toggle" :class="{ on: startMinimized }" :disabled="!autostart" @click="toggleStartMinimized"></button>
+        <ToggleSwitch :checked="startMinimized" :label="t('settings.startMinimized')" :disabled="!autostart" @change="toggleStartMinimized" />
       </div>
-      <div v-if="autostartError" class="error" style="margin-top:8px;">{{ autostartError }}</div>
-      <div v-if="uiSettingsError" class="error" style="margin-top:8px;">{{ uiSettingsError }}</div>
+      <div v-if="autostartError" class="error" style="margin-top:8px;" role="alert">{{ autostartError }}</div>
+      <div v-if="uiSettingsError" class="error" style="margin-top:8px;" role="alert">{{ uiSettingsError }}</div>
     </div>
 
     <div class="card"><LanguageSelect /></div>
@@ -127,6 +127,7 @@ import LanguageSelect from '../components/LanguageSelect.vue'
 import { useVpnStore } from '../stores/vpn'
 import type { DeviceCertificate } from '../lib/agent'
 import { protocolIsAvailable, type ProtocolPolicy } from '../lib/protocol'
+import ToggleSwitch from '../components/ToggleSwitch.vue'
 
 const { t, locale } = useI18n()
 const appVersion = __APP_VERSION__

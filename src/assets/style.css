@@ -55,6 +55,11 @@ html, body {
 
 button, input, select, textarea { font: inherit; }
 
+:where(button, a, input, select, textarea):focus-visible {
+  outline: 3px solid rgba(52, 211, 153, 0.72);
+  outline-offset: 2px;
+}
+
 /* ── Shell layout ───────────────────────────────────────────────────── */
 .app {
   display: flex;

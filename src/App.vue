@@ -23,7 +23,7 @@
 
     <div class="app-body">
       <!-- Agent supervisor status banner -->
-      <div v-if="agentStatus !== 'running'" class="agent-banner" :class="`agent-banner--${agentStatus}`">
+      <div v-if="agentStatus !== 'running'" class="agent-banner" :class="`agent-banner--${agentStatus}`" role="status" aria-live="polite">
         <span v-if="agentStatus === 'restarting'">{{ t('agent.restarting') }}</span>
         <span v-else-if="agentStatus === 'failed'">{{ t('agent.failed') }}</span>
       </div>
@@ -35,16 +35,17 @@
           :key="issue.id"
           class="security-issue"
           :class="`issue-${issue.level}`"
+          role="alert"
         >
           <div class="issue-header">
-            <span class="issue-icon">{{ issue.level === 'error' ? '✖' : issue.level === 'warning' ? '⚠' : 'ℹ' }}</span>
+            <span class="issue-icon" aria-hidden="true">{{ issue.level === 'error' ? '✖' : issue.level === 'warning' ? '⚠' : 'ℹ' }}</span>
             <strong>{{ issue.title }}</strong>
-            <button class="issue-close" @click="dismissIssue(issue.id)">✕</button>
+            <button type="button" class="issue-close" :aria-label="t('titlebar.close')" @click="dismissIssue(issue.id)">✕</button>
           </div>
           <p class="issue-detail">{{ issue.detail }}</p>
           <div v-if="issue.fix_cmd" class="issue-fix">
             <code class="fix-cmd">{{ issue.fix_cmd }}</code>
-            <button class="fix-copy" @click="copyAndFix(issue)">{{ t('security.copyAndClose') }}</button>
+            <button type="button" class="fix-copy" @click="copyAndFix(issue)">{{ t('security.copyAndClose') }}</button>
           </div>
         </div>
       </div>

@@ -9,7 +9,7 @@
       </div>
 
       <!-- Session expired banner -->
-      <div v-if="isExpired" class="expired-banner">
+      <div v-if="isExpired" class="expired-banner" role="status">
         <span class="expired-icon">⚠</span>
         {{ t('auth.sessionExpired') }}
       </div>
@@ -36,7 +36,7 @@
         {{ loading ? t('auth.waitingBrowser') : t('auth.signInWithAstian') }}
       </button>
       <button v-if="loading" class="cancel-btn" @click="cancelLogin">{{ t('auth.cancelLogin') }}</button>
-      <div v-if="error" class="error">{{ error }}</div>
+      <div v-if="error" class="error" role="alert">{{ error }}</div>
     </div>
 
     <button class="quit-fab" @click="quitApp" :aria-label="t('login.quit')">

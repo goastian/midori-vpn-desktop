@@ -1,8 +1,8 @@
 <template>
-  <div v-if="error" class="error-alert-card" :class="`error-alert--${error.category}`">
+  <div v-if="error" class="error-alert-card" :class="`error-alert--${error.category}`" role="alert">
     <div class="error-alert-header">
       <div class="error-alert-title-wrap">
-        <span class="error-alert-icon">
+        <span class="error-alert-icon" aria-hidden="true">
           <svg v-if="isPermissionError" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             <path d="M12 8v4"/>
@@ -21,10 +21,10 @@
         </span>
         <span class="error-alert-title">{{ localizedTitle }}</span>
       </div>
-      <button class="error-alert-close" type="button" :title="t('titlebar.close')" @click="$emit('dismiss')">
+      <button class="error-alert-close" type="button" :title="t('titlebar.close')" :aria-label="t('titlebar.close')" @click="$emit('dismiss')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"/>
-          <line x1="6" y1="6" x2="18" y2="6"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
       </button>
     </div>
@@ -45,7 +45,7 @@
           <path d="m21 2-9.6 9.6"/>
           <path d="m15.5 7.5 3 3L22 7l-3-3"/>
         </svg>
-        <span>{{ t('errors.dnsPermission.action') || 'Conceder permisos' }}</span>
+        <span>{{ t('errors.dnsPermission.action') }}</span>
       </button>
       <button
         v-else-if="error.action === 'retry'"
@@ -56,7 +56,7 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
         </svg>
-        <span>{{ t('errors.serverUnavailable.action') || 'Reintentar' }}</span>
+        <span>{{ t('errors.serverUnavailable.action') }}</span>
       </button>
       <button
         v-else-if="error.action === 'relogin'"
@@ -95,10 +95,7 @@ const localizedTitle = computed(() => {
   if (te(props.error.titleKey)) {
     return t(props.error.titleKey)
   }
-  if (isPermissionError.value) {
-    return 'Permisos requeridos'
-  }
-  return 'Error de conexión'
+  return t('errors.generic.title')
 })
 
 const localizedDescription = computed(() => {

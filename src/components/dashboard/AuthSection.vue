@@ -29,7 +29,7 @@
       <button class="link-btn" data-test="cancel-login-btn" @click="cancelLogin">{{ t('auth.cancelLogin') }}</button>
     </p>
 
-    <div v-if="loginError" class="error" data-test="login-error">{{ loginError }}</div>
+    <div v-if="loginError" class="error" data-test="login-error" role="alert">{{ loginError }}</div>
   </div>
 
   <!-- Authenticated -->

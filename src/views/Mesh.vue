@@ -16,23 +16,23 @@
             {{ mesh.enabled ? t('mesh.enabledHint') : t('mesh.joinHint') }}
           </div>
         </div>
-        <button
-          class="toggle"
-          :class="{ on: mesh.enabled }"
+        <ToggleSwitch
+          :checked="mesh.enabled"
+          :label="t('mesh.networkTitle')"
           :disabled="isTransitioning || featuresLocked"
-          @click="toggleMesh"
-        ></button>
+          @change="toggleMesh"
+        />
       </div>
-      <div v-if="mesh.meshState === 'enabling'" class="mesh-state-hint">{{ t('mesh.enabling') }}</div>
-      <div v-else-if="mesh.meshState === 'disabling'" class="mesh-state-hint">{{ t('mesh.disabling') }}</div>
-      <div v-if="mesh.error" class="error">{{ mesh.error }}</div>
+      <div v-if="mesh.meshState === 'enabling'" class="mesh-state-hint" role="status" aria-live="polite">{{ t('mesh.enabling') }}</div>
+      <div v-else-if="mesh.meshState === 'disabling'" class="mesh-state-hint" role="status" aria-live="polite">{{ t('mesh.disabling') }}</div>
+      <div v-if="mesh.error" class="error" role="alert">{{ mesh.error }}</div>
     </div>
 
     <!-- Peers list -->
     <div class="card" v-if="mesh.enabled">
       <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
         <span>{{ t('mesh.peers') }}</span>
-        <button class="btn-refresh" @click="mesh.fetchExitNodes()" :title="t('mesh.refresh')">↻</button>
+        <button type="button" class="btn-refresh" @click="mesh.fetchExitNodes()" :title="t('mesh.refresh')" :aria-label="t('mesh.refresh')">↻</button>
       </div>
       <div v-if="mesh.exitNodes.length === 0" style="color:#888;font-size:13px;">
         {{ t('mesh.noPeers') }}
@@ -54,6 +54,7 @@ import { computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMeshStore } from '../stores/mesh'
 import { useCaps } from '../composables/useCaps'
+import ToggleSwitch from '../components/ToggleSwitch.vue'
 
 const mesh = useMeshStore()
 const { t } = useI18n()

@@ -9,9 +9,14 @@
       <!-- Server picker -->
       <div v-if="auth.authenticated" class="picker-wrap" ref="pickerRef">
         <button
+          type="button"
           class="picker-trigger"
           :disabled="serversLoading || switching || featuresLocked"
+          :aria-label="t('server.choose')"
+          :aria-expanded="dropdownOpen"
+          aria-controls="server-picker-options"
           @click="dropdownOpen = !dropdownOpen"
+          @keydown.esc="dropdownOpen = false"
         >
           <template v-if="switching">
             <span class="cc-badge cc-loading">…</span>
@@ -43,6 +48,7 @@
           <svg
             class="picker-chevron" :class="{ open: dropdownOpen }"
             width="14" height="14" viewBox="0 0 24 24" fill="none"
+            aria-hidden="true"
           >
             <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2"
               stroke-linecap="round" stroke-linejoin="round"/>
@@ -50,10 +56,19 @@
         </button>
 
         <!-- Dropdown panel -->
-        <div v-if="dropdownOpen" class="picker-panel">
-          <div
+        <div
+          v-if="dropdownOpen"
+          id="server-picker-options"
+          class="picker-panel"
+          role="group"
+          :aria-label="t('server.choose')"
+          @keydown.esc="dropdownOpen = false"
+        >
+          <button
             v-for="item in allItems" :key="item.key"
+            type="button"
             class="picker-item"
+            :aria-pressed="selectedServer === item.key"
             :class="{
               'picker-item--selected': selectedServer === item.key,
               'picker-item--active': isActive(item.key),
@@ -67,8 +82,8 @@
               <span class="item-name">{{ item.name }}</span>
               <span class="item-sub">{{ item.ip }}</span>
             </span>
-            <span v-if="isActive(item.key)" class="item-active-dot"></span>
-          </div>
+            <span v-if="isActive(item.key)" class="item-active-dot" aria-hidden="true"></span>
+          </button>
           <div v-if="allItems.length === 0" class="picker-empty">
             {{ t('server.empty') }}
           </div>
@@ -77,8 +92,8 @@
 
       <!-- Status + connect button -->
       <div class="conn-row">
-        <div class="conn-status">
-          <span class="status-dot" :class="activeConnected ? 'connected' : 'disconnected'"></span>
+        <div class="conn-status" role="status" aria-live="polite">
+          <span class="status-dot" :class="activeConnected ? 'connected' : 'disconnected'" aria-hidden="true"></span>
           <span class="conn-label">{{ connectionStatusLabel }}</span>
         </div>
         <button
@@ -557,6 +572,7 @@ async function toggleConnection() {
 .picker-panel::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 2px; }
 
 .picker-item {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -564,6 +580,13 @@ async function toggleConnection() {
   cursor: pointer;
   border-bottom: 1px solid var(--border);
   transition: background 0.1s;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  border-top: none;
+  border-right: none;
+  border-left: none;
 }
 .picker-item:last-child { border-bottom: none; }
 .picker-item:hover { background: rgba(34, 197, 94, .08); }

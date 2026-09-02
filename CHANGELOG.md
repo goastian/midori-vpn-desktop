@@ -6,6 +6,10 @@ All notable MidoriVPN Desktop changes are documented here.
 
 Major Release with a verified WireGuard transport contract, native Go 1.27 agent, and hardened Linux RPM package.
 
+- Server choices and settings controls are now fully keyboard-operable and
+  expose switch, selection, status and alert semantics to assistive technology.
+  Focus remains visible throughout the dashboard, and all six locales share a
+  tested message-key contract without silent English fallbacks.
 - Removed the abandoned Tauri/Rust and non-Linux Desktop targets. The active
   client now contains only the Linux Go agent, Qt tray and authenticated Vue
   loopback UI; RPM icons and PolicyKit resources live under neutral packaging

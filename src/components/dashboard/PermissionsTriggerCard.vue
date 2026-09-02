@@ -18,6 +18,7 @@
     <div
       v-if="capsError"
       class="error"
+      role="alert"
       data-test="perms-error"
       style="margin-top:8px;font-size:12px"
     >
