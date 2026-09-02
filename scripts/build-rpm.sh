@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LICENSE_FILE="${MIDORIVPN_LICENSE_FILE:-${ROOT_DIR}/../LICENSE}"
+SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(git -C "${ROOT_DIR}" show -s --format=%ct HEAD)}"
 
 if [ "$(id -u)" -eq 0 ]; then
   echo "error: RPM builds must run through rootless Podman" >&2
@@ -11,6 +12,10 @@ fi
 
 [ -f "${LICENSE_FILE}" ] || {
   echo "error: project license not found: ${LICENSE_FILE}" >&2
+  exit 1
+}
+[[ "${SOURCE_DATE_EPOCH}" =~ ^[0-9]+$ ]] || {
+  echo "error: SOURCE_DATE_EPOCH must be an integer" >&2
   exit 1
 }
 
@@ -24,6 +29,7 @@ podman build -t midorivpn-rpm-builder -f "$ROOT_DIR/packaging/Containerfile.rpm"
 
 echo "==> Compilando agente Go, UI Vue y paquete RPM Linux..."
 podman run --rm --userns=keep-id:uid=0,gid=0 \
+  -e SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH}" \
   -v "$ROOT_DIR:/src:Z" \
   -v "$LICENSE_FILE:/project-license:ro,Z" \
   -v midori_rpm_npm_cache:/root/.npm:Z \
@@ -38,7 +44,7 @@ podman run --rm --userns=keep-id:uid=0,gid=0 \
   npm run build:qt-shell && \
   npm run build-agent:host && \
   mkdir -p /tmp/rpmbuild/RPMS /tmp/rpmbuild/BUILD /tmp/rpmbuild/BUILDROOT /tmp/rpmbuild/SOURCES /tmp/rpmbuild/SPECS /tmp/rpmbuild/SRPMS && \
-  rpmbuild -bb --define '_topdir /tmp/rpmbuild' --define 'source_dir /app' --define 'license_file /project-license' /app/packaging/midori-vpn.spec && \
+  rpmbuild -bb --define '_topdir /tmp/rpmbuild' --define 'use_source_date_epoch_as_buildtime 1' --define 'source_dir /app' --define 'license_file /project-license' /app/packaging/midori-vpn.spec && \
   cp -a /tmp/rpmbuild/RPMS/x86_64/. /src/dist-packages/"
 
 echo "==> Firmando paquete RPM generado..."
