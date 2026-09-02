@@ -2,7 +2,7 @@
 
 All notable MidoriVPN Desktop changes are documented here.
 
-## v2.0.0 - 2026-08-24
+## v2.0.0 - Unreleased
 
 Major Release with a verified WireGuard transport contract, native Go 1.27 agent, and hardened Linux RPM package.
 
@@ -33,7 +33,7 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
   certified transports no longer remain disabled behind the five-minute agent
   cache. Local RPC validates the refresh and certificate-management routes
   with strict UUID handling.
-- The Linux agent includes a real OpenVPN 2.7 adapter with an AEAD-only TLS 1.3 profile, certificate-name validation, handshake detection, DNS/kill-switch integration, runtime credential cleanup and mandatory DCO interface verification. It remains server-health gated until the gateway E2E is certified.
+- The Linux agent includes a real OpenVPN 2.7 adapter with an AEAD-only TLS 1.3 profile, certificate-name validation, handshake detection, DNS/kill-switch integration, runtime credential cleanup and mandatory DCO interface verification. Availability remains gated by each server's current health and explicit certification.
 - The Linux agent includes a private strongSwan 6 client for IKEv2 EAP-TLS. It reuses the device-owned certificate, creates an isolated VICI runtime and XFRM interface, loads `swanctl.conf` and credentials explicitly from that private directory, validates the gateway DNS identity, and integrates assigned IP, DNS, kill switch, counters and deterministic cleanup without creating a persistent system profile.
 - The private IKE client now launches `charon-systemd`, avoiding the global `/run/strongswan/charon.pid` used by a host daemon. Child capabilities are prepared fail-closed and a bounded stderr diagnostic tail exposes both startup and handshake failures without allowing daemon output to grow memory indefinitely.
 - IKEv2 now uses the initiator-side `auth = eap` contract, pins `SWANCTL_DIR` to the private runtime credential tree and selects the device certificate by its exact subject DN. This avoids interpreting the API's URI identity as an incompatible strongSwan `KEY_ID` and then sending an empty client-certificate message.
@@ -44,7 +44,7 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
 - MASQUE now supplies the implicit HTTPS port `443` to the QUIC dialer when a standards-compliant URI template omits it, allowing external CONNECT-UDP sessions to start correctly.
 - The Qt tray now follows the lifecycle of its owned agent, so closing MidoriVPN from the Vue dashboard cannot leave an orphaned desktop shell running.
 - Device-certificate validation accepts only the subsecond precision loss inherent to X.509 time encoding, while continuing to reject material expiry mismatches.
-- Settings exposes explicit OpenVPN and IKEv2 choices only for already healthy/certified server capabilities; Smart Auto remains limited to the currently certified WireGuard family until transport E2E is complete.
+- Settings exposes explicit OpenVPN and IKEv2 choices only for already healthy/certified server capabilities. Smart Auto intentionally remains limited to the WireGuard family, whose candidates share the same handshake and fallback contract.
 - The Qt shell enforces one Desktop/tray instance, prioritizes the packaged MidoriVPN icon, localizes tray actions from the selected UI language, and reuses the active dashboard when launched again.
 - Permission elevation restarts the agent in background mode and reconnects the existing dashboard instead of opening another browser tab. The single permission prompt now requires the complete network and DNS capability set.
 - Settings removes internal agent ports and duplicated startup cards, localizes the transport strategy, shows only the selected transport explanation, and greys out transports that no healthy server advertises.
@@ -70,6 +70,12 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
 - **Protocolos honestos**: OpenVPN e IKEv2 solo aparecen con capacidad saludable y certificada, y ambos completan un handshake nativo real antes de declarar conexión.
 - **Código simulado retirado**: Se eliminaron los adaptadores internos no conectados de OpenVPN DCO, IKEv2, MASQUE, TLS ofuscado, selector Smart y benchmarks estimados; ya no pueden confundirse con soporte de producción.
 - **Seguridad de agente**: el token local es obligatorio en todas las compilaciones; se retiró el build tag de bypass de desarrollo y se corrigió el cierre concurrente de relays.
+
+## Archived releases
+
+The entries below describe the source and packaging that shipped in their
+respective versions. References to Tauri, Rust, AppImage or non-Linux targets
+are historical and are not supported by 2.0.0.
 
 ## v1.1.5 - MidoriVPN Desktop 1.1.5
 
