@@ -244,6 +244,7 @@ async function grantCapsSmart() {
   const ok = await grantCapsSmartRaw()
   console.log('[Dashboard] grantCapsSmart result:', ok)
   if (!ok) return
+  if (parsedVpnError.value?.action === 'grant_caps') clearVpnError()
   await loadServersAfterLogin()
 }
 

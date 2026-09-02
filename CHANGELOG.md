@@ -6,6 +6,10 @@ All notable MidoriVPN Desktop changes are documented here.
 
 Major Release with a verified WireGuard transport contract, native Go 1.27 agent, and hardened Linux RPM package.
 
+- Permission changes now refresh global security warnings immediately, clear
+  stale permission connection errors and use the capable agent's private
+  nftables path without probing firewalld or opening a redundant PolicyKit
+  dialog.
 - Server choices and settings controls are now fully keyboard-operable and
   expose switch, selection, status and alert semantics to assistive technology.
   Focus remains visible throughout the dashboard, and all six locales share a

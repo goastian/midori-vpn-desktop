@@ -78,6 +78,7 @@ import { useProtectionStore } from './stores/protection'
 import { isAuthOriginRejected } from './lib/error'
 import { createBootstrapCoordinator, type BootstrapAttempt, type BootstrapPhase } from './lib/bootstrap'
 import AgentBootstrapBanner from './components/AgentBootstrapBanner.vue'
+import { CAPABILITIES_CHANGED_EVENT } from './composables/useCaps'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -254,6 +255,7 @@ onMounted(() => {
 
   // Re-poll when the OAuth journey returns focus or a failed shell is retried.
   window.addEventListener('focus', refreshSnapshot)
+  window.addEventListener(CAPABILITIES_CHANGED_EVENT, loadSecurityIssues)
 
   // Keep-alive: silently refresh the token every 8 minutes so the session
   // never expires due to inactivity on a desktop app. The agent also schedules
@@ -272,6 +274,7 @@ onUnmounted(() => {
   bootstrapCoordinator.stop()
   unlistenAgentStatus?.()
   window.removeEventListener('focus', refreshSnapshot)
+  window.removeEventListener(CAPABILITIES_CHANGED_EVENT, loadSecurityIssues)
   if (keepAliveTimer) clearInterval(keepAliveTimer)
 })
 </script>

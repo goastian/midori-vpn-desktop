@@ -16,6 +16,12 @@ const capsGranted = ref(false)   // default false — assume not granted until c
 const capsGranting = ref(false)
 const capsError = ref('')
 
+export const CAPABILITIES_CHANGED_EVENT = 'midorivpn:capabilities-changed'
+
+function notifyCapabilitiesChanged() {
+  window.dispatchEvent(new Event(CAPABILITIES_CHANGED_EVENT))
+}
+
 export function useCaps() {
   /**
    * Query the local agent for whether its binary has CAP_NET_ADMIN.
@@ -60,6 +66,7 @@ export function useCaps() {
         capsError.value = text('errors.capsVerifyFailed')
         return false
       }
+      notifyCapabilitiesChanged()
       return true
     } catch (e) {
       capsError.value = String(e)
@@ -78,6 +85,7 @@ export function useCaps() {
       const ok = await invokePlatform<boolean>('revert_agent_permissions')
       if (ok) {
         capsGranted.value = false
+        notifyCapabilitiesChanged()
         return true
       } else {
         capsError.value = text('errors.capsRevertFailed')

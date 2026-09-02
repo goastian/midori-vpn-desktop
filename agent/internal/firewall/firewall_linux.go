@@ -107,7 +107,15 @@ func Detect() Backend {
 // RevertAll() can remove the rules on agent shutdown.
 func Allow(ctx context.Context, scope Scope) error {
 	scope = normalizeScope(scope)
-	backend := Detect()
+	backend := BackendNone
+	if scope.Direct && findExe("nft") != "" {
+		// A capable agent can manage its private nftables table directly. Do not
+		// probe firewalld/ufw first: even read-only status commands may invoke a
+		// desktop PolicyKit agent and create a redundant password dialog.
+		backend = BackendNftables
+	} else {
+		backend = Detect()
+	}
 	slog.Info("firewall: Allow called", "direct", scope.Direct, "detected_backend", backend)
 	// When the caller has CAP_NET_ADMIN it can write nft rules directly without
 	// going through firewalld or ufw's D-Bus interfaces (which require polkit
@@ -155,7 +163,12 @@ func Allow(ctx context.Context, scope Scope) error {
 // targets nftables directly (no polkit prompt required when CAP_NET_ADMIN
 // is held), mirroring the same bypass used in Allow.
 func Cleanup(ctx context.Context, wgIface string, direct bool) error {
-	backend := Detect()
+	backend := BackendNone
+	if direct && findExe("nft") != "" {
+		backend = BackendNftables
+	} else {
+		backend = Detect()
+	}
 	slog.Info("firewall: Cleanup called", "direct", direct, "detected_backend", backend)
 	if direct && (backend == BackendFirewalld || backend == BackendUFW) {
 		if findExe("nft") != "" {
