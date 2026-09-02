@@ -10,6 +10,10 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
   expose switch, selection, status and alert semantics to assistive technology.
   Focus remains visible throughout the dashboard, and all six locales share a
   tested message-key contract without silent English fallbacks.
+- Desktop startup now shows localized loading and recovery states instead of
+  silently abandoning initialization when the local snapshot is delayed. A
+  guarded retry restores one event subscription without duplicating listeners,
+  timers or cleanup work.
 - Removed the abandoned Tauri/Rust and non-Linux Desktop targets. The active
   client now contains only the Linux Go agent, Qt tray and authenticated Vue
   loopback UI; RPM icons and PolicyKit resources live under neutral packaging

@@ -9,8 +9,10 @@
     "close": "Close"
   },
   "agent": {
+    "starting": "Loading the local VPN service…",
     "restarting": "Reconnecting agent… Please wait.",
-    "failed": "Agent unavailable. Restart the application."
+    "failed": "The local VPN service could not be reached.",
+    "retry": "Try again"
   },
   "security": {
     "copyAndClose": "Copy and dismiss"

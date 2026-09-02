@@ -9,8 +9,10 @@
     "close": "Schließen"
   },
   "agent": {
+    "starting": "Lokaler VPN-Dienst wird geladen…",
     "restarting": "Agent wird neu verbunden… Bitte warten.",
-    "failed": "Agent nicht verfügbar. Anwendung neu starten."
+    "failed": "Der lokale VPN-Dienst ist nicht erreichbar.",
+    "retry": "Erneut versuchen"
   },
   "security": {
     "copyAndClose": "Kopieren und schließen"

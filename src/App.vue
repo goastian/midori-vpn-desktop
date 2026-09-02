@@ -22,10 +22,13 @@
     </header>
 
     <div class="app-body">
+      <AgentBootstrapBanner :phase="bootstrapPhase" @retry="retryBootstrap" />
+
       <!-- Agent supervisor status banner -->
-      <div v-if="agentStatus !== 'running'" class="agent-banner" :class="`agent-banner--${agentStatus}`" role="status" aria-live="polite">
+      <div v-if="bootstrapPhase === 'ready' && agentStatus !== 'running'" class="agent-banner" :class="`agent-banner--${agentStatus}`" :role="agentStatus === 'failed' ? 'alert' : 'status'" aria-live="polite">
         <span v-if="agentStatus === 'restarting'">{{ t('agent.restarting') }}</span>
         <span v-else-if="agentStatus === 'failed'">{{ t('agent.failed') }}</span>
+        <button v-if="agentStatus === 'failed'" type="button" class="agent-retry" @click="retryBootstrap">{{ t('agent.retry') }}</button>
       </div>
 
       <!-- Security warnings banner -->
@@ -66,13 +69,15 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
-import { agent, hidePlatformWindow, initAgentToken, invokePlatform, listenPlatform, minimizePlatformWindow, startPlatformDragging } from './lib/agent'
+import { agent, hidePlatformWindow, initAgentToken, invokePlatform, listenPlatform, minimizePlatformWindow, startPlatformDragging, type AgentEvent } from './lib/agent'
 import brandIcon from './assets/midori-mv.png'
 import { useVpnStore } from './stores/vpn'
 import { useMeshStore } from './stores/mesh'
 import { useAuthStore } from './stores/auth'
 import { useProtectionStore } from './stores/protection'
 import { isAuthOriginRejected } from './lib/error'
+import { createBootstrapCoordinator, type BootstrapAttempt, type BootstrapPhase } from './lib/bootstrap'
+import AgentBootstrapBanner from './components/AgentBootstrapBanner.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -87,6 +92,7 @@ const securityIssues = ref<SecurityIssue[]>([])
 
 /** Status emitted by the local agent supervisor: "running" | "restarting" | "failed" */
 const agentStatus = ref<'running' | 'restarting' | 'failed'>('running')
+const bootstrapPhase = ref<BootstrapPhase>('loading')
 const SNAPSHOT_RETRY_MS = 300
 
 function dismissIssue(id: string) {
@@ -160,9 +166,14 @@ async function loadSnapshot(retries = 0) {
 }
 
 function refreshSnapshot() {
-  void loadSnapshot(3).catch(() => {
-    agentStatus.value = 'restarting'
-  })
+  if (bootstrapPhase.value === 'failed') {
+    retryBootstrap()
+    return
+  }
+  if (bootstrapPhase.value !== 'ready') return
+  void loadSnapshot(3)
+    .then(() => { agentStatus.value = 'running' })
+    .catch(() => { agentStatus.value = 'restarting' })
 }
 
 // When authenticated drops to false, redirect to /login so the user can
@@ -174,40 +185,74 @@ watch(() => authStore.authenticated, (isNow, wasBefore) => {
   }
 })
 
-// Subscribe to live events
-let unsubscribe: (() => void) | null = null
 let keepAliveTimer: ReturnType<typeof setInterval> | null = null
 let unlistenAgentStatus: (() => void) | null = null
+let appMounted = false
 
-onMounted(async () => {
-  // Initialise the agent client before subscribing to Rust-relayed events.
-  await initAgentToken()
-  await loadSnapshot(20)
-  unsubscribe = agent.subscribe((event) => {
-    if (event.type === 'vpn_status') vpnStore.applyStatus(event.data)
-    else if (event.type === 'mesh_status') meshStore.applyStatus(event.data)
-    else if (event.type === 'auth_status') authStore.applyStatus(event.data)
-    else if (event.type === 'protection_status') protectionStore.applyStatus(event.data)
-  })
+function applyAgentEvent(event: AgentEvent) {
+  if (event.type === 'error') {
+    agentStatus.value = 'restarting'
+    return
+  }
+  agentStatus.value = 'running'
+  if (event.type === 'vpn_status') vpnStore.applyStatus(event.data)
+  else if (event.type === 'mesh_status') meshStore.applyStatus(event.data)
+  else if (event.type === 'auth_status') authStore.applyStatus(event.data)
+  else if (event.type === 'protection_status') protectionStore.applyStatus(event.data)
+}
 
-  // Listen for agent supervisor status changes from Rust.
-  // On 'running' the SSE relay reconnects and the agent re-sends the full
-  // snapshot, so we don't poll loadSnapshot here (avoids racing the SSE
-  // snapshot with a stale HTTP GET that can overwrite mesh state).
+const bootstrapCoordinator = createBootstrapCoordinator({
+  async initialize(attempt: BootstrapAttempt) {
+    await initAgentToken()
+    await loadSnapshot(attempt === 'initial' ? 20 : 3)
+  },
+  subscribe: () => agent.subscribe(applyAgentEvent),
+  onPhaseChange: (phase) => {
+    bootstrapPhase.value = phase
+    if (phase === 'ready') agentStatus.value = 'running'
+    else if (phase === 'failed') agentStatus.value = 'failed'
+  },
+})
+
+async function loadSecurityIssues() {
+  try {
+    const issues = await invokePlatform<SecurityIssue[]>('security_check')
+    securityIssues.value = issues
+  } catch {
+    // Non-critical and intentionally absent from browser-only environments.
+  }
+}
+
+async function bootstrapAgent(attempt: BootstrapAttempt) {
+  const ready = await bootstrapCoordinator.run(attempt)
+  if (ready) await loadSecurityIssues()
+}
+
+function retryBootstrap() {
+  void bootstrapAgent('retry')
+}
+
+onMounted(() => {
+  appMounted = true
+  // Register recovery hooks before the first snapshot so a failed bootstrap
+  // cannot leave the shell without a way to recover.
   listenPlatform<{ status: string }>('agent://status', async (ev) => {
     const s = ev.payload.status
     if (s === 'running') {
-      await initAgentToken()
-      agentStatus.value = 'running'
+      await bootstrapAgent('retry')
     } else if (s === 'restarting') {
       agentStatus.value = 'restarting'
     } else if (s === 'failed') {
       agentStatus.value = 'failed'
     }
-  }).then(fn => { unlistenAgentStatus = fn })
+  }).then(fn => {
+    if (appMounted) unlistenAgentStatus = fn
+    else fn()
+  }).catch(() => {
+    unlistenAgentStatus = null
+  })
 
-  // Re-poll snapshot when the window regains focus (WebKit may pause event
-  // while the OAuth browser tab is open, causing the auth_status event to be missed).
+  // Re-poll when the OAuth journey returns focus or a failed shell is retried.
   window.addEventListener('focus', refreshSnapshot)
 
   // Keep-alive: silently refresh the token every 8 minutes so the session
@@ -219,17 +264,12 @@ onMounted(async () => {
     }
   }, 8 * 60 * 1000)
 
-  // Check for SELinux / AppArmor / firewall issues
-  try {
-    const issues = await invokePlatform<SecurityIssue[]>('security_check')
-    if (issues.length) securityIssues.value = issues
-  } catch {
-    // non-critical: ignore if command fails
-  }
+  void bootstrapAgent('initial')
 })
 
 onUnmounted(() => {
-  unsubscribe?.()
+  appMounted = false
+  bootstrapCoordinator.stop()
   unlistenAgentStatus?.()
   window.removeEventListener('focus', refreshSnapshot)
   if (keepAliveTimer) clearInterval(keepAliveTimer)
@@ -330,6 +370,14 @@ onUnmounted(() => {
 .agent-banner { padding: 7px 14px; font-size: 0.82rem; text-align: center; font-weight: 500; }
 .agent-banner--restarting { background: #fffbeb; color: #92400e; border-bottom: 1px solid #fcd34d; }
 .agent-banner--failed     { background: #fef2f2; color: #991b1b; border-bottom: 1px solid #fca5a5; }
+.agent-retry { margin-left: 8px; padding: 3px 8px; border: 1px solid currentColor; border-radius: 5px; background: transparent; color: inherit; cursor: pointer; }
+
+.bootstrap-banner { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 14px; font-size: 0.82rem; font-weight: 600; border-bottom: 1px solid; }
+.bootstrap-banner--loading,
+.bootstrap-banner--retrying { background: #fffbeb; color: #92400e; border-color: #fcd34d; }
+.bootstrap-banner--failed { background: #fef2f2; color: #991b1b; border-color: #fca5a5; }
+.bootstrap-indicator { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 1px solid currentColor; border-radius: 50%; }
+.bootstrap-retry { padding: 4px 9px; border: 1px solid currentColor; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; font-weight: 700; }
 
 /* Security banner */
 .security-banner { display: flex; flex-direction: column; gap: 0; }
