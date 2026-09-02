@@ -34,9 +34,11 @@
         <span>{{ t('mesh.peers') }}</span>
         <button type="button" class="btn-refresh" @click="mesh.fetchExitNodes()" :title="t('mesh.refresh')" :aria-label="t('mesh.refresh')">↻</button>
       </div>
-      <div v-if="mesh.exitNodes.length === 0" style="color:#888;font-size:13px;">
-        {{ t('mesh.noPeers') }}
-      </div>
+      <EmptyState
+        v-if="mesh.exitNodes.length === 0"
+        :title="t('mesh.noPeersTitle')"
+        :detail="t('mesh.noPeers')"
+      />
       <div
         v-for="n in mesh.exitNodes"
         :key="n.mesh_ip"
@@ -55,6 +57,7 @@ import { useI18n } from 'vue-i18n'
 import { useMeshStore } from '../stores/mesh'
 import { useCaps } from '../composables/useCaps'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
+import EmptyState from '../components/EmptyState.vue'
 
 const mesh = useMeshStore()
 const { t } = useI18n()

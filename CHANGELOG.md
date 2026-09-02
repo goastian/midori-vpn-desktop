@@ -14,6 +14,10 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
   silently abandoning initialization when the local snapshot is delayed. A
   guarded retry restores one event subscription without duplicating listeners,
   timers or cleanup work.
+- Empty destinations, Mesh peers and device certificates now share a clear
+  accessible presentation. Disabled connection and startup controls explain
+  their unmet dependency in all six languages, while an active tunnel always
+  keeps its Disconnect action available during permission-state transitions.
 - Removed the abandoned Tauri/Rust and non-Linux Desktop targets. The active
   client now contains only the Linux Go agent, Qt tray and authenticated Vue
   loopback UI; RPM icons and PolicyKit resources live under neutral packaging

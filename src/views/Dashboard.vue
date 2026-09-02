@@ -5,7 +5,7 @@
     </div>
 
     <!-- Connection card -->
-    <div class="card" :class="{ 'card--locked': featuresLocked }">
+    <div class="card" :class="{ 'card--locked': featuresLocked && !activeConnected }">
       <!-- Server picker -->
       <div v-if="auth.authenticated" class="picker-wrap" ref="pickerRef">
         <button
@@ -84,9 +84,12 @@
             </span>
             <span v-if="isActive(item.key)" class="item-active-dot" aria-hidden="true"></span>
           </button>
-          <div v-if="allItems.length === 0" class="picker-empty">
-            {{ t('server.empty') }}
-          </div>
+          <EmptyState
+            v-if="allItems.length === 0"
+            compact
+            :title="t('server.empty')"
+            :detail="t('server.emptyHint')"
+          />
         </div>
       </div>
 
@@ -98,11 +101,15 @@
         </div>
         <button
           class="btn" :class="activeConnected ? 'btn-danger' : 'btn-primary'"
-          :disabled="connectDisabled || featuresLocked"
+          :disabled="connectDisabled"
+          :aria-describedby="connectDisabledReason ? 'connect-disabled-reason' : undefined"
           @click="toggleConnection"
         >
           {{ vpn.loading ? '…' : activeConnected ? t('vpn.disconnect') : t('vpn.connect') }}
         </button>
+      </div>
+      <div v-if="connectDisabledReason" id="connect-disabled-reason" class="action-blocked-hint">
+        {{ connectDisabledReason }}
       </div>
 
       <!-- Stats when connected -->
@@ -186,6 +193,8 @@ import AuthSection from '../components/dashboard/AuthSection.vue'
 import PermissionsTriggerCard from '../components/dashboard/PermissionsTriggerCard.vue'
 import ErrorAlertCard from '../components/dashboard/ErrorAlertCard.vue'
 import { parseAppError, type ParsedError } from '../lib/error'
+import { getConnectionBlocker } from '../lib/uiState'
+import EmptyState from '../components/EmptyState.vue'
 
 const vpn = useVpnStore()
 const { t } = useI18n()
@@ -314,10 +323,22 @@ const connectionStatusLabel = computed(() => {
   return vpn.connected ? t('vpn.connected') : t('vpn.disconnected')
 })
 
-const connectDisabled = computed(() => {
-  if (vpn.loading || vpn.connectionInProgress || toggleInProgress.value) return true
-  if (activeConnected.value) return false
-  return !auth.authenticated || serversLoading.value || !selectedServer.value
+const connectionBusy = computed(() => vpn.loading || vpn.connectionInProgress || toggleInProgress.value)
+const connectionBlocker = computed(() => getConnectionBlocker({
+  active: activeConnected.value,
+  busy: connectionBusy.value,
+  authenticated: auth.authenticated,
+  permissionsLocked: featuresLocked.value,
+  destinationsLoading: serversLoading.value,
+  hasDestination: Boolean(selectedServer.value),
+}))
+const connectDisabled = computed(() => connectionBusy.value || connectionBlocker.value !== null)
+const connectDisabledReason = computed(() => {
+  if (connectionBlocker.value === 'sign_in') return t('vpn.blocked.signIn')
+  if (connectionBlocker.value === 'permissions') return t('vpn.blocked.permissions')
+  if (connectionBlocker.value === 'loading') return t('server.loading')
+  if (connectionBlocker.value === 'no_destination') return t('vpn.blocked.noDestination')
+  return ''
 })
 
 function isActive(key: string): boolean {
@@ -624,11 +645,11 @@ async function toggleConnection() {
   flex-shrink: 0;
 }
 
-.picker-empty {
-  padding: 18px;
-  text-align: center;
+.action-blocked-hint {
+  margin: -4px 0 14px;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 11.5px;
+  line-height: 1.4;
 }
 
 /* ── Connection row ─────────────────────────────────────────────────────── */

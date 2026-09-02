@@ -70,6 +70,7 @@
     "switching": "Switching server…",
     "loading": "Loading servers…",
     "empty": "No servers available",
+    "emptyHint": "No healthy VPN servers or Mesh exit peers are available yet.",
     "choose": "Choose a VPN server or Mesh peer",
     "meshName": "Mesh · {ip}"
   },
@@ -78,6 +79,11 @@
     "disconnected": "Disconnected",
     "connect": "Connect",
     "disconnect": "Disconnect",
+    "blocked": {
+      "signIn": "Sign in to choose a server and connect.",
+      "permissions": "Enable system permissions before starting a VPN connection.",
+      "noDestination": "No available VPN server or Mesh exit peer can be selected."
+    },
     "phases": {
       "preparing": "Preparing connection…",
       "authenticating": "Preparing secure credentials…",
@@ -163,6 +169,7 @@
     "disabling": "Disabling mesh…",
     "peers": "Mesh Peers",
     "refresh": "Refresh list",
+    "noPeersTitle": "No Mesh peers available",
     "noPeers": "No peers connected. To route traffic through a peer, select it as a server in the VPN tab.",
     "port": "port {n}"
   },
@@ -178,6 +185,8 @@
     "autoStartHint": "Runs in tray when you log in (XDG autostart)",
     "startMinimized": "Start minimized in the system tray",
     "startMinimizedHint": "Keeps the dashboard closed at login when the desktop provides a system tray.",
+    "startMinimizedUnavailable": "Enable launch at login first.",
+    "permissionsRequired": "Enable system permissions from the VPN tab to use this option.",
     "protocolTitle": "Connection protocol",
     "protocolStrategy": "Transport selection strategy",
     "protocolUnavailableShort": "Unavailable",

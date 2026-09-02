@@ -9,6 +9,7 @@
         </div>
         <ToggleSwitch :checked="meshAutoStart" :label="t('settings.meshAutoStart')" :disabled="featuresLocked" @change="toggleMeshAutoStart" />
       </div>
+      <div v-if="featuresLocked" class="setting-blocked-hint">{{ t('settings.permissionsRequired') }}</div>
       <div v-if="meshSettingsError" class="error" style="margin-top:8px;" role="alert">{{ meshSettingsError }}</div>
     </div>
 
@@ -35,7 +36,7 @@
       <div class="section-title">{{ t('settings.certificates.title') }}</div>
       <div class="label certificate-hint">{{ t('settings.certificates.hint') }}</div>
       <div v-if="certificatesLoading" class="label">{{ t('settings.certificates.loading') }}</div>
-      <div v-else-if="activeCertificates.length === 0" class="label">{{ t('settings.certificates.empty') }}</div>
+      <EmptyState v-else-if="activeCertificates.length === 0" compact :title="t('settings.certificates.empty')" />
       <div v-else class="certificate-list">
         <div v-for="certificate in activeCertificates" :key="certificate.id" class="certificate-row">
           <div class="certificate-copy">
@@ -74,6 +75,7 @@
         </div>
         <ToggleSwitch :checked="startMinimized" :label="t('settings.startMinimized')" :disabled="!autostart" @change="toggleStartMinimized" />
       </div>
+      <div v-if="!autostart" class="setting-blocked-hint">{{ t('settings.startMinimizedUnavailable') }}</div>
       <div v-if="autostartError" class="error" style="margin-top:8px;" role="alert">{{ autostartError }}</div>
       <div v-if="uiSettingsError" class="error" style="margin-top:8px;" role="alert">{{ uiSettingsError }}</div>
     </div>
@@ -128,6 +130,7 @@ import { useVpnStore } from '../stores/vpn'
 import type { DeviceCertificate } from '../lib/agent'
 import { protocolIsAvailable, type ProtocolPolicy } from '../lib/protocol'
 import ToggleSwitch from '../components/ToggleSwitch.vue'
+import EmptyState from '../components/EmptyState.vue'
 
 const { t, locale } = useI18n()
 const appVersion = __APP_VERSION__
@@ -348,4 +351,5 @@ async function toggleStartMinimized() {
 .certificate-revoke { flex: 0 0 auto; }
 .certificate-message { margin-top: 10px; }
 .success-message { color: var(--midori-500); font-size: 12px; }
+.setting-blocked-hint { margin-top: 8px; color: var(--muted); font-size: 11.5px; line-height: 1.4; }
 </style>

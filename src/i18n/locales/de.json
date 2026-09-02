@@ -70,6 +70,7 @@
     "switching": "Server wird gewechselt…",
     "loading": "Server werden geladen…",
     "empty": "Keine Server verfügbar",
+    "emptyHint": "Derzeit sind keine fehlerfreien VPN-Server oder Mesh-Exit-Peers verfügbar.",
     "choose": "VPN-Server oder Mesh-Peer auswählen",
     "meshName": "Mesh · {ip}"
   },
@@ -78,6 +79,11 @@
     "disconnected": "Getrennt",
     "connect": "Verbinden",
     "disconnect": "Trennen",
+    "blocked": {
+      "signIn": "Melden Sie sich an, um einen Server auszuwählen und eine Verbindung herzustellen.",
+      "permissions": "Aktivieren Sie die Systemberechtigungen, bevor Sie eine VPN-Verbindung starten.",
+      "noDestination": "Es kann kein verfügbarer VPN-Server oder Mesh-Exit-Peer ausgewählt werden."
+    },
     "phases": {
       "preparing": "Verbindung wird vorbereitet…",
       "authenticating": "Sichere Anmeldedaten werden vorbereitet…",
@@ -163,6 +169,7 @@
     "disabling": "Mesh wird deaktiviert…",
     "peers": "Mesh-Peers",
     "refresh": "Liste aktualisieren",
+    "noPeersTitle": "Keine Mesh-Peers verfügbar",
     "noPeers": "Keine Peers verbunden. Um Datenverkehr über einen Peer zu leiten, wähle ihn als Server im VPN-Tab aus.",
     "port": "Port {n}"
   },
@@ -178,6 +185,8 @@
     "autoStartHint": "Läuft im Tray, wenn du dich anmeldest (XDG-Autostart)",
     "startMinimized": "Minimiert im System-Tray starten",
     "startMinimizedHint": "Hält das Dashboard bei der Anmeldung geschlossen, wenn ein System-Tray verfügbar ist.",
+    "startMinimizedUnavailable": "Aktivieren Sie zuerst den Start bei der Anmeldung.",
+    "permissionsRequired": "Aktivieren Sie die Systemberechtigungen im VPN-Tab, um diese Option zu verwenden.",
     "protocolTitle": "Verbindungsprotokoll",
     "protocolStrategy": "Strategie zur Transportauswahl",
     "protocolUnavailableShort": "Nicht verfügbar",

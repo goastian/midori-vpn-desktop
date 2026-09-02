@@ -70,6 +70,7 @@
     "switching": "Cambiando servidor…",
     "loading": "Cargando servidores…",
     "empty": "No hay servidores disponibles",
+    "emptyHint": "Todavía no hay servidores VPN saludables ni peers de salida Mesh disponibles.",
     "choose": "Elige un servidor VPN o par Mesh",
     "meshName": "Mesh · {ip}"
   },
@@ -78,6 +79,11 @@
     "disconnected": "Desconectado",
     "connect": "Conectar",
     "disconnect": "Desconectar",
+    "blocked": {
+      "signIn": "Inicia sesión para elegir un servidor y conectarte.",
+      "permissions": "Habilita los permisos del sistema antes de iniciar una conexión VPN.",
+      "noDestination": "No se puede seleccionar ningún servidor VPN ni peer de salida Mesh."
+    },
     "phases": {
       "preparing": "Preparando conexión…",
       "authenticating": "Preparando credenciales seguras…",
@@ -163,6 +169,7 @@
     "disabling": "Desactivando mesh…",
     "peers": "Peers Mesh",
     "refresh": "Actualizar lista",
+    "noPeersTitle": "No hay peers Mesh disponibles",
     "noPeers": "Sin peers conectados. Para enrutar tráfico a través de un peer, selecciónalo como servidor en la pestaña VPN.",
     "port": "puerto {n}"
   },
@@ -178,6 +185,8 @@
     "autoStartHint": "Se ejecuta en la bandeja al iniciar sesión (XDG autostart)",
     "startMinimized": "Iniciar minimizado en la bandeja",
     "startMinimizedHint": "Mantiene el panel cerrado al iniciar sesión cuando el escritorio ofrece bandeja del sistema.",
+    "startMinimizedUnavailable": "Primero habilita el inicio automático al iniciar sesión.",
+    "permissionsRequired": "Habilita los permisos del sistema desde la pestaña VPN para usar esta opción.",
     "protocolTitle": "Protocolo de conexión",
     "protocolStrategy": "Estrategia de selección del transporte",
     "protocolUnavailableShort": "No disponible",

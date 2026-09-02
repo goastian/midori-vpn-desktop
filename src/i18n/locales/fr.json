@@ -70,6 +70,7 @@
     "switching": "Changement de serveur…",
     "loading": "Chargement des serveurs…",
     "empty": "Aucun serveur disponible",
+    "emptyHint": "Aucun serveur VPN sain ni pair de sortie Mesh n’est encore disponible.",
     "choose": "Choisir un serveur VPN ou un pair Mesh",
     "meshName": "Mesh · {ip}"
   },
@@ -78,6 +79,11 @@
     "disconnected": "Déconnecté",
     "connect": "Connecter",
     "disconnect": "Déconnecter",
+    "blocked": {
+      "signIn": "Connectez-vous pour choisir un serveur et établir la connexion.",
+      "permissions": "Activez les autorisations système avant de démarrer une connexion VPN.",
+      "noDestination": "Aucun serveur VPN ni pair de sortie Mesh disponible ne peut être sélectionné."
+    },
     "phases": {
       "preparing": "Préparation de la connexion…",
       "authenticating": "Préparation des identifiants sécurisés…",
@@ -163,6 +169,7 @@
     "disabling": "Désactivation du mesh…",
     "peers": "Pairs Mesh",
     "refresh": "Actualiser la liste",
+    "noPeersTitle": "Aucun pair Mesh disponible",
     "noPeers": "Aucun pair connecté. Pour acheminer le trafic via un pair, sélectionnez-le comme serveur dans l'onglet VPN.",
     "port": "port {n}"
   },
@@ -178,6 +185,8 @@
     "autoStartHint": "S'exécute dans la barre des tâches à la connexion (démarrage automatique XDG)",
     "startMinimized": "Démarrer réduit dans la zone de notification",
     "startMinimizedHint": "Garde le tableau de bord fermé à la connexion si le bureau fournit une zone de notification.",
+    "startMinimizedUnavailable": "Activez d’abord le lancement à la connexion.",
+    "permissionsRequired": "Activez les autorisations système depuis l’onglet VPN pour utiliser cette option.",
     "protocolTitle": "Protocole de connexion",
     "protocolStrategy": "Stratégie de sélection du transport",
     "protocolUnavailableShort": "Indisponible",
