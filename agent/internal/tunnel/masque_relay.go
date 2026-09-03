@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
+	"time"
 
+	"github.com/goastian/midorivpn-agent/internal/httpx"
 	masquego "github.com/quic-go/masque-go"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
@@ -63,7 +65,13 @@ func StartMasqueRelay(ctx context.Context, proxyTemplate, target, token string) 
 			NextProtos: []string{http3.NextProtoH3},
 			ServerName: proxyURL.Hostname(),
 		},
-		QUICConfig: &quic.Config{EnableDatagrams: true, InitialPacketSize: 1350},
+		QUICConfig: &quic.Config{
+			HandshakeIdleTimeout: 10 * time.Second,
+			MaxIdleTimeout:       5 * time.Minute,
+			KeepAlivePeriod:      30 * time.Second,
+			EnableDatagrams:      true,
+			InitialPacketSize:    1350,
+		},
 		// masque-go passes URL.Host directly to quic.DialAddr. Unlike an HTTP
 		// client, quic.DialAddr doesn't infer the default port for an HTTPS URL,
 		// so templates such as https://vpn.example/masque must explicitly be
@@ -92,10 +100,14 @@ func StartMasqueRelay(ctx context.Context, proxyTemplate, target, token string) 
 	}
 	if result.err != nil {
 		cancel()
+		status := 0
 		if result.response != nil {
-			return nil, "", fmt.Errorf("dial MASQUE relay: HTTP %d: %w", result.response.StatusCode, result.err)
+			status = result.response.StatusCode
+			if result.response.Body != nil {
+				result.response.Body.Close()
+			}
 		}
-		return nil, "", fmt.Errorf("dial MASQUE relay: %w", result.err)
+		return nil, "", httpx.NewRemoteError("masque_relay", "handshake_failed", status, 0, result.err)
 	}
 
 	udp, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})

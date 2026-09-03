@@ -20,6 +20,7 @@ import (
 	"github.com/goastian/midorivpn-agent/internal/deviceidentity"
 	"github.com/goastian/midorivpn-agent/internal/devicepki"
 	"github.com/goastian/midorivpn-agent/internal/dns"
+	"github.com/goastian/midorivpn-agent/internal/httpx"
 	"github.com/goastian/midorivpn-agent/internal/netguard"
 	"github.com/goastian/midorivpn-agent/internal/proxy"
 	"github.com/goastian/midorivpn-agent/internal/settings"
@@ -45,6 +46,8 @@ type Server struct {
 	apiClient      *apiClient.Client
 	deviceIdentity *deviceidentity.Store
 	devicePKI      *devicepki.Store
+	authHTTPClient *http.Client
+	publicIPClient *http.Client
 
 	externalDNSMu      sync.Mutex
 	externalDNS        dns.Backend
@@ -140,6 +143,8 @@ func NewServer(ag *state.Agent, port int) (*Server, error) {
 		apiURL:         cfg.APIURL,
 		jwksURL:        cfg.AuthentikJWKSURL,
 		deviceIdentity: identityStore,
+		authHTTPClient: httpx.NewClient(15 * time.Second),
+		publicIPClient: httpx.NewClient(8 * time.Second),
 
 		pendingOAuth:         make(map[string]pendingOAuthEntry),
 		authentikIssuer:      cfg.AuthentikIssuer,

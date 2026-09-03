@@ -64,3 +64,21 @@ func TestWSSRelayForwardsDatagramsAndAuthorization(t *testing.T) {
 		t.Fatalf("echoed datagram = %q", got)
 	}
 }
+
+func TestWSSRelayErrorDoesNotExposeRemoteBody(t *testing.T) {
+	secret := "remote-wss-provider-secret"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(secret))
+	}))
+	defer server.Close()
+
+	endpoint := "ws" + strings.TrimPrefix(server.URL, "http")
+	_, _, err := StartWSSRelay(context.Background(), endpoint, "test-token")
+	if err == nil {
+		t.Fatal("StartWSSRelay() error = nil")
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Fatalf("remote response leaked through error: %q", err.Error())
+	}
+}

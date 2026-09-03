@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/goastian/midorivpn-agent/internal/httpx"
 	"github.com/goastian/midorivpn-agent/internal/logredact"
 )
 
@@ -63,11 +64,7 @@ func (f *LocalForwarder) Active() bool {
 
 // Start begins serving; blocks until ctx is cancelled.
 func (f *LocalForwarder) Start(ctx context.Context) error {
-	srv := &http.Server{
-		Addr:              f.addr,
-		Handler:           f,
-		ReadHeaderTimeout: 10 * time.Second,
-	}
+	srv := httpx.NewTunnelServer(f.addr, f)
 	go func() {
 		<-ctx.Done()
 		shutCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -114,7 +111,7 @@ func (f *LocalForwarder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		slog.Warn("local forwarder: dial failed", "target", logredact.HostPort(r.Host), "upstream", logredact.HostPort(upstream), "err", err)
-		http.Error(w, "gateway error: "+err.Error(), http.StatusBadGateway)
+		http.Error(w, "upstream proxy unavailable", http.StatusBadGateway)
 		return
 	}
 	defer targetConn.Close()
@@ -178,6 +175,10 @@ func dialViaProxy(proxyAddr, target string) (net.Conn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("dial proxy %s: %w", proxyAddr, err)
 	}
+	if err := conn.SetDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("set proxy handshake deadline: %w", err)
+	}
 
 	req := &http.Request{
 		Method:     http.MethodConnect,
@@ -203,7 +204,11 @@ func dialViaProxy(proxyAddr, target string) (net.Conn, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		conn.Close()
-		return nil, fmt.Errorf("upstream CONNECT rejected: %s", resp.Status)
+		return nil, fmt.Errorf("upstream CONNECT rejected with status %d", resp.StatusCode)
+	}
+	if err := conn.SetDeadline(time.Time{}); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("clear proxy handshake deadline: %w", err)
 	}
 
 	return conn, nil

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/goastian/midorivpn-agent/internal/caps"
+	"github.com/goastian/midorivpn-agent/internal/httpx"
 )
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -62,6 +63,7 @@ func (s *Server) handleDNSStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
+	httpx.AllowStreaming(w)
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)

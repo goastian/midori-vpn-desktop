@@ -197,4 +197,38 @@ func TestClientReturnsStructuredAPIError(t *testing.T) {
 	if !strings.Contains(err.Error(), "[origin_country_unavailable]") {
 		t.Fatalf("APIError.Error() = %q, want stable code", err.Error())
 	}
+	if strings.Contains(err.Error(), apiErr.Message) {
+		t.Fatalf("APIError.Error() leaked remote message: %q", err.Error())
+	}
+}
+
+func TestClientRejectsOversizedCoreResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(strings.Repeat("x", (1<<20)+1)))
+	}))
+	defer server.Close()
+
+	client := New(server.URL, "test-client-id", func() string { return "token" }, nil)
+	_, err := client.ListServers(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "response_too_large") {
+		t.Fatalf("ListServers() error = %v", err)
+	}
+}
+
+func TestClientRejectsUnsafeRemoteErrorCode(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"ok":false,"code":"INVALID CODE","error":"provider-secret"}`))
+	}))
+	defer server.Close()
+
+	client := New(server.URL, "test-client-id", func() string { return "token" }, nil)
+	_, err := client.ActivateNode(context.Background())
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Code != "" {
+		t.Fatalf("error = %#v", err)
+	}
+	if strings.Contains(err.Error(), "provider-secret") {
+		t.Fatalf("APIError.Error() leaked remote message: %q", err.Error())
+	}
 }

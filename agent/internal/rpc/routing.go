@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/goastian/midorivpn-agent/internal/httpx"
 )
 
 func isAllowedDesktopOrigin(origin, host string) bool {
@@ -177,6 +179,9 @@ func (s *Server) newMux(agentToken string) http.Handler {
 
 // Start begins serving. It blocks until ctx is cancelled.
 func (s *Server) Start(ctx context.Context) error {
+	defer s.authHTTPClient.CloseIdleConnections()
+	defer s.publicIPClient.CloseIdleConnections()
+	defer s.apiClient.CloseIdleConnections()
 	agentToken, err := resolveAgentToken()
 	if err != nil {
 		return err
@@ -188,11 +193,7 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 	}()
 
-	srv := &http.Server{
-		Addr:              fmt.Sprintf("127.0.0.1:%d", s.port),
-		Handler:           s.newMux(agentToken),
-		ReadHeaderTimeout: 10 * time.Second,
-	}
+	srv := httpx.NewAPIServer(fmt.Sprintf("127.0.0.1:%d", s.port), s.newMux(agentToken))
 
 	go func() {
 		<-ctx.Done()

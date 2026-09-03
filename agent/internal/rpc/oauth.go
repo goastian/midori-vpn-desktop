@@ -6,8 +6,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -16,6 +16,7 @@ import (
 
 	"github.com/goastian/midorivpn-agent/internal/auth"
 	"github.com/goastian/midorivpn-agent/internal/caps"
+	"github.com/goastian/midorivpn-agent/internal/httpx"
 	"github.com/goastian/midorivpn-agent/internal/logredact"
 )
 
@@ -175,9 +176,9 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.authHTTPClient.Do(req)
 	if err != nil {
-		slog.Error("oauth: token exchange HTTP error", "err", err)
+		slog.Error("oauth: token exchange HTTP error", "operation", "authentik_token_exchange", "code", "transport_failed")
 		if r.Header.Get("Accept") == "application/json" {
 			writeStructuredError(w, http.StatusBadGateway, "token_exchange_http_error", "token exchange failed")
 		} else {
@@ -186,10 +187,25 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, readErr := httpx.ReadBody(resp.Body, httpx.MaxResponseBytes)
+	if readErr != nil {
+		code := "response_read_failed"
+		responseBytes := 0
+		if errors.Is(readErr, httpx.ErrResponseTooLarge) {
+			code = "response_too_large"
+			responseBytes = httpx.MaxResponseBytes + 1
+		}
+		slog.Warn("oauth: token exchange response rejected", "operation", "authentik_token_exchange", "code", code, "status", resp.StatusCode, "response_bytes", responseBytes)
+		if r.Header.Get("Accept") == "application/json" {
+			writeStructuredError(w, http.StatusBadGateway, "token_exchange_invalid_response", "token exchange failed")
+		} else {
+			http.Error(w, "token exchange failed", http.StatusBadGateway)
+		}
+		return
+	}
 
 	if resp.StatusCode != http.StatusOK {
-		slog.Warn("oauth: token exchange non-200", "status", resp.StatusCode, "body", logredact.Body(body))
+		slog.Warn("oauth: token exchange non-200", "operation", "authentik_token_exchange", "code", "provider_rejected", "status", resp.StatusCode, "response_bytes", len(body))
 		if r.Header.Get("Accept") == "application/json" {
 			writeStructuredError(w, http.StatusBadGateway, "token_exchange_rejected", fmt.Sprintf("token exchange: %d", resp.StatusCode))
 		} else {
@@ -295,13 +311,16 @@ func (s *Server) fetchUsername(ctx context.Context, accessToken string) string {
 		return ""
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.authHTTPClient.Do(req)
 	if err != nil {
-		slog.Warn("oauth: userinfo request failed", "err", err)
+		slog.Warn("oauth: userinfo request failed", "operation", "authentik_userinfo", "code", "transport_failed")
 		return ""
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+	body, err := httpx.ReadBody(resp.Body, httpx.MaxResponseBytes)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return ""
+	}
 	var info struct {
 		Email             string `json:"email"`
 		PreferredUsername string `json:"preferred_username"`

@@ -1,5 +1,5 @@
 // Package logredact provides small helpers to keep sensitive values (DNS
-// servers, client/peer IPs, hostnames, usernames, HTTP bodies) out of the
+// servers, client/peer IPs, hostnames, and usernames) out of the
 // agent's structured logs by default.
 //
 // Verbose, unredacted logging can be re-enabled at runtime by setting the
@@ -129,15 +129,6 @@ func User(s string) string {
 		first = local[:1]
 	}
 	return first + "***" + domain
-}
-
-// Body summarises an arbitrary byte payload as "<len>B sha256:<8 hex>".
-func Body(b []byte) string {
-	if Verbose() {
-		return string(b)
-	}
-	sum := sha256.Sum256(b)
-	return itoa(len(b)) + "B sha256:" + hex.EncodeToString(sum[:4])
 }
 
 // Generic returns a length+fingerprint summary for an opaque string value.

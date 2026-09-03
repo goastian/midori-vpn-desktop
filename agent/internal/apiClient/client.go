@@ -13,6 +13,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/goastian/midorivpn-agent/internal/httpx"
 )
 
 // APIError is a non-success response returned by vpn-core. Code is the
@@ -26,9 +28,21 @@ type APIError struct {
 
 func (e *APIError) Error() string {
 	if e.Code != "" {
-		return fmt.Sprintf("api error %d [%s]: %s", e.StatusCode, e.Code, e.Message)
+		return fmt.Sprintf("api request failed (status=%d code=[%s])", e.StatusCode, e.Code)
 	}
-	return fmt.Sprintf("api error %d: %s", e.StatusCode, e.Message)
+	return fmt.Sprintf("api request failed (status=%d)", e.StatusCode)
+}
+
+func sanitizeAPIErrorCode(code string) string {
+	if len(code) > 64 {
+		return ""
+	}
+	for _, char := range code {
+		if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '_' {
+			return ""
+		}
+	}
+	return code
 }
 
 func ErrorCode(err error) string {
@@ -65,6 +79,11 @@ type Client struct {
 	refreshFunc func(context.Context) error
 }
 
+// CloseIdleConnections releases resources owned by the dedicated transport.
+func (c *Client) CloseIdleConnections() {
+	c.httpClient.CloseIdleConnections()
+}
+
 // New creates a new Client.
 func New(baseURL string, clientID string, tokenFunc func() string, refreshFunc func(context.Context) error) *Client {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
@@ -78,7 +97,7 @@ func New(baseURL string, clientID string, tokenFunc func() string, refreshFunc f
 		clientID:    clientID,
 		tokenFunc:   tokenFunc,
 		refreshFunc: refreshFunc,
-		httpClient:  &http.Client{Timeout: 30 * time.Second},
+		httpClient:  httpx.NewClient(30 * time.Second),
 	}
 }
 
@@ -451,7 +470,16 @@ func (c *Client) doOnce(ctx context.Context, method, path string, body, out any,
 	}
 
 	if resp.StatusCode >= 400 {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		b, readErr := httpx.ReadBody(resp.Body, httpx.MaxResponseBytes)
+		if readErr != nil {
+			code := "response_read_failed"
+			responseBytes := 0
+			if errors.Is(readErr, httpx.ErrResponseTooLarge) {
+				code = "response_too_large"
+				responseBytes = httpx.MaxResponseBytes + 1
+			}
+			return httpx.NewRemoteError("core_api", code, resp.StatusCode, responseBytes, readErr)
+		}
 		message := strings.TrimSpace(string(b))
 		var envelope struct {
 			Error string `json:"error"`
@@ -463,7 +491,7 @@ func (c *Client) doOnce(ctx context.Context, method, path string, body, out any,
 		if message == "" {
 			message = http.StatusText(resp.StatusCode)
 		}
-		return &APIError{StatusCode: resp.StatusCode, Code: envelope.Code, Message: message}
+		return &APIError{StatusCode: resp.StatusCode, Code: sanitizeAPIErrorCode(envelope.Code), Message: message}
 	}
 
 	if out != nil {
@@ -473,9 +501,15 @@ func (c *Client) doOnce(ctx context.Context, method, path string, body, out any,
 			OK   bool            `json:"ok"`
 			Data json.RawMessage `json:"data"`
 		}
-		raw, err := io.ReadAll(resp.Body)
+		raw, err := httpx.ReadBody(resp.Body, httpx.MaxResponseBytes)
 		if err != nil {
-			return fmt.Errorf("read response: %w", err)
+			code := "response_read_failed"
+			responseBytes := 0
+			if errors.Is(err, httpx.ErrResponseTooLarge) {
+				code = "response_too_large"
+				responseBytes = httpx.MaxResponseBytes + 1
+			}
+			return httpx.NewRemoteError("core_api", code, resp.StatusCode, responseBytes, err)
 		}
 		if err := json.Unmarshal(raw, &envelope); err == nil && envelope.Data != nil {
 			// Wrapped response — decode data into out.

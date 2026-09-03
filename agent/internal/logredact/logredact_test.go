@@ -61,13 +61,3 @@ func TestHostPortKeepsPort(t *testing.T) {
 		t.Fatalf("HostPort lost suffix: %q", got)
 	}
 }
-
-func TestBodySummary(t *testing.T) {
-	if Verbose() {
-		t.Skip("verbose mode enabled via env; skipping masking test")
-	}
-	got := Body([]byte("hello world"))
-	if !strings.HasPrefix(got, "11B sha256:") {
-		t.Fatalf("Body summary = %q", got)
-	}
-}

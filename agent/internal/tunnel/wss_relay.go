@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/goastian/midorivpn-agent/internal/httpx"
 )
 
 // WSSRelay adapts a local UDP WireGuard endpoint to the authenticated WSS
@@ -28,9 +29,23 @@ func StartWSSRelay(ctx context.Context, endpoint, token string) (*WSSRelay, stri
 	if endpoint == "" || token == "" {
 		return nil, "", fmt.Errorf("WSS endpoint and tunnel token are required")
 	}
-	conn, _, err := websocket.Dial(ctx, endpoint, &websocket.DialOptions{HTTPHeader: http.Header{"Authorization": []string{"Bearer " + token}}})
+	httpClient := httpx.NewClient(0)
+	defer httpClient.CloseIdleConnections()
+	handshakeCtx, cancelHandshake := context.WithTimeout(ctx, 15*time.Second)
+	defer cancelHandshake()
+	conn, response, err := websocket.Dial(handshakeCtx, endpoint, &websocket.DialOptions{
+		HTTPClient: httpClient,
+		HTTPHeader: http.Header{"Authorization": []string{"Bearer " + token}},
+	})
 	if err != nil {
-		return nil, "", fmt.Errorf("dial WSS relay: %w", err)
+		status := 0
+		if response != nil {
+			status = response.StatusCode
+			if response.Body != nil {
+				response.Body.Close()
+			}
+		}
+		return nil, "", httpx.NewRemoteError("wss_relay", "handshake_failed", status, 0, err)
 	}
 	udp, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0})
 	if err != nil {

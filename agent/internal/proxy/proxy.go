@@ -6,6 +6,7 @@ package proxy
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -15,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/goastian/midorivpn-agent/internal/httpx"
 	"github.com/goastian/midorivpn-agent/internal/logredact"
 	"github.com/lestrrat-go/jwx/v3/jwk"
 	"github.com/lestrrat-go/jwx/v3/jwt"
@@ -32,6 +34,7 @@ type Server struct {
 	mu       sync.Mutex
 	active   map[string]int
 	maxConns int
+	jwksHTTP *http.Client
 }
 
 // New creates a Server bound to addr (e.g. ":8888").
@@ -42,24 +45,22 @@ func New(addr, jwksURL string) *Server {
 		keySet:   jwk.NewSet(),
 		active:   make(map[string]int),
 		maxConns: 20,
+		jwksHTTP: httpx.NewClient(15 * time.Second),
 	}
 }
 
 // Start begins serving and refreshes the JWKS at regular intervals.
 // It returns when ctx is cancelled.
 func (s *Server) Start(ctx context.Context) error {
+	defer s.jwksHTTP.CloseIdleConnections()
 	if s.jwksURL != "" {
 		if err := s.refreshKeys(ctx); err != nil {
-			slog.Warn("proxy: initial JWKS fetch failed, auth will reject until keys load", "err", err)
+			slog.Warn("proxy: initial JWKS fetch failed, auth will reject until keys load", "operation", "authentik_jwks", "code", "refresh_failed")
 		}
 		go s.keyRefreshLoop(ctx)
 	}
 
-	srv := &http.Server{
-		Addr:              s.addr,
-		Handler:           s,
-		ReadHeaderTimeout: 10 * time.Second,
-	}
+	srv := httpx.NewTunnelServer(s.addr, s)
 
 	go func() {
 		<-ctx.Done()
@@ -84,16 +85,38 @@ func (s *Server) keyRefreshLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if err := s.refreshKeys(ctx); err != nil {
-				slog.Warn("proxy: JWKS refresh failed", "err", err)
+				slog.Warn("proxy: JWKS refresh failed", "operation", "authentik_jwks", "code", "refresh_failed")
 			}
 		}
 	}
 }
 
 func (s *Server) refreshKeys(ctx context.Context) error {
-	set, err := jwk.Fetch(ctx, s.jwksURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.jwksURL, nil)
 	if err != nil {
-		return err
+		return httpx.NewRemoteError("authentik_jwks", "request_build_failed", 0, 0, err)
+	}
+	resp, err := s.jwksHTTP.Do(req)
+	if err != nil {
+		return httpx.NewRemoteError("authentik_jwks", "transport_failed", 0, 0, err)
+	}
+	defer resp.Body.Close()
+	body, err := httpx.ReadBody(resp.Body, httpx.MaxResponseBytes)
+	if err != nil {
+		code := "response_read_failed"
+		responseBytes := 0
+		if errors.Is(err, httpx.ErrResponseTooLarge) {
+			code = "response_too_large"
+			responseBytes = httpx.MaxResponseBytes + 1
+		}
+		return httpx.NewRemoteError("authentik_jwks", code, resp.StatusCode, responseBytes, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return httpx.NewRemoteError("authentik_jwks", "provider_rejected", resp.StatusCode, len(body), nil)
+	}
+	set, err := jwk.Parse(body)
+	if err != nil {
+		return httpx.NewRemoteError("authentik_jwks", "response_invalid", resp.StatusCode, len(body), err)
 	}
 	s.keysMu.Lock()
 	s.keySet = set
@@ -110,7 +133,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	sub, err := s.authenticate(r)
 	if err != nil {
-		slog.Info("proxy auth failed", "remote", logredact.HostPort(r.RemoteAddr), "target", logredact.HostPort(r.Host), "err", err)
+		slog.Info("proxy auth failed", "remote", logredact.HostPort(r.RemoteAddr), "target", logredact.HostPort(r.Host), "code", "token_validation_failed")
 		w.Header().Set("Proxy-Authenticate", `Basic realm="midorivpn"`)
 		http.Error(w, "proxy authentication required", http.StatusProxyAuthRequired)
 		return
