@@ -173,7 +173,11 @@ func main() {
 
 	ag := state.NewAgent()
 
-	srv := rpc.NewServer(ag, *port)
+	srv, err := rpc.NewServer(ag, *port)
+	if err != nil {
+		slog.Error("cannot initialize agent", "err", err)
+		os.Exit(1)
+	}
 	srv.SetUIDir(*uiDir)
 	srv.SetLifecycle(restartSelf, cancel)
 	slog.Info("MidoriVPN agent starting", "port", *port)

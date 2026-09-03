@@ -2,12 +2,8 @@ package rpc
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/goastian/midorivpn-agent/internal/devicepki"
@@ -29,7 +25,11 @@ func (s *Server) ensureDeviceCredential(ctx context.Context, serverID string) (*
 		return nil, fmt.Errorf("load device credential: %w", err)
 	}
 
-	deviceName := localDeviceName()
+	identity, err := s.deviceIdentity.Current()
+	if err != nil {
+		return nil, fmt.Errorf("load device identity: %w", err)
+	}
+	deviceName := identity.ReportedName
 	request, err := devicepki.NewRequest(deviceName)
 	if err != nil {
 		return nil, err
@@ -59,19 +59,4 @@ func (s *Server) ensureDeviceCredential(ctx context.Context, serverID string) (*
 		return nil, fmt.Errorf("persist device credential: %w", err)
 	}
 	return &credential, nil
-}
-
-// localDeviceName is stable on one installation without disclosing the raw
-// machine-id or hostname to the service.
-func localDeviceName() string {
-	identifier, err := os.ReadFile("/etc/machine-id")
-	if err != nil || strings.TrimSpace(string(identifier)) == "" {
-		hostname, hostErr := os.Hostname()
-		if hostErr != nil {
-			return "linux-desktop"
-		}
-		identifier = []byte(hostname)
-	}
-	digest := sha256.Sum256([]byte(strings.TrimSpace(string(identifier))))
-	return "linux-" + hex.EncodeToString(digest[:6])
 }

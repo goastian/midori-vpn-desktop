@@ -42,6 +42,35 @@ func TestEnrollDeviceCertificateSendsCSRWithoutPrivateKey(t *testing.T) {
 	}
 }
 
+func TestCreateConnectionSendsReportedDeviceName(t *testing.T) {
+	var requestBody map[string]string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/control/connections" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "data": map[string]any{
+			"peer_id": "peer-one", "peer_ip": "10.8.0.2/32",
+		}})
+	}))
+	defer server.Close()
+
+	client := New(server.URL, "client", func() string { return "token" }, nil)
+	result, err := client.CreateConnection(context.Background(), "server-one", "public-key", "Tecno-09", "pq-key")
+	if err != nil || result.PeerID != "peer-one" {
+		t.Fatalf("CreateConnection() = %+v, %v", result, err)
+	}
+	if requestBody["device_name"] != "Tecno-09" {
+		t.Fatalf("device_name = %q, want reported hostname", requestBody["device_name"])
+	}
+	if requestBody["server_id"] != "server-one" || requestBody["public_key"] != "public-key" || requestBody["pq_kem_public_key"] != "pq-key" {
+		t.Fatalf("unexpected connection request: %#v", requestBody)
+	}
+}
+
 func TestListDeviceCertificatesPreservesRevocationState(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/control/certificates" {

@@ -17,6 +17,7 @@ import (
 	"github.com/goastian/midorivpn-agent/internal/auth"
 	"github.com/goastian/midorivpn-agent/internal/caps"
 	"github.com/goastian/midorivpn-agent/internal/config"
+	"github.com/goastian/midorivpn-agent/internal/deviceidentity"
 	"github.com/goastian/midorivpn-agent/internal/devicepki"
 	"github.com/goastian/midorivpn-agent/internal/dns"
 	"github.com/goastian/midorivpn-agent/internal/netguard"
@@ -33,16 +34,17 @@ const localFwdPort = 8889
 
 // Server is the local RPC HTTP server.
 type Server struct {
-	agent     *state.Agent
-	port      int
-	wgMgr     *wg.Manager
-	guard     *netguard.Guard
-	proxySrv  *proxy.Server
-	socks5Srv *proxy.SOCKS5Server
-	proxyCtx  context.CancelFunc
-	localFwd  *proxy.LocalForwarder
-	apiClient *apiClient.Client
-	devicePKI *devicepki.Store
+	agent          *state.Agent
+	port           int
+	wgMgr          *wg.Manager
+	guard          *netguard.Guard
+	proxySrv       *proxy.Server
+	socks5Srv      *proxy.SOCKS5Server
+	proxyCtx       context.CancelFunc
+	localFwd       *proxy.LocalForwarder
+	apiClient      *apiClient.Client
+	deviceIdentity *deviceidentity.Store
+	devicePKI      *devicepki.Store
 
 	externalDNSMu      sync.Mutex
 	externalDNS        dns.Backend
@@ -115,8 +117,12 @@ func (s *Server) SetLifecycle(restart func() error, quit context.CancelFunc) {
 
 // NewServer creates the RPC server. Configuration is loaded from layered
 // files and environment variables without environment-specific defaults.
-func NewServer(ag *state.Agent, port int) *Server {
+func NewServer(ag *state.Agent, port int) (*Server, error) {
 	cfg := config.Load()
+	identityStore, err := deviceidentity.New()
+	if err != nil {
+		return nil, fmt.Errorf("initialize persistent device identity: %w", err)
+	}
 
 	settingsStore, err := settings.New()
 	if err != nil {
@@ -124,15 +130,16 @@ func NewServer(ag *state.Agent, port int) *Server {
 	}
 
 	s := &Server{
-		agent:    ag,
-		port:     port,
-		wgMgr:    wg.NewManager(),
-		guard:    netguard.New(),
-		localFwd: proxy.NewLocalForwarder(fmt.Sprintf("127.0.0.1:%d", localFwdPort)),
-		cfg:      cfg,
-		settings: settingsStore,
-		apiURL:   cfg.APIURL,
-		jwksURL:  cfg.AuthentikJWKSURL,
+		agent:          ag,
+		port:           port,
+		wgMgr:          wg.NewManager(),
+		guard:          netguard.New(),
+		localFwd:       proxy.NewLocalForwarder(fmt.Sprintf("127.0.0.1:%d", localFwdPort)),
+		cfg:            cfg,
+		settings:       settingsStore,
+		apiURL:         cfg.APIURL,
+		jwksURL:        cfg.AuthentikJWKSURL,
+		deviceIdentity: identityStore,
 
 		pendingOAuth:         make(map[string]pendingOAuthEntry),
 		authentikIssuer:      cfg.AuthentikIssuer,
@@ -189,7 +196,7 @@ func NewServer(ag *state.Agent, port int) *Server {
 		s.devicePKI = devicePKI
 	}
 	s.loadServersCacheFromDisk()
-	return s
+	return s, nil
 }
 
 // Init performs startup work that needs a context (loading persisted tokens,

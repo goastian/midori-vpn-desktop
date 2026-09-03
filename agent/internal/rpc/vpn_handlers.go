@@ -158,6 +158,12 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.agent.UpdateVPNConnection(connectionID, state.VPNPhaseAuthenticating, "", "")
+	identity, err := s.deviceIdentity.Current()
+	if err != nil {
+		slog.Error("persistent device identity unavailable", "err", err)
+		writeError(w, http.StatusInternalServerError, "device identity unavailable")
+		return
+	}
 
 	// Generate WireGuard and ML-KEM-768 keypairs locally. Private key material
 	// never leaves the client process.
@@ -173,7 +179,7 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create connection with optional PQ KEM encapsulation public key.
-	connCfg, err := s.apiClient.CreateConnection(ctx, req.ServerID, kp.PublicKey, "desktop", pqEncKey)
+	connCfg, err := s.apiClient.CreateConnection(ctx, req.ServerID, kp.PublicKey, identity.ReportedName, pqEncKey)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "connect: "+err.Error())
 		return

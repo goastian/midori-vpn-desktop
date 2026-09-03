@@ -28,12 +28,11 @@ func (s *Server) handleListDeviceCertificates(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusBadGateway, "list device certificates: "+err.Error())
 		return
 	}
-	localName := localDeviceName()
 	result := make([]deviceCertificateView, 0, len(certificates))
 	for _, certificate := range certificates {
 		result = append(result, deviceCertificateView{
 			DeviceCertificate: certificate,
-			IsThisDevice:      certificate.DeviceName == localName,
+			IsThisDevice:      s.isLocalDeviceCertificate(certificate),
 		})
 	}
 	writeJSON(w, result)
@@ -65,7 +64,8 @@ func (s *Server) handleRevokeDeviceCertificate(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusNotFound, "active device certificate not found")
 		return
 	}
-	if selected.DeviceName == localDeviceName() {
+	isLocal := s.isLocalDeviceCertificate(*selected)
+	if isLocal {
 		if vpn, ok := s.agent.Snapshot()["vpn"].(state.VPNStatus); ok && vpn.Connected && vpn.ServerID == selected.ServerID {
 			writeStructuredError(w, http.StatusConflict, "ERR_CERTIFICATE_IN_USE", "Desconecta la VPN antes de revocar el certificado de este dispositivo.")
 			return
@@ -76,7 +76,7 @@ func (s *Server) handleRevokeDeviceCertificate(w http.ResponseWriter, r *http.Re
 		return
 	}
 	localCredentialRemoved := false
-	if selected.DeviceName == localDeviceName() && s.devicePKI != nil {
+	if isLocal && s.devicePKI != nil {
 		credential, loadErr := s.devicePKI.Load(selected.ServerID)
 		if loadErr == nil && credential.CertificateID == selected.ID {
 			if deleteErr := s.devicePKI.Delete(selected.ServerID); deleteErr != nil {
@@ -90,4 +90,18 @@ func (s *Server) handleRevokeDeviceCertificate(w http.ResponseWriter, r *http.Re
 		}
 	}
 	writeJSON(w, map[string]any{"ok": true, "local_credential_removed": localCredentialRemoved})
+}
+
+func (s *Server) isLocalDeviceCertificate(certificate apiClient.DeviceCertificate) bool {
+	if s.devicePKI == nil {
+		return false
+	}
+	credential, err := s.devicePKI.Load(certificate.ServerID)
+	if err != nil {
+		if !errors.Is(err, devicepki.ErrNotFound) {
+			slog.Warn("local device certificate lookup failed", "server_id", certificate.ServerID, "err", err)
+		}
+		return false
+	}
+	return credential.CertificateID == certificate.ID
 }
