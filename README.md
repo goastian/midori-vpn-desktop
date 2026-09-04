@@ -1,6 +1,14 @@
 # MidoriVPN Desktop 2.0.0
 
-The production client is a native Linux Go 1.27 agent plus a Qt 6 tray integration. The dashboard is the same authenticated Vue UI served by the local agent at `127.0.0.1`, so the Linux experience matches the existing client instead of maintaining a second UI. It works across X11 and Wayland desktops, offers a tray menu when the desktop exposes one, and does not link GTK3 or WebKitGTK. Linux x86_64 RPM is the only supported release target.
+The 2.0 client is a native Linux Go 1.27 agent plus a Qt 6 tray integration. The dashboard is the same authenticated Vue UI served by the local agent at `127.0.0.1`, so the Linux experience matches the existing client instead of maintaining a second UI. It works across X11 and Wayland desktops, offers a tray menu when the desktop exposes one, and does not link GTK3 or WebKitGTK. Linux x86_64 RPM is the only supported release target.
+
+## Release status
+
+| Category | Current state |
+|---|---|
+| Implemented | The Linux agent, Qt tray, authenticated loopback UI and listed native transports are present in source and covered by component checks. |
+| Certified | Principal-staging transport and RPM evidence exists for earlier candidate revisions; certification remains specific to that environment and exact artifact. |
+| Pending | 2.0.0 remains **Unreleased**. The final RPM must be rebuilt, signed and validated from the frozen release commit, and a new regional server remains a platform release gate. |
 
 ## Linux transports
 
@@ -110,4 +118,7 @@ scripts/build-rpm.sh   rootless production package pipeline
 ## License
 
 AGPL-3.0-or-later; see the
-[project license](https://github.com/goastian/midori-vpn-core/blob/main/LICENSE).
+[repository license](LICENSE).
+
+Security reports and contributions are governed by [SECURITY.md](SECURITY.md)
+and [CONTRIBUTING.md](CONTRIBUTING.md).

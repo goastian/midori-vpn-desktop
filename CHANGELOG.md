@@ -6,6 +6,11 @@ All notable MidoriVPN Desktop changes are documented here.
 
 Major Release with a verified WireGuard transport contract, native Go 1.27 agent, and hardened Linux RPM package.
 
+- Added a repository-local AGPL-3.0-or-later license, private vulnerability
+  reporting policy and contribution guide; public status now distinguishes
+  implemented source, artifact-specific certification and pending release
+  gates.
+
 - Permission changes now refresh global security warnings immediately, clear
   stale permission connection errors and use the capable agent's private
   nftables path without probing firewalld or opening a redundant PolicyKit
