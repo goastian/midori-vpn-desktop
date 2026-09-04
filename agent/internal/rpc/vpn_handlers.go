@@ -179,9 +179,14 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create connection with optional PQ KEM encapsulation public key.
-	connCfg, err := s.apiClient.CreateConnection(ctx, req.ServerID, kp.PublicKey, identity.ReportedName, pqEncKey)
+	connCfg, err := s.apiClient.CreateConnection(ctx, req.ServerID, kp.PublicKey, deviceRegistration(identity), pqEncKey)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "connect: "+err.Error())
+		return
+	}
+	if connCfg.DeviceID == "" || !isValidUUID(connCfg.DeviceID) {
+		_ = s.apiClient.DeleteConnection(cleanupCtx, connCfg.PeerID)
+		writeError(w, http.StatusBadGateway, "connect: response is missing a valid device identity")
 		return
 	}
 

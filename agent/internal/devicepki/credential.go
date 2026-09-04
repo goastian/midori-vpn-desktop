@@ -23,6 +23,7 @@ var ErrNotFound = errors.New("device certificate not found")
 
 type Credential struct {
 	CertificateID    string    `json:"certificate_id"`
+	DeviceID         string    `json:"device_id"`
 	ServerID         string    `json:"server_id"`
 	DeviceName       string    `json:"device_name"`
 	Identity         string    `json:"identity"`
@@ -64,6 +65,9 @@ func NewRequest(deviceName string) (*Request, error) {
 func (c *Credential) Validate(expectedServerID string, now time.Time) error {
 	if c.ServerID == "" || c.ServerID != expectedServerID {
 		return errors.New("device certificate server does not match request")
+	}
+	if !validUUID(c.DeviceID) {
+		return errors.New("device certificate is not linked to a valid device")
 	}
 	cert, err := parseSingleCertificate(c.CertificatePEM)
 	if err != nil {
@@ -108,6 +112,25 @@ func (c *Credential) Validate(expectedServerID string, now time.Time) error {
 		return errors.New("stored certificate expiry is invalid")
 	}
 	return nil
+}
+
+func validUUID(value string) bool {
+	if len(value) != 36 || value[8] != '-' || value[13] != '-' || value[18] != '-' || value[23] != '-' {
+		return false
+	}
+	hasNonZeroDigit := false
+	for index, char := range value {
+		if index == 8 || index == 13 || index == 18 || index == 23 {
+			continue
+		}
+		if (char < '0' || char > '9') && (char < 'a' || char > 'f') && (char < 'A' || char > 'F') {
+			return false
+		}
+		if char != '0' {
+			hasNonZeroDigit = true
+		}
+	}
+	return hasNonZeroDigit
 }
 
 func parseSingleCertificate(value string) (*x509.Certificate, error) {

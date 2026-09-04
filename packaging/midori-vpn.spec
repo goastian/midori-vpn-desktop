@@ -91,6 +91,9 @@ install -m 0644 %{source_dir}/packaging/apparmor/usr.libexec.midorivpn-agent %{b
 /usr/share/polkit-1/actions/org.astian.midorivpn.policy
 
 %changelog
+* Thu Sep 03 2026 Astian, Inc. <support@astian.org> - 2.0.0-1
+- Reuse the persistent desktop identity for peers and device certificates.
+
 * Mon Aug 31 2026 Astian, Inc. <support@astian.org> - 2.0.0-1
 - Bind disconnect requests to the active tunnel and preserve it across settings refreshes.
 

@@ -147,6 +147,7 @@ type TransportCapability struct {
 // Connection is a VPN peer/connection entry.
 type Connection struct {
 	ID            string `json:"id"`
+	DeviceID      string `json:"device_id"`
 	UserID        string `json:"user_id"`
 	ServerID      string `json:"server_id"`
 	PublicKey     string `json:"public_key"`
@@ -160,6 +161,7 @@ type Connection struct {
 // ConnectionConfig is the WireGuard configuration returned by connect.
 type ConnectionConfig struct {
 	PeerID          string `json:"peer_id"`
+	DeviceID        string `json:"device_id"`
 	PeerIP          string `json:"peer_ip"`
 	ServerPublicKey string `json:"server_public_key"`
 	ServerEndpoint  string `json:"server_endpoint"`
@@ -167,6 +169,16 @@ type ConnectionConfig struct {
 	PQKEMCiphertext string `json:"pq_kem_ciphertext,omitempty"`
 	DNS             string `json:"dns"`
 	AllowedIPs      string `json:"allowed_ips"`
+}
+
+// DeviceRegistration is the stable installation identity sent to Core. The
+// adapter reference is an HMAC produced locally; a raw hardware address must
+// never be placed in this contract.
+type DeviceRegistration struct {
+	ClientInstanceID string `json:"client_instance_id"`
+	ReportedName     string `json:"reported_name"`
+	DeviceType       string `json:"device_type"`
+	AdapterReference string `json:"adapter_reference,omitempty"`
 }
 
 type TunnelCredentials struct {
@@ -178,6 +190,7 @@ type TunnelCredentials struct {
 // local device. Private keys are generated and retained by the desktop agent.
 type DeviceCertificate struct {
 	ID               string     `json:"id"`
+	DeviceID         string     `json:"device_id"`
 	ServerID         string     `json:"server_id"`
 	DeviceName       string     `json:"device_name"`
 	SerialNumber     string     `json:"serial_number"`
@@ -239,14 +252,19 @@ func (c *Client) ListServers(ctx context.Context) ([]Server, error) {
 }
 
 // CreateConnection registers a new VPN peer for the given server with optional Post-Quantum ML-KEM-768 public key.
-func (c *Client) CreateConnection(ctx context.Context, serverID, publicKey, deviceName string, pqKEMPublicKey ...string) (*ConnectionConfig, error) {
-	body := map[string]string{
-		"server_id":   serverID,
-		"public_key":  publicKey,
-		"device_name": deviceName,
+func (c *Client) CreateConnection(ctx context.Context, serverID, publicKey string, device DeviceRegistration, pqKEMPublicKey ...string) (*ConnectionConfig, error) {
+	body := struct {
+		ServerID       string             `json:"server_id"`
+		PublicKey      string             `json:"public_key"`
+		Device         DeviceRegistration `json:"device"`
+		PQKEMPublicKey string             `json:"pq_kem_public_key,omitempty"`
+	}{
+		ServerID:  serverID,
+		PublicKey: publicKey,
+		Device:    device,
 	}
 	if len(pqKEMPublicKey) > 0 && pqKEMPublicKey[0] != "" {
-		body["pq_kem_public_key"] = pqKEMPublicKey[0]
+		body.PQKEMPublicKey = pqKEMPublicKey[0]
 	}
 	var connCfg ConnectionConfig
 	if err := c.post(ctx, "/api/v1/control/connections", body, &connCfg); err != nil {
@@ -265,11 +283,15 @@ func (c *Client) TunnelCredentials(ctx context.Context, peerID string) (*TunnelC
 
 // EnrollDeviceCertificate submits only a CSR. The corresponding private key
 // must never be included in this or any other backend request.
-func (c *Client) EnrollDeviceCertificate(ctx context.Context, serverID, deviceName, csrPEM string) (*DeviceCertificateEnrollment, error) {
-	body := map[string]string{
-		"server_id":   serverID,
-		"device_name": deviceName,
-		"csr_pem":     csrPEM,
+func (c *Client) EnrollDeviceCertificate(ctx context.Context, serverID string, device DeviceRegistration, csrPEM string) (*DeviceCertificateEnrollment, error) {
+	body := struct {
+		ServerID string             `json:"server_id"`
+		Device   DeviceRegistration `json:"device"`
+		CSRPEM   string             `json:"csr_pem"`
+	}{
+		ServerID: serverID,
+		Device:   device,
+		CSRPEM:   csrPEM,
 	}
 	var enrollment DeviceCertificateEnrollment
 	if err := c.post(ctx, "/api/v1/control/certificates", body, &enrollment); err != nil {

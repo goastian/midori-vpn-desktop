@@ -29,17 +29,17 @@ func (s *Server) ensureDeviceCredential(ctx context.Context, serverID string) (*
 	if err != nil {
 		return nil, fmt.Errorf("load device identity: %w", err)
 	}
-	deviceName := identity.ReportedName
-	request, err := devicepki.NewRequest(deviceName)
+	request, err := devicepki.NewRequest(identity.ReportedName)
 	if err != nil {
 		return nil, err
 	}
-	enrollment, err := s.apiClient.EnrollDeviceCertificate(ctx, serverID, deviceName, request.CSRPEM)
+	enrollment, err := s.apiClient.EnrollDeviceCertificate(ctx, serverID, deviceRegistration(identity), request.CSRPEM)
 	if err != nil {
 		return nil, fmt.Errorf("enroll device certificate: %w", err)
 	}
 	credential = devicepki.Credential{
 		CertificateID:    enrollment.Certificate.ID,
+		DeviceID:         enrollment.Certificate.DeviceID,
 		ServerID:         enrollment.Certificate.ServerID,
 		DeviceName:       enrollment.Certificate.DeviceName,
 		Identity:         "urn:midorivpn:device:" + enrollment.Certificate.ID,

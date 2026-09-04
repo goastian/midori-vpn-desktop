@@ -91,6 +91,21 @@ func TestCredentialValidationAcceptsOnlyX509PrecisionDifference(t *testing.T) {
 	}
 }
 
+func TestCredentialValidationRequiresDeviceLink(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	request, err := NewRequest("linux-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, deviceID := range []string{"", "00000000-0000-0000-0000-000000000000", "not-a-uuid"} {
+		credential := issueTestCredential(t, request, "fd2649e9-bc30-47e4-9ea8-9f06d320e5e1", now)
+		credential.DeviceID = deviceID
+		if err := credential.Validate("server-one", now); err == nil {
+			t.Fatalf("Validate() accepted invalid device link %q", deviceID)
+		}
+	}
+}
+
 func issueTestCredential(t *testing.T, request *Request, id string, now time.Time) Credential {
 	t.Helper()
 	caKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -117,7 +132,7 @@ func issueTestCredential(t *testing.T, request *Request, id string, now time.Tim
 		t.Fatal(err)
 	}
 	return Credential{
-		CertificateID: id, ServerID: "server-one", DeviceName: "linux-test",
+		CertificateID: id, DeviceID: "28a41186-73ea-443b-9262-c37ad8342a53", ServerID: "server-one", DeviceName: "linux-test",
 		Identity:         "urn:midorivpn:device:" + id,
 		CertificatePEM:   string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})),
 		CACertificatePEM: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})),

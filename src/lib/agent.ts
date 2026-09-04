@@ -162,6 +162,7 @@ export interface ExitNode {
 
 export interface DeviceCertificate {
   id: string
+  device_id?: string | null
   server_id: string
   device_name: string
   serial_number: string

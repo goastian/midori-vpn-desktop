@@ -25,7 +25,7 @@ func TestEnrollDeviceCertificateSendsCSRWithoutPrivateKey(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "data": map[string]any{
 			"certificate": map[string]any{
-				"id": "cert-one", "server_id": "server-one", "device_name": "linux-one",
+				"id": "cert-one", "device_id": "28a41186-73ea-443b-9262-c37ad8342a53", "server_id": "server-one", "device_name": "linux-one",
 				"certificate_pem": "CERT", "not_before": "2026-01-01T00:00:00Z", "not_after": "2026-02-01T00:00:00Z",
 			},
 			"ca_certificate_pem": "CA",
@@ -33,41 +33,80 @@ func TestEnrollDeviceCertificateSendsCSRWithoutPrivateKey(t *testing.T) {
 	}))
 	defer server.Close()
 	client := New(server.URL, "client", func() string { return "token" }, nil)
-	result, err := client.EnrollDeviceCertificate(context.Background(), "server-one", "linux-one", "CSR")
+	device := DeviceRegistration{
+		ClientInstanceID: "88a4e639-54f9-4b57-9460-671c95136adf",
+		ReportedName:     "linux-one",
+		DeviceType:       "desktop",
+		AdapterReference: "net-v1:1234567890123456789012345678901234567890123",
+	}
+	result, err := client.EnrollDeviceCertificate(context.Background(), "server-one", device, "CSR")
 	if err != nil || result.Certificate.ID != "cert-one" {
 		t.Fatalf("EnrollDeviceCertificate() = %+v, %v", result, err)
 	}
 	if !bytes.Contains(requestBody, []byte(`"csr_pem":"CSR"`)) || bytes.Contains(bytes.ToLower(requestBody), []byte("private")) {
 		t.Fatalf("unsafe enrollment request body: %s", requestBody)
 	}
+	assertStructuredDeviceRequest(t, requestBody, device)
+	if result.Certificate.DeviceID != "28a41186-73ea-443b-9262-c37ad8342a53" {
+		t.Fatalf("device_id = %q", result.Certificate.DeviceID)
+	}
 }
 
-func TestCreateConnectionSendsReportedDeviceName(t *testing.T) {
-	var requestBody map[string]string
+func TestCreateConnectionSendsPersistentDeviceIdentity(t *testing.T) {
+	var requestBody []byte
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/control/connections" {
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
-			t.Fatalf("decode request body: %v", err)
-		}
+		requestBody, _ = io.ReadAll(r.Body)
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "data": map[string]any{
-			"peer_id": "peer-one", "peer_ip": "10.8.0.2/32",
+			"peer_id": "peer-one", "device_id": "28a41186-73ea-443b-9262-c37ad8342a53", "peer_ip": "10.8.0.2/32",
 		}})
 	}))
 	defer server.Close()
 
 	client := New(server.URL, "client", func() string { return "token" }, nil)
-	result, err := client.CreateConnection(context.Background(), "server-one", "public-key", "Tecno-09", "pq-key")
+	device := DeviceRegistration{
+		ClientInstanceID: "88a4e639-54f9-4b57-9460-671c95136adf",
+		ReportedName:     "Tecno-09",
+		DeviceType:       "desktop",
+		AdapterReference: "net-v1:1234567890123456789012345678901234567890123",
+	}
+	result, err := client.CreateConnection(context.Background(), "server-one", "public-key", device, "pq-key")
 	if err != nil || result.PeerID != "peer-one" {
 		t.Fatalf("CreateConnection() = %+v, %v", result, err)
 	}
-	if requestBody["device_name"] != "Tecno-09" {
-		t.Fatalf("device_name = %q, want reported hostname", requestBody["device_name"])
+	assertStructuredDeviceRequest(t, requestBody, device)
+	var decoded map[string]any
+	if err := json.Unmarshal(requestBody, &decoded); err != nil {
+		t.Fatal(err)
 	}
-	if requestBody["server_id"] != "server-one" || requestBody["public_key"] != "public-key" || requestBody["pq_kem_public_key"] != "pq-key" {
-		t.Fatalf("unexpected connection request: %#v", requestBody)
+	if decoded["server_id"] != "server-one" || decoded["public_key"] != "public-key" || decoded["pq_kem_public_key"] != "pq-key" {
+		t.Fatalf("unexpected connection request: %s", requestBody)
+	}
+	if result.DeviceID != "28a41186-73ea-443b-9262-c37ad8342a53" {
+		t.Fatalf("device_id = %q", result.DeviceID)
+	}
+}
+
+func assertStructuredDeviceRequest(t *testing.T, body []byte, want DeviceRegistration) {
+	t.Helper()
+	var decoded struct {
+		Device     DeviceRegistration `json:"device"`
+		DeviceName json.RawMessage    `json:"device_name"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("decode request body: %v", err)
+	}
+	if len(decoded.DeviceName) != 0 {
+		t.Fatalf("legacy device_name must be omitted: %s", body)
+	}
+	if decoded.Device != want {
+		t.Fatalf("device = %#v, want %#v", decoded.Device, want)
+	}
+	if bytes.Contains(body, []byte("02:11:22:33:44:55")) {
+		t.Fatalf("raw MAC escaped request boundary: %s", body)
 	}
 }
 
@@ -78,7 +117,7 @@ func TestListDeviceCertificatesPreservesRevocationState(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "data": []map[string]any{{
-			"id": "cert-one", "server_id": "server-one", "device_name": "linux-one",
+			"id": "cert-one", "device_id": "28a41186-73ea-443b-9262-c37ad8342a53", "server_id": "server-one", "device_name": "linux-one",
 			"not_before": "2026-01-01T00:00:00Z", "not_after": "2026-02-01T00:00:00Z",
 			"revoked_at": "2026-01-15T00:00:00Z", "revocation_reason": "cessation_of_operation",
 		}}})
@@ -86,7 +125,7 @@ func TestListDeviceCertificatesPreservesRevocationState(t *testing.T) {
 	defer server.Close()
 	client := New(server.URL, "client", func() string { return "token" }, nil)
 	result, err := client.ListDeviceCertificates(context.Background())
-	if err != nil || len(result) != 1 || result[0].RevokedAt == nil {
+	if err != nil || len(result) != 1 || result[0].RevokedAt == nil || result[0].DeviceID != "28a41186-73ea-443b-9262-c37ad8342a53" {
 		t.Fatalf("ListDeviceCertificates() = %+v, %v", result, err)
 	}
 }

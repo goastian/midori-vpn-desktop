@@ -103,5 +103,5 @@ func (s *Server) isLocalDeviceCertificate(certificate apiClient.DeviceCertificat
 		}
 		return false
 	}
-	return credential.CertificateID == certificate.ID
+	return credential.CertificateID == certificate.ID && credential.DeviceID == certificate.DeviceID
 }
