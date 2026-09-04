@@ -22,7 +22,10 @@ done
 [[ "$server_id" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] || { usage; exit 2; }
 [[ "$protocol" == wireguard || "$protocol" == wss || "$protocol" == masque || "$protocol" == smart_auto ]] || { usage; exit 2; }
 [[ "$throughput_url" == https://* ]] || { usage; exit 2; }
-[[ "$iterations" =~ ^[0-9]+$ ]] && (( iterations >= 5 && iterations <= 100 )) || { printf 'iterations must be between 5 and 100\n' >&2; exit 2; }
+if [[ ! "$iterations" =~ ^[0-9]+$ ]] || (( iterations < 5 || iterations > 100 )); then
+  printf 'iterations must be between 5 and 100\n' >&2
+  exit 2
+fi
 
 for command_name in curl jq awk; do
   command -v "$command_name" >/dev/null 2>&1 || { printf '%s is required\n' "$command_name" >&2; exit 1; }
@@ -43,18 +46,28 @@ agent_token="$(tr -d '\r\n' <"$token_file")"
 agent_url="http://127.0.0.1:$MIDORIVPN_AGENT_PORT"
 
 work_dir="$(mktemp -d /tmp/midorivpn-benchmark.XXXXXX)"
-cleanup() {
-  printf 'header = "X-Agent-Token: %s"\n' "$agent_token" | curl --config - --silent --max-time 15 --request POST "$agent_url/vpn/disconnect" >/dev/null 2>&1 || true
-  rm -rf -- "$work_dir"
-}
-trap cleanup EXIT INT TERM
-
 agent_request() {
   local path="$1"
   shift
   printf 'header = "X-Agent-Token: %s"\nheader = "Content-Type: application/json"\n' "$agent_token" |
     curl --config - --fail-with-body --silent --show-error --max-time 45 "$@" "$agent_url$path"
 }
+
+disconnect_active() {
+  local snapshot connection_id
+  snapshot="$(agent_request /status 2>/dev/null || true)"
+  connection_id="$(jq -r '.vpn.connection_id // empty' <<<"$snapshot" 2>/dev/null || true)"
+  if [[ -n "$connection_id" ]]; then
+    agent_request /vpn/disconnect --request POST \
+      --data "{\"connection_id\":\"$connection_id\",\"reason\":\"user_request\"}" >/dev/null
+  fi
+}
+
+cleanup() {
+  disconnect_active >/dev/null 2>&1 || true
+  rm -rf -- "$work_dir"
+}
+trap cleanup EXIT INT TERM
 
 printf 'Checking authenticated local agent...\n' >&2
 agent_request /status | jq -e '.auth.logged_in == true' >/dev/null
@@ -68,7 +81,7 @@ for ((sample = 1; sample <= iterations; sample++)); do
   read -r bytes duration < <(curl --fail --silent --show-error --location --max-time 60 --output /dev/null --write-out '%{size_download} %{time_total}\n' "$throughput_url")
   awk -v bytes="$bytes" -v seconds="$duration" 'BEGIN { if (seconds <= 0) exit 1; printf "%.6f\n", (bytes * 8) / seconds / 1000000 }' >>"$work_dir/throughput_mbps"
 
-  agent_request /vpn/disconnect --request POST --data '{}' >/dev/null
+  disconnect_active
   sleep 1
 done
 

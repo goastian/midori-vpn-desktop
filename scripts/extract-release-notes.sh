@@ -83,9 +83,9 @@ if [ -z "$release_title" ]; then
 fi
 
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
-  echo "release-title=${release_title}" >> "$GITHUB_OUTPUT"
-  echo "release-body-path=${body_path}" >> "$GITHUB_OUTPUT"
   {
+    echo "release-title=${release_title}"
+    echo "release-body-path=${body_path}"
     echo "release-body<<EOF"
     cat "$body_path"
     echo "EOF"
