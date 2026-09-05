@@ -67,6 +67,9 @@
     }
   },
   "server": {
+    "automatic": "Automatischer Server",
+    "automaticHint": "Niedrigste gemessene Latenz mit sicherem Failover",
+    "automaticActive": "Automatisch · {server}",
     "switching": "Server wird gewechselt…",
     "loading": "Server werden geladen…",
     "empty": "Keine Server verfügbar",
@@ -89,6 +92,7 @@
       "authenticating": "Sichere Anmeldedaten werden vorbereitet…",
       "negotiating": "Tunnel wird ausgehandelt…",
       "protecting": "Schutz vor Datenlecks wird aktiviert…",
+      "reconnecting": "Verbindung wird sicher wiederhergestellt…",
       "disconnecting": "Verbindung wird getrennt…"
     }
   },

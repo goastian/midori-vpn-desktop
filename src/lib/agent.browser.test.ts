@@ -60,12 +60,14 @@ describe('browser agent client', () => {
       }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
       .mockResolvedValueOnce(new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }))
       .mockResolvedValueOnce(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }))
     vi.stubGlobal('fetch', fetchMock)
 
     const { agent } = await import('./agent')
     const dns = await agent.dns.status()
     await agent.servers.refresh()
     await agent.vpn.disconnect('active-connection', 'user_request')
+    await agent.vpn.connect('', 'smart_auto', 'automatic')
 
     expect(dns.backend).toBe('resolvconf')
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/dns/status', expect.objectContaining({ method: 'GET' }))
@@ -73,6 +75,10 @@ describe('browser agent client', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/vpn/disconnect', expect.objectContaining({
       method: 'POST',
       body: JSON.stringify({ connection_id: 'active-connection', reason: 'user_request' }),
+    }))
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/vpn/connect', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ protocol: 'smart_auto', selection_mode: 'automatic' }),
     }))
     for (const [, request] of fetchMock.mock.calls) {
       expect(request.headers).toEqual(expect.objectContaining({ 'X-Agent-Token': 'browser-secret' }))

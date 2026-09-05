@@ -34,3 +34,16 @@ func TestVPNConnectionProgressIsOwnedByOpaqueIdentity(t *testing.T) {
 		t.Fatal("deferred failure overwrote an established tunnel")
 	}
 }
+
+func TestVPNRecoveryRemainsCancelableAcrossHandshakeProgress(t *testing.T) {
+	agent := NewAgent()
+	agent.BeginVPNRecoveryConnection("recovery-attempt", "failed-server", "smart_auto")
+	if !agent.UpdateVPNConnection("recovery-attempt", VPNPhaseNegotiating, "wireguard", "") {
+		t.Fatal("recovery attempt did not accept progress")
+	}
+	vpn := agent.Snapshot()["vpn"].(VPNStatus)
+	if vpn.Phase != VPNPhaseReconnecting || vpn.ConnectionID != "recovery-attempt" ||
+		vpn.FailoverFrom != "failed-server" || vpn.ActiveProtocol != "wireguard" {
+		t.Fatalf("recovery state = %#v", vpn)
+	}
+}

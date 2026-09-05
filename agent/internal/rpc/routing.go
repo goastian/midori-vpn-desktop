@@ -181,6 +181,7 @@ func (s *Server) newMux(agentToken string) http.Handler {
 func (s *Server) Start(ctx context.Context) error {
 	defer s.authHTTPClient.CloseIdleConnections()
 	defer s.publicIPClient.CloseIdleConnections()
+	defer s.edgeProbeClient.CloseIdleConnections()
 	defer s.apiClient.CloseIdleConnections()
 	agentToken, err := resolveAgentToken()
 	if err != nil {

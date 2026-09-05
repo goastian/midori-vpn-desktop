@@ -73,7 +73,7 @@ func TestCreateConnectionSendsPersistentDeviceIdentity(t *testing.T) {
 		DeviceType:       "desktop",
 		AdapterReference: "net-v1:1234567890123456789012345678901234567890123",
 	}
-	result, err := client.CreateConnection(context.Background(), "server-one", "public-key", device, "pq-key")
+	result, err := client.CreateConnection(context.Background(), "server-one", "public-key", device, ConnectionReasonAutomaticFailover, "pq-key")
 	if err != nil || result.PeerID != "peer-one" {
 		t.Fatalf("CreateConnection() = %+v, %v", result, err)
 	}
@@ -82,11 +82,33 @@ func TestCreateConnectionSendsPersistentDeviceIdentity(t *testing.T) {
 	if err := json.Unmarshal(requestBody, &decoded); err != nil {
 		t.Fatal(err)
 	}
-	if decoded["server_id"] != "server-one" || decoded["public_key"] != "public-key" || decoded["pq_kem_public_key"] != "pq-key" {
+	if decoded["server_id"] != "server-one" || decoded["public_key"] != "public-key" ||
+		decoded["connection_reason"] != "automatic_failover" || decoded["pq_kem_public_key"] != "pq-key" {
 		t.Fatalf("unexpected connection request: %s", requestBody)
 	}
 	if result.DeviceID != "28a41186-73ea-443b-9262-c37ad8342a53" {
 		t.Fatalf("device_id = %q", result.DeviceID)
+	}
+}
+
+func TestListServerCandidatesUsesRequestedProtocol(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/control/servers/candidates" || r.URL.Query().Get("protocol") != "wireguard" {
+			t.Fatalf("unexpected candidate request: %s", r.URL.String())
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "data": []map[string]any{{
+			"id": "server-one", "name": "Main", "protocol": "wireguard",
+			"probe_url": "https://edge.example.test/.well-known/midorivpn/edge-health",
+			"endpoint":  "edge.example.test", "port": 51820,
+		}}})
+	}))
+	defer server.Close()
+
+	client := New(server.URL, "client", func() string { return "token" }, nil)
+	candidates, err := client.ListServerCandidates(context.Background(), "wireguard")
+	if err != nil || len(candidates) != 1 || candidates[0].ID != "server-one" {
+		t.Fatalf("ListServerCandidates() = %#v, %v", candidates, err)
 	}
 }
 

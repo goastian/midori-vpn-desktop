@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/goastian/midorivpn-agent/internal/settings"
 	"github.com/goastian/midorivpn-agent/internal/state"
 )
 
@@ -23,6 +24,35 @@ func TestNewVPNConnectionIDIsUniqueAndOpaque(t *testing.T) {
 	}
 	if first == second {
 		t.Fatal("connection identities must be unique")
+	}
+}
+
+func TestDecodeVPNConnectRequestSeparatesAutomaticAndManualIntent(t *testing.T) {
+	const serverID = "82b130ca-d14d-46a3-ad44-7ccd34dfb842"
+	for _, test := range []struct {
+		name string
+		body string
+		mode settings.SelectionMode
+		ok   bool
+	}{
+		{name: "automatic", body: `{"selection_mode":"automatic","protocol":"smart_auto"}`, mode: settings.SelectionModeAutomatic, ok: true},
+		{name: "manual", body: `{"selection_mode":"manual","server_id":"` + serverID + `","protocol":"wireguard"}`, mode: settings.SelectionModeManual, ok: true},
+		{name: "legacy manual", body: `{"server_id":"` + serverID + `"}`, mode: settings.SelectionModeManual, ok: true},
+		{name: "automatic server ambiguity", body: `{"selection_mode":"automatic","server_id":"` + serverID + `"}`},
+		{name: "manual without server", body: `{"selection_mode":"manual"}`},
+		{name: "unknown mode", body: `{"selection_mode":"nearest"}`},
+		{name: "unknown field", body: `{"selection_mode":"automatic","retry":true}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/vpn/connect", strings.NewReader(test.body))
+			decoded, err := decodeVPNConnectRequest(req)
+			if (err == nil) != test.ok {
+				t.Fatalf("decode error = %v, want success %t", err, test.ok)
+			}
+			if test.ok && decoded.SelectionMode != test.mode {
+				t.Fatalf("mode = %q, want %q", decoded.SelectionMode, test.mode)
+			}
+		})
 	}
 }
 

@@ -67,6 +67,9 @@
     }
   },
   "server": {
+    "automatic": "Automatic server",
+    "automaticHint": "Lowest measured latency with safe failover",
+    "automaticActive": "Automatic · {server}",
     "switching": "Switching server…",
     "loading": "Loading servers…",
     "empty": "No servers available",
@@ -89,6 +92,7 @@
       "authenticating": "Preparing secure credentials…",
       "negotiating": "Negotiating tunnel…",
       "protecting": "Enabling leak protection…",
+      "reconnecting": "Recovering connection safely…",
       "disconnecting": "Disconnecting…"
     }
   },

@@ -20,6 +20,7 @@ import (
 	"github.com/goastian/midorivpn-agent/internal/deviceidentity"
 	"github.com/goastian/midorivpn-agent/internal/devicepki"
 	"github.com/goastian/midorivpn-agent/internal/dns"
+	"github.com/goastian/midorivpn-agent/internal/failover"
 	"github.com/goastian/midorivpn-agent/internal/httpx"
 	"github.com/goastian/midorivpn-agent/internal/netguard"
 	"github.com/goastian/midorivpn-agent/internal/proxy"
@@ -35,19 +36,21 @@ const localFwdPort = 8889
 
 // Server is the local RPC HTTP server.
 type Server struct {
-	agent          *state.Agent
-	port           int
-	wgMgr          *wg.Manager
-	guard          *netguard.Guard
-	proxySrv       *proxy.Server
-	socks5Srv      *proxy.SOCKS5Server
-	proxyCtx       context.CancelFunc
-	localFwd       *proxy.LocalForwarder
-	apiClient      *apiClient.Client
-	deviceIdentity *deviceidentity.Store
-	devicePKI      *devicepki.Store
-	authHTTPClient *http.Client
-	publicIPClient *http.Client
+	agent           *state.Agent
+	port            int
+	wgMgr           *wg.Manager
+	guard           *netguard.Guard
+	proxySrv        *proxy.Server
+	socks5Srv       *proxy.SOCKS5Server
+	proxyCtx        context.CancelFunc
+	localFwd        *proxy.LocalForwarder
+	apiClient       *apiClient.Client
+	deviceIdentity  *deviceidentity.Store
+	devicePKI       *devicepki.Store
+	authHTTPClient  *http.Client
+	publicIPClient  *http.Client
+	edgeProbeClient *http.Client
+	edgeProber      *failover.Prober
 
 	externalDNSMu      sync.Mutex
 	externalDNS        dns.Backend
@@ -95,6 +98,11 @@ type Server struct {
 	connectCancel context.CancelFunc
 	connectSeq    uint64
 
+	failoverMu        sync.Mutex
+	failoverCancel    context.CancelFunc
+	recoveryMu        sync.Mutex
+	recoveryEndpoints []string
+
 	// transportRelay is present while WireGuard uses WSS or MASQUE. relayMu
 	// keeps disconnect and shutdown from racing cleanup.
 	relayMu        sync.Mutex
@@ -132,19 +140,22 @@ func NewServer(ag *state.Agent, port int) (*Server, error) {
 		slog.Warn("settings store unavailable; defaults will be used", "err", err)
 	}
 
+	edgeProbeClient := newEdgeProbeClient()
 	s := &Server{
-		agent:          ag,
-		port:           port,
-		wgMgr:          wg.NewManager(),
-		guard:          netguard.New(),
-		localFwd:       proxy.NewLocalForwarder(fmt.Sprintf("127.0.0.1:%d", localFwdPort)),
-		cfg:            cfg,
-		settings:       settingsStore,
-		apiURL:         cfg.APIURL,
-		jwksURL:        cfg.AuthentikJWKSURL,
-		deviceIdentity: identityStore,
-		authHTTPClient: httpx.NewClient(15 * time.Second),
-		publicIPClient: httpx.NewClient(8 * time.Second),
+		agent:           ag,
+		port:            port,
+		wgMgr:           wg.NewManager(),
+		guard:           netguard.New(),
+		localFwd:        proxy.NewLocalForwarder(fmt.Sprintf("127.0.0.1:%d", localFwdPort)),
+		cfg:             cfg,
+		settings:        settingsStore,
+		apiURL:          cfg.APIURL,
+		jwksURL:         cfg.AuthentikJWKSURL,
+		deviceIdentity:  identityStore,
+		authHTTPClient:  httpx.NewClient(15 * time.Second),
+		publicIPClient:  httpx.NewClient(8 * time.Second),
+		edgeProbeClient: edgeProbeClient,
+		edgeProber:      failover.NewProber(edgeProbeClient, failover.DefaultProbeTimeout, failover.DefaultParallelism),
 
 		pendingOAuth:         make(map[string]pendingOAuthEntry),
 		authentikIssuer:      cfg.AuthentikIssuer,

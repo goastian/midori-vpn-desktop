@@ -16,6 +16,7 @@ const (
 	VPNPhaseAuthenticating VPNPhase = "authenticating"
 	VPNPhaseNegotiating    VPNPhase = "negotiating"
 	VPNPhaseProtecting     VPNPhase = "protecting"
+	VPNPhaseReconnecting   VPNPhase = "reconnecting"
 	VPNPhaseConnected      VPNPhase = "connected"
 	VPNPhaseDisconnecting  VPNPhase = "disconnecting"
 	VPNPhaseError          VPNPhase = "error"
@@ -37,7 +38,9 @@ type VPNStatus struct {
 	BytesRecv         int64    `json:"bytes_recv"`
 	ActiveProtocol    string   `json:"active_protocol,omitempty"`
 	RequestedProtocol string   `json:"requested_protocol,omitempty"`
+	SelectionMode     string   `json:"selection_mode,omitempty"`
 	FallbackReason    string   `json:"fallback_reason,omitempty"`
+	FailoverFrom      string   `json:"failover_from,omitempty"`
 	ConnectionMS      int64    `json:"connection_ms,omitempty"`
 	PostQuantum       bool     `json:"post_quantum,omitempty"`
 	PQAlgorithm       string   `json:"pq_algorithm,omitempty"`
@@ -149,6 +152,31 @@ func (a *Agent) BeginVPNConnection(connectionID, serverID, requestedProtocol str
 	})
 }
 
+// BeginVPNRecoveryConnection gives a failover attempt a fresh cancellation
+// identity while keeping the user-visible lifecycle in reconnecting. Detailed
+// handshake phases must not make the disconnect action disappear mid-recovery.
+func (a *Agent) BeginVPNRecoveryConnection(connectionID, failedServerID, requestedProtocol string) {
+	a.SetVPN(VPNStatus{
+		Phase: VPNPhaseReconnecting, ConnectionID: connectionID, ServerID: failedServerID,
+		RequestedProtocol: requestedProtocol, SelectionMode: "automatic", FailoverFrom: failedServerID,
+	})
+}
+
+// SetVPNSelection records the resolved edge and persisted selection mode while
+// the same connection attempt still owns the state.
+func (a *Agent) SetVPNSelection(connectionID, serverID, selectionMode string) bool {
+	a.mu.Lock()
+	if a.VPN.ConnectionID != connectionID || a.VPN.Connected {
+		a.mu.Unlock()
+		return false
+	}
+	a.VPN.ServerID = serverID
+	a.VPN.SelectionMode = selectionMode
+	a.mu.Unlock()
+	a.broadcast(Event{Type: "vpn_status"})
+	return true
+}
+
 // UpdateVPNConnection advances the attempt only while it still owns the
 // published connection identity.
 func (a *Agent) UpdateVPNConnection(connectionID string, phase VPNPhase, activeProtocol, fallbackReason string) bool {
@@ -157,7 +185,9 @@ func (a *Agent) UpdateVPNConnection(connectionID string, phase VPNPhase, activeP
 		a.mu.Unlock()
 		return false
 	}
-	a.VPN.Phase = phase
+	if a.VPN.Phase != VPNPhaseReconnecting {
+		a.VPN.Phase = phase
+	}
 	if activeProtocol != "" {
 		a.VPN.ActiveProtocol = activeProtocol
 	}
@@ -181,7 +211,8 @@ func (a *Agent) FailVPNConnection(connectionID string) bool {
 	a.VPN = VPNStatus{
 		Phase: VPNPhaseError, ServerID: a.VPN.ServerID,
 		RequestedProtocol: a.VPN.RequestedProtocol,
-		ActiveProtocol:    a.VPN.ActiveProtocol, FallbackReason: a.VPN.FallbackReason,
+		ActiveProtocol:    a.VPN.ActiveProtocol, SelectionMode: a.VPN.SelectionMode,
+		FallbackReason: a.VPN.FallbackReason, FailoverFrom: a.VPN.FailoverFrom,
 	}
 	a.mu.Unlock()
 	a.broadcast(Event{Type: "vpn_status"})

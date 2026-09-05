@@ -27,6 +27,7 @@ func (s *Server) gracefulShutdown() {
 	}
 
 	// Disconnect VPN tunnel if up.
+	s.stopFailoverMonitor()
 	s.stopVPNStatsLoop()
 	s.closeTransportRelay()
 	s.restoreExternalDNS()
@@ -77,7 +78,8 @@ func (s *Server) gracefulShutdown() {
 func (s *Server) Shutdown(ctx context.Context) {
 	slog.Info("agent: starting graceful shutdown cleanup")
 
-	// 1. Disconnect VPN — this calls Guard.Disable() and restores resolv.conf.
+	// 1. Stop recovery and disconnect VPN — this calls Guard.Disable() and restores resolv.conf.
+	s.stopFailoverMonitor()
 	if s.wgMgr != nil {
 		s.closeTransportRelay()
 		s.restoreExternalDNS()

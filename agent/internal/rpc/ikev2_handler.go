@@ -9,24 +9,26 @@ import (
 
 	"github.com/goastian/midorivpn-agent/internal/apiClient"
 	"github.com/goastian/midorivpn-agent/internal/ikev2"
+	"github.com/goastian/midorivpn-agent/internal/settings"
 	"github.com/goastian/midorivpn-agent/internal/state"
 )
 
-func (s *Server) handleIKEv2Connect(w http.ResponseWriter, ctx context.Context, server *apiClient.Server, candidate vpnTransportCandidate, sequence uint64, connectionID string) {
+func (s *Server) runIKEv2Connect(ctx context.Context, server *apiClient.Server, candidate vpnTransportCandidate, sequence uint64, connectionID string, selectionMode settings.SelectionMode, selection *automaticSelection, responder vpnConnectResponder) {
+	guardWasActive := s.guard.Active()
 	s.agent.UpdateVPNConnection(connectionID, state.VPNPhaseAuthenticating, "", "")
 	serverName, ok := metadataString(candidate.metadata, "server_name")
 	if !ok {
-		writeStructuredError(w, http.StatusBadGateway, "ERR_TRANSPORT_CONFIGURATION_INVALID", "IKEv2 no tiene un nombre de certificado de gateway configurado.")
+		responder.Fail(connectFailure(http.StatusBadGateway, "ERR_TRANSPORT_CONFIGURATION_INVALID", "IKEv2 no tiene un nombre de certificado de gateway configurado."))
 		return
 	}
 	dnsServers := sanitizeDNS(transportDNS(candidate.metadata))
 	if len(dnsServers) == 0 {
-		writeStructuredError(w, http.StatusBadGateway, "ERR_DNS_CONFIGURATION_MISSING", "El gateway IKEv2 no entregó una configuración DNS válida.")
+		responder.Fail(connectFailure(http.StatusBadGateway, "ERR_DNS_CONFIGURATION_MISSING", "El gateway IKEv2 no entregó una configuración DNS válida."))
 		return
 	}
 	credential, err := s.ensureDeviceCredential(ctx, server.ID)
 	if err != nil {
-		writeStructuredError(w, http.StatusBadGateway, "ERR_DEVICE_CERTIFICATE_FAILED", "No se pudo preparar el certificado privado del dispositivo: "+err.Error())
+		responder.Fail(connectFailure(http.StatusBadGateway, "ERR_DEVICE_CERTIFICATE_FAILED", "No se pudo preparar el certificado privado del dispositivo: "+err.Error()))
 		return
 	}
 	endpoint := net.JoinHostPort(candidate.host, strconv.Itoa(candidate.port))
@@ -36,11 +38,13 @@ func (s *Server) handleIKEv2Connect(w http.ResponseWriter, ctx context.Context, 
 		Endpoint: endpoint, ServerName: serverName, Credential: credential, Timeout: candidate.timeout,
 	})
 	if err != nil {
-		writeStructuredError(w, http.StatusBadGateway, "ERR_VPN_HANDSHAKE_FAILED", "No se pudo completar el handshake IKEv2/EAP-TLS: "+err.Error())
+		responder.Fail(connectFailure(http.StatusBadGateway, "ERR_VPN_HANDSHAKE_FAILED", "No se pudo completar el handshake IKEv2/EAP-TLS: "+err.Error()))
 		return
 	}
 	cleanup := func() {
-		_ = s.guard.Disable()
+		if !guardWasActive {
+			_ = s.guard.Disable()
+		}
 		s.restoreExternalDNS()
 		client.Close()
 	}
@@ -48,21 +52,21 @@ func (s *Server) handleIKEv2Connect(w http.ResponseWriter, ctx context.Context, 
 	assignedIP := client.AssignedIP()
 	if assignedIP == "" {
 		cleanup()
-		writeStructuredError(w, http.StatusBadGateway, "ERR_TRANSPORT_CONFIGURATION_INVALID", "IKEv2 no entregó una dirección virtual válida.")
+		responder.Fail(connectFailure(http.StatusBadGateway, "ERR_TRANSPORT_CONFIGURATION_INVALID", "IKEv2 no entregó una dirección virtual válida."))
 		return
 	}
 	if err := s.applyExternalDNS(client.InterfaceName(), dnsServers); err != nil {
 		cleanup()
 		if isDNSPermissionError(err) {
-			writeStructuredError(w, http.StatusForbidden, "ERR_DNS_PERMISSION_DENIED", "Permisos insuficientes para configurar DNS en el sistema.")
+			responder.Fail(connectFailure(http.StatusForbidden, "ERR_DNS_PERMISSION_DENIED", "Permisos insuficientes para configurar DNS en el sistema."))
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "IKEv2 DNS: "+err.Error())
+		responder.Fail(connectFailure(http.StatusInternalServerError, "", "IKEv2 DNS: "+err.Error()))
 		return
 	}
 	if err := s.guard.Enable(s.netguardScopeForInterface(client.InterfaceName(), client.Endpoint(), assignedIP)); err != nil {
 		cleanup()
-		writeError(w, http.StatusInternalServerError, "kill switch: "+err.Error())
+		responder.Fail(connectFailure(http.StatusInternalServerError, "", "kill switch: "+err.Error()))
 		return
 	}
 
@@ -71,7 +75,7 @@ func (s *Server) handleIKEv2Connect(w http.ResponseWriter, ctx context.Context, 
 	s.connectMu.Unlock()
 	if superseded {
 		cleanup()
-		writeError(w, http.StatusConflict, "superseded by a newer connect request")
+		responder.Fail(connectFailure(http.StatusConflict, "", "superseded by a newer connect request"))
 		return
 	}
 	s.setTransportRelay(client)
@@ -83,13 +87,16 @@ func (s *Server) handleIKEv2Connect(w http.ResponseWriter, ctx context.Context, 
 	s.agent.SetVPN(state.VPNStatus{
 		Connected: true, Phase: state.VPNPhaseConnected, ConnectionID: connectionID, ServerName: server.Name, ServerID: server.ID,
 		AssignedIP: assignedIP, ServerPublicIP: serverPublicIP,
-		ServerEndpoint: client.Endpoint(), ActiveProtocol: "ikev2", RequestedProtocol: "ikev2", ConnectionMS: connectionMS,
+		ServerEndpoint: client.Endpoint(), ActiveProtocol: "ikev2", RequestedProtocol: "ikev2",
+		SelectionMode: string(selectionMode), ConnectionMS: connectionMS,
 	})
 	s.startVPNStatsLoop()
 	s.agent.SetProtection(state.ProtectionStatus{KillSwitchActive: true, DNSProtected: true, Mode: "ikev2"})
-	writeJSON(w, map[string]any{
-		"ok": true, "assigned_ip": assignedIP, "server": server.Name,
-		"active_protocol": "ikev2", "connection_ms": connectionMS,
-		"post_quantum": false, "pq_algorithm": "",
+	if selectionMode == settings.SelectionModeAutomatic && selection != nil {
+		s.startFailoverMonitor("ikev2", *selection)
+	}
+	responder.Succeed(vpnConnectResult{
+		AssignedIP: assignedIP, Server: server.Name, ActiveProtocol: "ikev2",
+		ConnectionMS: connectionMS,
 	})
 }

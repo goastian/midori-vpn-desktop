@@ -115,6 +115,40 @@ describe('vpn store', () => {
     expect(mocks.connect).not.toHaveBeenCalled()
   })
 
+  it('requests automatic placement without pinning a server', async () => {
+    const vpn = useVpnStore()
+
+    await vpn.connect('', 'automatic')
+
+    expect(mocks.connect).toHaveBeenCalledWith('', 'smart_auto', 'automatic')
+    expect(vpn.selectionMode).toBe('automatic')
+    expect(vpn.manualServerId).toBe('')
+  })
+
+  it('allows explicit cancellation while automatic recovery is in progress', async () => {
+    const vpn = useVpnStore()
+    vpn.applyStatus({
+      connected: false,
+      phase: 'reconnecting',
+      connection_id: 'recovery-connection',
+      server_name: '',
+      server_id: 'failed-server',
+      assigned_ip: '',
+      server_public_ip: '',
+      mesh_ip: '',
+      bytes_sent: 0,
+      bytes_recv: 0,
+      selection_mode: 'automatic',
+      failover_from: 'failed-server',
+    })
+
+    const disconnected = await vpn.disconnect('user_request')
+
+    expect(disconnected).toBe(true)
+    expect(mocks.disconnect).toHaveBeenCalledWith('recovery-connection', 'user_request')
+    expect(vpn.phase).toBe('disconnected')
+  })
+
   it('does not disconnect an active tunnel while refreshing servers', async () => {
     const vpn = useVpnStore()
     vpn.applyStatus({

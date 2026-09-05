@@ -108,10 +108,11 @@ func (s *Server) netguardScope(endpoint, assignedIP string) netguard.Scope {
 
 func (s *Server) netguardScopeForInterface(iface, endpoint, assignedIP string) netguard.Scope {
 	scope := netguard.Scope{
-		TunnelIface: iface,
-		Endpoint:    endpoint,
-		APIURL:      s.apiURL,
-		AssignedIP:  assignedIP,
+		TunnelIface:       iface,
+		Endpoint:          endpoint,
+		APIURL:            s.apiURL,
+		AssignedIP:        assignedIP,
+		RecoveryEndpoints: s.currentRecoveryEndpoints(),
 	}
 	snap := s.agent.Snapshot()
 	if meshState, ok := snap["mesh"].(state.MeshStatus); ok && meshState.Active {

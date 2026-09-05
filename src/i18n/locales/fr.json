@@ -67,6 +67,9 @@
     }
   },
   "server": {
+    "automatic": "Serveur automatique",
+    "automaticHint": "Latence mesurée la plus faible avec basculement sécurisé",
+    "automaticActive": "Automatique · {server}",
     "switching": "Changement de serveur…",
     "loading": "Chargement des serveurs…",
     "empty": "Aucun serveur disponible",
@@ -89,6 +92,7 @@
       "authenticating": "Préparation des identifiants sécurisés…",
       "negotiating": "Négociation du tunnel…",
       "protecting": "Activation de la protection contre les fuites…",
+      "reconnecting": "Rétablissement sécurisé de la connexion…",
       "disconnecting": "Déconnexion…"
     }
   },

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/goastian/midorivpn-agent/internal/sysstate"
@@ -22,6 +23,7 @@ const (
 )
 
 type Guard struct {
+	mu     sync.Mutex
 	active bool
 }
 
@@ -31,6 +33,10 @@ type Scope struct {
 	APIURL      string
 	AssignedIP  string
 	MeshPeerIPs []string
+	// RecoveryEndpoints remain reachable while the tunnel is down so automatic
+	// failover can probe and connect to another eligible edge without opening
+	// general network access.
+	RecoveryEndpoints []string
 }
 
 func New() *Guard {
@@ -38,10 +44,14 @@ func New() *Guard {
 }
 
 func (g *Guard) Active() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	return g.active
 }
 
 func (g *Guard) Enable(scope Scope) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	if scope.TunnelIface == "" {
 		return fmt.Errorf("tunnel interface required")
 	}
@@ -52,10 +62,11 @@ func (g *Guard) Enable(scope Scope) error {
 
 	_ = runNFT(nft, "delete", "table", "inet", tableName)
 	if out, err := runNFTOut(nft, "add", "table", "inet", tableName); err != nil {
+		g.emergencyFailClosed(nft)
 		return fmt.Errorf("nft add table: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	if out, err := runNFTOut(nft, "add", "chain", "inet", tableName, "output", "{", "type", "filter", "hook", "output", "priority", "0", ";", "policy", "drop", ";", "}"); err != nil {
-		_ = g.Disable()
+		g.emergencyFailClosed(nft)
 		return fmt.Errorf("nft add output chain: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	// INPUT chain: accept established/related replies (WireGuard handshake responses
@@ -63,7 +74,7 @@ func (g *Guard) Enable(scope Scope) error {
 	// decrypted packets arrive via the tunnel interface) so systems with strict
 	// INPUT DROP policies don't silently drop incoming tunnel traffic.
 	if out, err := runNFTOut(nft, "add", "chain", "inet", tableName, "input", "{", "type", "filter", "hook", "input", "priority", "0", ";", "policy", "accept", ";", "}"); err != nil {
-		_ = g.Disable()
+		g.emergencyFailClosed(nft)
 		return fmt.Errorf("nft add input chain: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 
@@ -79,12 +90,12 @@ func (g *Guard) Enable(scope Scope) error {
 	rules = append(rules, tunnelRules(scope)...)
 	for _, rule := range rules {
 		if out, err := runNFTOut(nft, rule...); err != nil {
-			_ = g.Disable()
+			g.emergencyFailClosed(nft)
 			return fmt.Errorf("nft rule %q: %w: %s", strings.Join(rule, " "), err, strings.TrimSpace(string(out)))
 		}
 	}
 
-	for _, hostPort := range []string{scope.Endpoint, apiHostPort(scope.APIURL)} {
+	for _, hostPort := range guardEndpoints(scope) {
 		if hostPort == "" {
 			continue
 		}
@@ -101,7 +112,7 @@ func (g *Guard) Enable(scope Scope) error {
 			}
 			args := []string{"add", "rule", "inet", tableName, "output", family, addrKey, ip.String(), "tcp", "dport", port, "accept"}
 			if out, err := runNFTOut(nft, args...); err != nil {
-				_ = g.Disable()
+				g.emergencyFailClosed(nft)
 				return fmt.Errorf("nft allow endpoint %s:%s: %w: %s", ip, port, err, strings.TrimSpace(string(out)))
 			}
 			args = []string{"add", "rule", "inet", tableName, "output", family, addrKey, ip.String(), "udp", "dport", port, "accept"}
@@ -116,6 +127,45 @@ func (g *Guard) Enable(scope Scope) error {
 		_ = g.Disable()
 	})
 	return nil
+}
+
+func guardEndpoints(scope Scope) []string {
+	values := make([]string, 0, len(scope.RecoveryEndpoints)+2)
+	values = append(values, scope.Endpoint, apiHostPort(scope.APIURL))
+	values = append(values, scope.RecoveryEndpoints...)
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
+// emergencyFailClosed replaces a partially configured table with the
+// smallest possible output-drop policy. It is intentionally best-effort: if
+// nft itself is unavailable there is no userspace fallback that can enforce a
+// kernel kill switch. Explicit disconnect remains the only path that removes
+// this emergency policy.
+func (g *Guard) emergencyFailClosed(nft string) {
+	_ = runNFT(nft, "delete", "table", "inet", tableName)
+	if err := runNFT(nft, "add", "table", "inet", tableName); err != nil {
+		g.active = false
+		return
+	}
+	if err := runNFT(nft, "add", "chain", "inet", tableName, "output", "{", "type", "filter", "hook", "output", "priority", "0", ";", "policy", "drop", ";", "}"); err != nil {
+		g.active = false
+		return
+	}
+	g.active = true
+	_, _ = runNFTOut(nft, "add", "rule", "inet", tableName, "output", "oifname", "lo", "accept")
 }
 
 func tunnelRules(scope Scope) [][]string {
@@ -172,6 +222,12 @@ func nftFamily(addr string) string {
 }
 
 func (g *Guard) Disable() error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.disableLocked()
+}
+
+func (g *Guard) disableLocked() error {
 	nft := findNFT()
 	if nft == "" {
 		g.active = false

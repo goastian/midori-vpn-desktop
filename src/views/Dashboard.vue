@@ -262,12 +262,24 @@ interface ServerItem {
   cc: string       // 2-letter country code (or empty for mesh)
   flag: string
   isMesh: boolean
+  isAutomatic?: boolean
   name: string
   ip: string
 }
 
 const allItems = computed<ServerItem[]>(() => {
   const items: ServerItem[] = [
+    ...(vpn.servers.length > 0 ? [{
+      key: 'vpn:auto',
+      cc: '',
+      flag: '⚡',
+      isMesh: false,
+      isAutomatic: true,
+      name: t('server.automatic'),
+      ip: vpn.connected && vpn.selectionMode === 'automatic' && vpn.serverName
+        ? t('server.automaticActive', { server: vpn.serverName })
+        : t('server.automaticHint'),
+    }] : []),
     ...vpn.servers.map(s => {
       const code = (s.country_code || '').toUpperCase().slice(0, 2)
       return {
@@ -309,11 +321,11 @@ const activeServerEndpoint = computed(() => {
 // ── Connection state ────────────────────────────────────────────────────────
 
 const activeConnected = computed(() =>
-  vpn.connected || (mesh.enabled && mesh.fullTunnel)
+  vpn.canDisconnect || (mesh.enabled && mesh.fullTunnel)
 )
 
 const activeConnectionType = computed<'vpn' | 'mesh' | ''>(() => {
-  if (vpn.connected) return 'vpn'
+  if (vpn.canDisconnect) return 'vpn'
   if (mesh.enabled && mesh.fullTunnel) return 'mesh'
   return connectionType.value
 })
@@ -324,7 +336,7 @@ const connectionStatusLabel = computed(() => {
   return vpn.connected ? t('vpn.connected') : t('vpn.disconnected')
 })
 
-const connectionBusy = computed(() => vpn.loading || vpn.connectionInProgress || toggleInProgress.value)
+const connectionBusy = computed(() => vpn.loading || (vpn.connectionInProgress && !vpn.reconnecting) || toggleInProgress.value)
 const connectionBlocker = computed(() => getConnectionBlocker({
   active: activeConnected.value,
   busy: connectionBusy.value,
@@ -344,7 +356,10 @@ const connectDisabledReason = computed(() => {
 
 function isActive(key: string): boolean {
   if (!activeConnected.value) return false
-  if (activeConnectionType.value === 'vpn') return key === `vpn:${vpn.serverIp}`
+  if (activeConnectionType.value === 'vpn') {
+    if (vpn.selectionMode === 'automatic') return key === 'vpn:auto'
+    return key === `vpn:${vpn.serverIp}`
+  }
   if (activeConnectionType.value === 'mesh') return key.startsWith(`mesh:${activeMeshExitIp.value}:`)
   return false
 }
@@ -399,7 +414,7 @@ async function loadServersAfterLogin() {
   vpn.error = null
   serversLoading.value = true
   try {
-    await vpn.fetchServers()
+    await Promise.all([vpn.fetchServers(), vpn.fetchSelectionSettings()])
     if (mesh.enabled) await mesh.fetchExitNodes()
   } finally {
     serversLoading.value = false
@@ -408,11 +423,16 @@ async function loadServersAfterLogin() {
 }
 
 function syncSelectedServer() {
+  if (vpn.selectionMode === 'automatic' && (vpn.connected || vpn.reconnecting || selectedServer.value === '')) {
+    selectedServer.value = 'vpn:auto'
+    return
+  }
   if (vpn.connected && vpn.serverIp) {
     const m = vpn.servers.find(s => s.id === vpn.serverIp)
     if (m) { selectedServer.value = `vpn:${m.id}`; return }
   }
   if (
+    selectedServer.value === 'vpn:auto' ||
     (selectedServer.value.startsWith('vpn:') && vpn.servers.some(s => `vpn:${s.id}` === selectedServer.value)) ||
     (selectedServer.value.startsWith('mesh:') && mesh.exitNodes.some(n => selectedServer.value.startsWith(`mesh:${n.mesh_ip}:`)))
   ) return
@@ -428,7 +448,7 @@ async function selectServer(key: string) {
   if (activeConnected.value) {
     switching.value = true
     try {
-      if (vpn.connected && !(await vpn.disconnect('server_switch'))) return
+      if (vpn.canDisconnect && !(await vpn.disconnect('server_switch'))) return
       if (mesh.fullTunnel) await mesh.clearExitNode()
       connectionType.value = ''
       activeMeshExitIp.value = ''
@@ -448,15 +468,18 @@ async function toggleConnection() {
       connectionType.value = ''
       activeMeshExitIp.value = ''
       await Promise.all([
-        vpn.connected ? vpn.disconnect('user_request') : Promise.resolve(),
+        vpn.canDisconnect ? vpn.disconnect('user_request') : Promise.resolve(),
         mesh.fullTunnel ? mesh.clearExitNode() : Promise.resolve(),
       ])
       return
     }
     if (!auth.authenticated || !selectedServer.value) return
 
-    if (selectedServer.value.startsWith('vpn:')) {
-      await vpn.connect(selectedServer.value.slice(4))
+    if (selectedServer.value === 'vpn:auto') {
+      await vpn.connect('', 'automatic')
+      if (!vpn.error) connectionType.value = 'vpn'
+    } else if (selectedServer.value.startsWith('vpn:')) {
+      await vpn.connect(selectedServer.value.slice(4), 'manual')
       if (!vpn.error) connectionType.value = 'vpn'
     } else if (selectedServer.value.startsWith('mesh:')) {
       const rest = selectedServer.value.slice(5)

@@ -42,12 +42,14 @@ export async function initAgentToken(): Promise<void> {
 
 export type VPNTransportProtocol = 'wireguard' | 'wss' | 'masque' | 'openvpn' | 'ikev2'
 export type VPNRequestedProtocol = VPNTransportProtocol | 'smart_auto'
+export type VPNSelectionMode = 'automatic' | 'manual'
 export type VPNConnectionPhase =
   | 'disconnected'
   | 'preparing'
   | 'authenticating'
   | 'negotiating'
   | 'protecting'
+  | 'reconnecting'
   | 'connected'
   | 'disconnecting'
   | 'error'
@@ -67,7 +69,9 @@ export interface VPNStatus {
   bytes_recv: number
   active_protocol?: VPNTransportProtocol
   requested_protocol?: VPNRequestedProtocol
+  selection_mode?: VPNSelectionMode
   fallback_reason?: string
+  failover_from?: string
   connection_ms?: number
 }
 
@@ -129,6 +133,7 @@ export interface Server {
   name: string
   host: string
   endpoint: string
+  probe_url?: string
   location: string
   country_code: string
   wg_port: number
@@ -406,8 +411,10 @@ export const agent = {
   },
 
   vpn: {
-    connect: (server_id: string, protocol = 'smart_auto') =>
-      post<void>('vpn/connect', { server_id, protocol }),
+    connect: (server_id: string, protocol = 'smart_auto', selection_mode: VPNSelectionMode = 'manual') =>
+      post<void>('vpn/connect', selection_mode === 'automatic'
+        ? { protocol, selection_mode }
+        : { server_id, protocol, selection_mode }),
     disconnect: (connection_id: string, reason: VPNDisconnectReason) =>
       post<void>('vpn/disconnect', { connection_id, reason }),
   },
@@ -451,4 +458,5 @@ export interface UserSettings {
   mesh?: { start_disabled?: boolean }
   autostart?: { enabled?: boolean }
   ui?: { start_minimized?: boolean; language?: string }
+  vpn?: { selection_mode?: VPNSelectionMode; manual_server_id?: string }
 }

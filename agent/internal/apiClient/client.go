@@ -119,6 +119,7 @@ type Server struct {
 	ID                string                `json:"id"`
 	Name              string                `json:"name"`
 	Host              string                `json:"host"`
+	ProbeURL          string                `json:"probe_url"`
 	Endpoint          string                `json:"endpoint"`
 	Port              int                   `json:"port"`
 	WGPort            int                   `json:"wg_port"`
@@ -133,6 +134,27 @@ type Server struct {
 	SupportsMeshExit  bool                  `json:"supports_mesh_exit"`
 	Transports        []TransportCapability `json:"transports"`
 }
+
+// ServerCandidate is the fail-closed placement projection returned by
+// Control. It contains only public data needed to measure and select an edge.
+type ServerCandidate struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Location    string `json:"location"`
+	CountryCode string `json:"country_code"`
+	Protocol    string `json:"protocol"`
+	ProbeURL    string `json:"probe_url"`
+	Endpoint    string `json:"endpoint"`
+	Port        int    `json:"port"`
+	Priority    int    `json:"priority"`
+}
+
+type ConnectionReason string
+
+const (
+	ConnectionReasonUser              ConnectionReason = "user"
+	ConnectionReasonAutomaticFailover ConnectionReason = "automatic_failover"
+)
 
 type TransportCapability struct {
 	Protocol     string                 `json:"protocol"`
@@ -251,17 +273,36 @@ func (c *Client) ListServers(ctx context.Context) ([]Server, error) {
 	return result, nil
 }
 
+// ListServerCandidates returns only centrally eligible placements for one
+// transport protocol. The backend response is deliberately not cached here.
+func (c *Client) ListServerCandidates(ctx context.Context, protocol string) ([]ServerCandidate, error) {
+	protocol = strings.TrimSpace(protocol)
+	if protocol == "" {
+		return nil, errors.New("server candidate protocol is required")
+	}
+	var result []ServerCandidate
+	if err := c.get(ctx, "/api/v1/control/servers/candidates?protocol="+url.QueryEscape(protocol), &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // CreateConnection registers a new VPN peer for the given server with optional Post-Quantum ML-KEM-768 public key.
-func (c *Client) CreateConnection(ctx context.Context, serverID, publicKey string, device DeviceRegistration, pqKEMPublicKey ...string) (*ConnectionConfig, error) {
+func (c *Client) CreateConnection(ctx context.Context, serverID, publicKey string, device DeviceRegistration, reason ConnectionReason, pqKEMPublicKey ...string) (*ConnectionConfig, error) {
+	if reason != ConnectionReasonUser && reason != ConnectionReasonAutomaticFailover {
+		return nil, errors.New("valid connection reason is required")
+	}
 	body := struct {
-		ServerID       string             `json:"server_id"`
-		PublicKey      string             `json:"public_key"`
-		Device         DeviceRegistration `json:"device"`
-		PQKEMPublicKey string             `json:"pq_kem_public_key,omitempty"`
+		ServerID         string             `json:"server_id"`
+		PublicKey        string             `json:"public_key"`
+		Device           DeviceRegistration `json:"device"`
+		ConnectionReason ConnectionReason   `json:"connection_reason"`
+		PQKEMPublicKey   string             `json:"pq_kem_public_key,omitempty"`
 	}{
-		ServerID:  serverID,
-		PublicKey: publicKey,
-		Device:    device,
+		ServerID:         serverID,
+		PublicKey:        publicKey,
+		Device:           device,
+		ConnectionReason: reason,
 	}
 	if len(pqKEMPublicKey) > 0 && pqKEMPublicKey[0] != "" {
 		body.PQKEMPublicKey = pqKEMPublicKey[0]
