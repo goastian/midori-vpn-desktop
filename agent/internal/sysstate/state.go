@@ -50,18 +50,7 @@ func (r *Registry) RevertAll(ctx context.Context) {
 	}
 
 	slog.Info("sysstate: reverting system mutations", "count", len(muts))
-	for i := len(muts) - 1; i >= 0; i-- {
-		m := muts[i]
-		slog.Info("sysstate: reverting", "mutation", m.Name)
-		func() {
-			defer func() {
-				if v := recover(); v != nil {
-					slog.Warn("sysstate: revert panicked", "mutation", m.Name, "panic", v)
-				}
-			}()
-			m.Revert(ctx)
-		}()
-	}
+	revert(ctx, muts)
 	slog.Info("sysstate: all mutations reverted")
 }
 
@@ -87,8 +76,12 @@ func (r *Registry) RevertByPrefix(ctx context.Context, prefixes ...string) {
 	}
 
 	slog.Info("sysstate: reverting selected system mutations", "count", len(matched))
-	for i := len(matched) - 1; i >= 0; i-- {
-		m := matched[i]
+	revert(ctx, matched)
+}
+
+func revert(ctx context.Context, mutations []Mutation) {
+	for i := len(mutations) - 1; i >= 0; i-- {
+		m := mutations[i]
 		slog.Info("sysstate: reverting", "mutation", m.Name)
 		func() {
 			defer func() {

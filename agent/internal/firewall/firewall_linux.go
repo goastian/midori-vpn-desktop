@@ -34,6 +34,8 @@ import (
 
 const ManagedTag = "midorivpn-managed"
 
+var unsafeScopeName = regexp.MustCompile(`[^a-z0-9_]+`)
+
 type Scope struct {
 	Name              string
 	Interface         string
@@ -464,8 +466,7 @@ func nftTableName(name string) string {
 
 func sanitizeName(name string) string {
 	name = strings.ToLower(name)
-	re := regexp.MustCompile(`[^a-z0-9_]+`)
-	name = re.ReplaceAllString(name, "_")
+	name = unsafeScopeName.ReplaceAllString(name, "_")
 	name = strings.Trim(name, "_")
 	if name == "" {
 		return "default"
