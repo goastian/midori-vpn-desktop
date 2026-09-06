@@ -17,6 +17,7 @@ import (
 	"github.com/goastian/midorivpn-agent/internal/auth"
 	"github.com/goastian/midorivpn-agent/internal/caps"
 	"github.com/goastian/midorivpn-agent/internal/config"
+	"github.com/goastian/midorivpn-agent/internal/connectioncleanup"
 	"github.com/goastian/midorivpn-agent/internal/deviceidentity"
 	"github.com/goastian/midorivpn-agent/internal/devicepki"
 	"github.com/goastian/midorivpn-agent/internal/dns"
@@ -36,21 +37,22 @@ const localFwdPort = 8889
 
 // Server is the local RPC HTTP server.
 type Server struct {
-	agent           *state.Agent
-	port            int
-	wgMgr           *wg.Manager
-	guard           *netguard.Guard
-	proxySrv        *proxy.Server
-	socks5Srv       *proxy.SOCKS5Server
-	proxyCtx        context.CancelFunc
-	localFwd        *proxy.LocalForwarder
-	apiClient       *apiClient.Client
-	deviceIdentity  *deviceidentity.Store
-	devicePKI       *devicepki.Store
-	authHTTPClient  *http.Client
-	publicIPClient  *http.Client
-	edgeProbeClient *http.Client
-	edgeProber      *failover.Prober
+	agent             *state.Agent
+	port              int
+	wgMgr             *wg.Manager
+	guard             *netguard.Guard
+	proxySrv          *proxy.Server
+	socks5Srv         *proxy.SOCKS5Server
+	proxyCtx          context.CancelFunc
+	localFwd          *proxy.LocalForwarder
+	apiClient         *apiClient.Client
+	deviceIdentity    *deviceidentity.Store
+	connectionCleanup *connectioncleanup.Store
+	devicePKI         *devicepki.Store
+	authHTTPClient    *http.Client
+	publicIPClient    *http.Client
+	edgeProbeClient   *http.Client
+	edgeProber        *failover.Prober
 
 	externalDNSMu      sync.Mutex
 	externalDNS        dns.Backend
@@ -111,6 +113,8 @@ type Server struct {
 	// meshMu serializes concurrent enableMesh calls so AutoEnableMesh and the
 	// frontend cannot race and double-activate the mesh node.
 	meshMu sync.Mutex
+
+	connectionCleanupWake chan struct{}
 }
 
 // SetUIDir enables the Linux browser UI from an immutable package directory.
@@ -134,6 +138,10 @@ func NewServer(ag *state.Agent, port int) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("initialize persistent device identity: %w", err)
 	}
+	cleanupStore, err := connectioncleanup.New()
+	if err != nil {
+		return nil, fmt.Errorf("initialize pending connection cleanup: %w", err)
+	}
 
 	settingsStore, err := settings.New()
 	if err != nil {
@@ -142,27 +150,29 @@ func NewServer(ag *state.Agent, port int) (*Server, error) {
 
 	edgeProbeClient := newEdgeProbeClient()
 	s := &Server{
-		agent:           ag,
-		port:            port,
-		wgMgr:           wg.NewManager(),
-		guard:           netguard.New(),
-		localFwd:        proxy.NewLocalForwarder(fmt.Sprintf("127.0.0.1:%d", localFwdPort)),
-		cfg:             cfg,
-		settings:        settingsStore,
-		apiURL:          cfg.APIURL,
-		jwksURL:         cfg.AuthentikJWKSURL,
-		deviceIdentity:  identityStore,
-		authHTTPClient:  httpx.NewClient(15 * time.Second),
-		publicIPClient:  httpx.NewClient(8 * time.Second),
-		edgeProbeClient: edgeProbeClient,
-		edgeProber:      failover.NewProber(edgeProbeClient, failover.DefaultProbeTimeout, failover.DefaultParallelism),
+		agent:             ag,
+		port:              port,
+		wgMgr:             wg.NewManager(),
+		guard:             netguard.New(),
+		localFwd:          proxy.NewLocalForwarder(fmt.Sprintf("127.0.0.1:%d", localFwdPort)),
+		cfg:               cfg,
+		settings:          settingsStore,
+		apiURL:            cfg.APIURL,
+		jwksURL:           cfg.AuthentikJWKSURL,
+		deviceIdentity:    identityStore,
+		connectionCleanup: cleanupStore,
+		authHTTPClient:    httpx.NewClient(15 * time.Second),
+		publicIPClient:    httpx.NewClient(8 * time.Second),
+		edgeProbeClient:   edgeProbeClient,
+		edgeProber:        failover.NewProber(edgeProbeClient, failover.DefaultProbeTimeout, failover.DefaultParallelism),
 
-		pendingOAuth:         make(map[string]pendingOAuthEntry),
-		authentikIssuer:      cfg.AuthentikIssuer,
-		authentikClientID:    cfg.AuthentikClientID,
-		authentikAuthURL:     cfg.AuthentikAuthURL,
-		authentikTokenURL:    cfg.AuthentikTokenURL,
-		authentikUserinfoURL: cfg.AuthentikUserinfoURL,
+		pendingOAuth:          make(map[string]pendingOAuthEntry),
+		connectionCleanupWake: make(chan struct{}, 1),
+		authentikIssuer:       cfg.AuthentikIssuer,
+		authentikClientID:     cfg.AuthentikClientID,
+		authentikAuthURL:      cfg.AuthentikAuthURL,
+		authentikTokenURL:     cfg.AuthentikTokenURL,
+		authentikUserinfoURL:  cfg.AuthentikUserinfoURL,
 	}
 
 	// Build the auth manager BEFORE the apiClient so the apiClient's refresh
@@ -225,7 +235,11 @@ func (s *Server) Init(ctx context.Context) error {
 	if s.cfg.AuthentikRedirectURI != expectedRedirect {
 		return fmt.Errorf("invalid runtime configuration: AUTHENTIK_REDIRECT_URI must match the RPC listener (%s)", expectedRedirect)
 	}
-	return s.authMgr.Init(ctx)
+	if err := s.authMgr.Init(ctx); err != nil {
+		return err
+	}
+	s.wakeConnectionCleanup()
+	return nil
 }
 
 // AutoEnableMesh runs in the background after startup. It waits up to
@@ -338,6 +352,7 @@ func (s *Server) handleSetTokens(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.wakeConnectionCleanup()
 	go s.refreshServersCache(context.Background())
 
 	// Auto-activate mesh on login (best-effort, non-blocking) unless the
@@ -385,10 +400,28 @@ func (s *Server) setMeshDegraded(err error) {
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	s.stopVPNStatsLoop()
-	if vpn, ok := s.agent.Snapshot()["vpn"].(state.VPNStatus); ok && vpn.Connected {
+	vpn, vpnActive := s.agent.Snapshot()["vpn"].(state.VPNStatus)
+	if vpnActive && vpn.Connected {
 		slog.Info("vpn disconnect requested", "reason", "logout", "protocol", vpn.ActiveProtocol, "server_id", vpn.ServerID)
+		if vpn.PeerID != "" {
+			if err := s.queueConnectionCleanup(vpn.PeerID); err != nil {
+				writeStructuredError(w, http.StatusInternalServerError, "ERR_VPN_DISCONNECT_UNAVAILABLE", "No se pudo registrar la desconexión antes de cerrar sesión.")
+				return
+			}
+			cleanupCtx, cancel := context.WithTimeout(ctx, connectionCleanupTimeout)
+			cleanupErr := s.apiClient.DeleteConnection(cleanupCtx, vpn.PeerID)
+			cancel()
+			if cleanupErr != nil {
+				writeStructuredError(w, http.StatusBadGateway, "ERR_VPN_DISCONNECT_UNAVAILABLE", "No se pudo retirar la conexión antes de cerrar sesión.")
+				return
+			}
+			if err := s.connectionCleanup.Remove(vpn.PeerID); err != nil {
+				writeStructuredError(w, http.StatusInternalServerError, "ERR_VPN_DISCONNECT_UNAVAILABLE", "La desconexión remota terminó, pero no se pudo confirmar localmente.")
+				return
+			}
+		}
 	}
+	s.stopVPNStatsLoop()
 
 	// Cancel any in-progress VPN connect so it cannot race with cleanup.
 	s.connectMu.Lock()
@@ -399,13 +432,8 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	s.connectSeq++ // invalidate any superseded connect that beat the cancel
 	s.connectMu.Unlock()
 
-	// Disconnect any active VPN transport.
-	snap := s.agent.Snapshot()
-	if vpn, ok := snap["vpn"].(state.VPNStatus); ok && vpn.Connected {
-		if vpn.PeerID != "" {
-			_ = s.apiClient.DeleteConnection(ctx, vpn.PeerID)
-		}
-	}
+	// Disconnect any active VPN transport. The remote peer was retired above
+	// before authentication is cleared, so logout cannot strand access.
 	s.closeTransportRelay()
 	s.restoreExternalDNS()
 	s.wgMgr.Disconnect()

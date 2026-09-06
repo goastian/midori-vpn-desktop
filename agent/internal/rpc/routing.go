@@ -193,6 +193,7 @@ func (s *Server) Start(ctx context.Context) error {
 			slog.Error("local forwarder error", "err", err)
 		}
 	}()
+	go s.runConnectionCleanup(ctx)
 
 	srv := httpx.NewAPIServer(fmt.Sprintf("127.0.0.1:%d", s.port), s.newMux(agentToken))
 

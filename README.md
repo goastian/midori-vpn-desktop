@@ -36,6 +36,7 @@ explicit choices because they have different connection and recovery costs.
 - The active physical Wi-Fi or Ethernet MAC is processed only in memory. When available, the client derives a secondary `net-v1:` HMAC reference with the local key; the raw MAC and the derived reference are never stored locally, and changing adapters never rotates the installation UUID.
 - OpenVPN device keys are generated locally as ECDSA P-256 keys and persisted only in Secret Service. Core receives a CSR, never the private key; native client files exist only in the mode-`0700` user runtime directory and are removed on disconnect.
 - Kill switch, route pinning and DNS state are installed only for the selected endpoint and are restored on disconnect.
+- Before local tunnel teardown, the agent records the exact backend peer in `${XDG_STATE_HOME:-$HOME/.local/state}/midorivpn/pending-connection-cleanup.json`. The mode-`0600` atomic queue survives restarts and retains failed cleanup until the backend accepts its idempotent removal; it contains peer UUIDs, never keys or tokens.
 - WSS/MASQUE use short-lived tokens bound to the active peer and server.
 
 ## Build and test

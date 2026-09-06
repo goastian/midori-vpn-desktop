@@ -24,6 +24,18 @@ func (s *Server) gracefulShutdown() {
 	}()
 	if vpn, ok := s.agent.Snapshot()["vpn"].(state.VPNStatus); ok && vpn.Connected {
 		slog.Info("vpn disconnect requested", "reason", "process_shutdown", "protocol", vpn.ActiveProtocol, "server_id", vpn.ServerID)
+		if vpn.PeerID != "" {
+			if err := s.queueConnectionCleanup(vpn.PeerID); err != nil {
+				slog.Error("shutdown could not persist backend VPN cleanup", "error", err)
+			} else if s.apiClient != nil && s.authMgr != nil && s.authMgr.LoggedIn() {
+				cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				remaining := s.drainConnectionCleanup(cleanupCtx)
+				cancel()
+				if remaining > 0 {
+					slog.Warn("shutdown leaves durable backend VPN cleanup", "pending_count", remaining)
+				}
+			}
+		}
 	}
 
 	// Disconnect VPN tunnel if up.
@@ -77,6 +89,13 @@ func (s *Server) gracefulShutdown() {
 // sysstate.Global. Safe to call more than once; idempotent and best-effort.
 func (s *Server) Shutdown(ctx context.Context) {
 	slog.Info("agent: starting graceful shutdown cleanup")
+	if s.agent != nil {
+		if vpn, ok := s.agent.Snapshot()["vpn"].(state.VPNStatus); ok && vpn.Connected && vpn.PeerID != "" {
+			if err := s.queueConnectionCleanup(vpn.PeerID); err != nil {
+				slog.Error("shutdown safety net could not persist backend VPN cleanup", "error", err)
+			}
+		}
+	}
 
 	// 1. Stop recovery and disconnect VPN — this calls Guard.Disable() and restores resolv.conf.
 	s.stopFailoverMonitor()

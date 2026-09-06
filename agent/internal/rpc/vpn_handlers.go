@@ -475,6 +475,11 @@ func (s *Server) cleanupVPNConnection(peerID string) {
 	if peerID == "" {
 		return
 	}
+	if err := s.queueConnectionCleanup(peerID); err == nil {
+		return
+	} else {
+		slog.Error("vpn connection cleanup could not be persisted", "error", err)
+	}
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := s.apiClient.DeleteConnection(cleanupCtx, peerID); err != nil {
@@ -500,6 +505,23 @@ func (s *Server) handleVPNDisconnect(w http.ResponseWriter, r *http.Request) {
 		writeStructuredError(w, http.StatusConflict, "ERR_VPN_CONNECTION_CHANGED", "La conexión VPN activa cambió; actualiza el estado antes de desconectarla.")
 		return
 	}
+	peerID := vpn.PeerID
+	cleanupPending := false
+	if peerID != "" {
+		if err := s.queueConnectionCleanup(peerID); err != nil {
+			// If the durable store itself is unavailable, require a successful
+			// synchronous backend retirement before discarding local identity.
+			cleanupCtx, cancel := context.WithTimeout(r.Context(), connectionCleanupTimeout)
+			cleanupErr := s.apiClient.DeleteConnection(cleanupCtx, peerID)
+			cancel()
+			if cleanupErr != nil {
+				writeStructuredError(w, http.StatusBadGateway, "ERR_VPN_DISCONNECT_UNAVAILABLE", "No se pudo registrar la desconexión de forma segura; inténtalo de nuevo.")
+				return
+			}
+		} else {
+			cleanupPending = true
+		}
+	}
 
 	slog.Info("vpn disconnect requested", "reason", req.Reason, "protocol", vpn.ActiveProtocol, "server_id", vpn.ServerID)
 	vpn.Phase = state.VPNPhaseDisconnecting
@@ -516,7 +538,6 @@ func (s *Server) handleVPNDisconnect(w http.ResponseWriter, r *http.Request) {
 	s.connectMu.Unlock()
 
 	s.stopVPNStatsLoop()
-	peerID := vpn.PeerID
 	// Disconnect locally and respond immediately — don't block on cloud API.
 	s.closeTransportRelay()
 	s.restoreExternalDNS()
@@ -525,15 +546,7 @@ func (s *Server) handleVPNDisconnect(w http.ResponseWriter, r *http.Request) {
 	s.setRecoveryEndpoints(nil)
 	s.agent.SetVPN(state.VPNStatus{Phase: state.VPNPhaseDisconnected})
 	s.agent.SetProtection(state.ProtectionStatus{})
-	writeJSON(w, map[string]bool{"ok": true})
-	// Deregister peer from backend in the background.
-	if peerID != "" {
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			_ = s.apiClient.DeleteConnection(ctx, peerID)
-		}()
-	}
+	writeJSON(w, map[string]bool{"ok": true, "cleanup_pending": cleanupPending})
 }
 
 func findTransport(transports []apiClient.TransportCapability, protocol string) (apiClient.TransportCapability, bool) {

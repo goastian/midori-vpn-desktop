@@ -214,6 +214,13 @@ func (s *Server) runAutomaticFailover(ctx context.Context, protocol, failedServe
 		return
 	}
 	recoveryID := current.ConnectionID
+	oldPeerID := current.PeerID
+	if oldPeerID != "" {
+		if err := s.queueConnectionCleanup(oldPeerID); err != nil {
+			slog.Error("automatic failover refused to lose previous peer cleanup", "error", err)
+			return
+		}
+	}
 	current.Phase = state.VPNPhaseReconnecting
 	current.FailoverFrom = failedServerID
 	s.agent.SetVPN(current)
@@ -222,7 +229,6 @@ func (s *Server) runAutomaticFailover(ctx context.Context, protocol, failedServe
 	s.closeTransportRelay()
 	s.restoreExternalDNS()
 	s.wgMgr.Disconnect()
-	oldPeerID := current.PeerID
 	s.agent.SetVPN(state.VPNStatus{
 		Phase: state.VPNPhaseReconnecting, ConnectionID: recoveryID,
 		ServerID: failedServerID, RequestedProtocol: protocol,
@@ -231,16 +237,6 @@ func (s *Server) runAutomaticFailover(ctx context.Context, protocol, failedServe
 	s.agent.SetProtection(state.ProtectionStatus{
 		KillSwitchActive: s.guard.Active(), DNSProtected: false, Mode: protocol,
 	})
-	if oldPeerID != "" {
-		go func(peerID string) {
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			if err := s.apiClient.DeleteConnection(cleanupCtx, peerID); err != nil {
-				slog.Warn("automatic failover could not immediately retire previous peer", "err", err)
-			}
-		}(oldPeerID)
-	}
-
 	for attempt := 0; ; attempt++ {
 		if ctx.Err() != nil || !s.authMgr.LoggedIn() {
 			return
