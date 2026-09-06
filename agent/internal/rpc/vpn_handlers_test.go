@@ -35,11 +35,23 @@ func TestSelectTransportCandidatesSmartUsesOnlyHealthyOrder(t *testing.T) {
 	if len(candidates) != 2 {
 		t.Fatalf("candidate count = %d, want 2", len(candidates))
 	}
-	if candidates[0].protocol != "wireguard" || candidates[0].timeout != 1500*time.Millisecond {
+	if candidates[0].protocol != "wireguard" || candidates[0].timeout != smartWireGuardHandshakeTimeout {
 		t.Fatalf("first candidate = %#v, want direct WireGuard", candidates[0])
 	}
 	if candidates[1].protocol != "wss" || candidates[1].timeout != 5*time.Second {
 		t.Fatalf("second candidate = %#v, want WSS", candidates[1])
+	}
+}
+
+func TestSelectTransportCandidatesExplicitWireGuardAllowsHandshakeRetries(t *testing.T) {
+	candidates := selectTransportCandidates([]apiClient.TransportCapability{{
+		Protocol: "wireguard", Host: "vpn.example.test", Port: 51820, Enabled: true, HealthStatus: "healthy",
+	}}, "wireguard")
+	if len(candidates) != 1 || candidates[0].timeout != 15*time.Second {
+		t.Fatalf("WireGuard candidates = %#v", candidates)
+	}
+	if candidates[0].timeout <= smartWireGuardHandshakeTimeout {
+		t.Fatalf("explicit WireGuard timeout = %s, must exceed Smart fallback budget", candidates[0].timeout)
 	}
 }
 

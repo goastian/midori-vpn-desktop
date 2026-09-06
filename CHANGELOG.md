@@ -62,6 +62,9 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
 - IKEv2 now resolves the gateway before starting strongSwan, pins the handshake and kill-switch scope to that literal address, and installs its physical-route exclusions before CHILD_SA creation. Full-tunnel policy can no longer capture a late DNS lookup and strand an otherwise successful EAP-TLS session.
 - The Linux OpenVPN client now resolves the distribution path `/usr/sbin/openvpn` explicitly, so KDE and other graphical sessions work even when their user `PATH` intentionally excludes administrative binaries.
 - WireGuard full-tunnel teardown now removes its temporary endpoint `/32` route and restores any route that existed before connection, preventing stale host-route state after disconnect or failed setup.
+- Explicit WireGuard connections now allow a bounded 15-second handshake
+  window so normal protocol retransmissions can complete. Smart Auto retains
+  its 1.5-second primary attempt before falling back to WSS or MASQUE.
 - MASQUE now supplies the implicit HTTPS port `443` to the QUIC dialer when a standards-compliant URI template omits it, allowing external CONNECT-UDP sessions to start correctly.
 - The Qt tray now follows the lifecycle of its owned agent, so closing MidoriVPN from the Vue dashboard cannot leave an orphaned desktop shell running.
 - Device-certificate validation accepts only the subsecond precision loss inherent to X.509 time encoding, while continuing to reject material expiry mismatches.

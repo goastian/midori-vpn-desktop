@@ -21,8 +21,10 @@ import (
 )
 
 const (
-	vpnConnectOperationTimeout = 70 * time.Second
-	vpnConnectWriteTimeout     = 75 * time.Second
+	vpnConnectOperationTimeout        = 70 * time.Second
+	vpnConnectWriteTimeout            = 75 * time.Second
+	smartWireGuardHandshakeTimeout    = 1500 * time.Millisecond
+	explicitWireGuardHandshakeTimeout = 15 * time.Second
 )
 
 func (s *Server) handleListConnections(w http.ResponseWriter, r *http.Request) {
@@ -587,7 +589,10 @@ func selectTransportCandidates(transports []apiClient.TransportCapability, reque
 		}
 		timeout := 5 * time.Second
 		if protocol == "wireguard" {
-			timeout = 1500 * time.Millisecond
+			timeout = explicitWireGuardHandshakeTimeout
+			if requested == "smart_auto" {
+				timeout = smartWireGuardHandshakeTimeout
+			}
 		} else if protocol == "openvpn" || protocol == "ikev2" {
 			timeout = 30 * time.Second
 		}
