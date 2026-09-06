@@ -20,6 +20,11 @@ import (
 	"github.com/goastian/midorivpn-agent/internal/wg"
 )
 
+const (
+	vpnConnectOperationTimeout = 70 * time.Second
+	vpnConnectWriteTimeout     = 75 * time.Second
+)
+
 func (s *Server) handleListConnections(w http.ResponseWriter, r *http.Request) {
 	connections, err := s.apiClient.ListConnections(r.Context())
 	if err != nil {
@@ -51,7 +56,14 @@ func (s *Server) handleVPNConnect(w http.ResponseWriter, r *http.Request) {
 		writeStructuredError(w, http.StatusBadRequest, "ERR_VPN_CONNECT_REQUEST_INVALID", "La solicitud de conexión no es válida.")
 		return
 	}
-	s.runVPNConnect(r.Context(), req, apiClient.ConnectionReasonUser, httpVPNConnectResponder{writer: w}, true)
+	// A connection may retry an ambiguous upstream result several times with
+	// the same key. Override the generic 30-second RPC write deadline so the
+	// caller receives the final structured result instead of an empty reply,
+	// while retaining a finite operation budget.
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(vpnConnectWriteTimeout))
+	operationCtx, cancel := context.WithTimeout(r.Context(), vpnConnectOperationTimeout)
+	defer cancel()
+	s.runVPNConnect(operationCtx, req, apiClient.ConnectionReasonUser, httpVPNConnectResponder{writer: w}, true)
 }
 
 type vpnConnectResponder interface {
