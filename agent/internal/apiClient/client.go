@@ -71,12 +71,13 @@ func ErrorMessage(err error) string {
 
 // Client is the vpn-core API client.
 type Client struct {
-	baseURL     string
-	origin      string
-	clientID    string
-	httpClient  *http.Client
-	tokenFunc   func() string // returns the current access token
-	refreshFunc func(context.Context) error
+	baseURL              string
+	origin               string
+	clientID             string
+	httpClient           *http.Client
+	tokenFunc            func() string // returns the current access token
+	refreshFunc          func(context.Context) error
+	connectionRetryDelay func(int) time.Duration
 }
 
 // CloseIdleConnections releases resources owned by the dedicated transport.
@@ -92,12 +93,62 @@ func New(baseURL string, clientID string, tokenFunc func() string, refreshFunc f
 		slog.Warn("api client: API_URL cannot be used as CSRF origin", "api_url", baseURL, "err", err)
 	}
 	return &Client{
-		baseURL:     baseURL,
-		origin:      origin,
-		clientID:    clientID,
-		tokenFunc:   tokenFunc,
-		refreshFunc: refreshFunc,
-		httpClient:  httpx.NewClient(30 * time.Second),
+		baseURL:              baseURL,
+		origin:               origin,
+		clientID:             clientID,
+		tokenFunc:            tokenFunc,
+		refreshFunc:          refreshFunc,
+		httpClient:           httpx.NewClient(30 * time.Second),
+		connectionRetryDelay: defaultConnectionRetryDelay,
+	}
+}
+
+var connectionRetrySchedule = [...]time.Duration{
+	time.Second,
+	2 * time.Second,
+	4 * time.Second,
+	8 * time.Second,
+}
+
+func defaultConnectionRetryDelay(attempt int) time.Duration {
+	if attempt < 0 {
+		attempt = 0
+	}
+	if attempt >= len(connectionRetrySchedule) {
+		attempt = len(connectionRetrySchedule) - 1
+	}
+	return connectionRetrySchedule[attempt]
+}
+
+func retryAmbiguousConnection(err error) bool {
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.Code == "connection_in_progress" || apiErr.StatusCode >= http.StatusInternalServerError
+	}
+	var transportErr *url.Error
+	if errors.As(err, &transportErr) {
+		return true
+	}
+	var remoteErr *httpx.RemoteError
+	if errors.As(err, &remoteErr) {
+		return remoteErr.Status >= http.StatusInternalServerError
+	}
+	var syntaxErr *json.SyntaxError
+	var typeErr *json.UnmarshalTypeError
+	return errors.As(err, &syntaxErr) || errors.As(err, &typeErr)
+}
+
+func waitForConnectionRetry(ctx context.Context, delay time.Duration) error {
+	if delay <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
@@ -307,11 +358,23 @@ func (c *Client) CreateConnection(ctx context.Context, serverID, publicKey strin
 	if len(pqKEMPublicKey) > 0 && pqKEMPublicKey[0] != "" {
 		body.PQKEMPublicKey = pqKEMPublicKey[0]
 	}
-	var connCfg ConnectionConfig
-	if err := c.post(ctx, "/api/v1/control/connections", body, &connCfg); err != nil {
-		return nil, err
+	for attempt := 0; ; attempt++ {
+		var connCfg ConnectionConfig
+		err := c.post(ctx, "/api/v1/control/connections", body, &connCfg)
+		if err == nil {
+			return &connCfg, nil
+		}
+		if ctx.Err() != nil || attempt >= len(connectionRetrySchedule) || !retryAmbiguousConnection(err) {
+			return nil, err
+		}
+		delay := defaultConnectionRetryDelay(attempt)
+		if c.connectionRetryDelay != nil {
+			delay = c.connectionRetryDelay(attempt)
+		}
+		if waitErr := waitForConnectionRetry(ctx, delay); waitErr != nil {
+			return nil, waitErr
+		}
 	}
-	return &connCfg, nil
 }
 
 func (c *Client) TunnelCredentials(ctx context.Context, peerID string) (*TunnelCredentials, error) {

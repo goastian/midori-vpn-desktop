@@ -10,7 +10,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/goastian/midorivpn-agent/internal/config"
 )
@@ -88,6 +90,83 @@ func TestCreateConnectionSendsPersistentDeviceIdentity(t *testing.T) {
 	}
 	if result.DeviceID != "28a41186-73ea-443b-9262-c37ad8342a53" {
 		t.Fatalf("device_id = %q", result.DeviceID)
+	}
+}
+
+func TestCreateConnectionRetriesAmbiguousResultWithSameRequest(t *testing.T) {
+	var mu sync.Mutex
+	var bodies [][]byte
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		requests++
+		attempt := requests
+		bodies = append(bodies, append([]byte(nil), body...))
+		mu.Unlock()
+		switch attempt {
+		case 1:
+			panic(http.ErrAbortHandler)
+		case 2:
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok": false, "error": "completion interrupted",
+			})
+		case 3:
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok": false, "code": "connection_in_progress", "error": "connection operation is still in progress",
+			})
+		default:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "data": map[string]any{
+				"peer_id": "peer-one", "device_id": "28a41186-73ea-443b-9262-c37ad8342a53", "peer_ip": "10.8.0.2/32",
+			}})
+		}
+	}))
+	defer server.Close()
+
+	client := New(server.URL, "client", func() string { return "token" }, nil)
+	client.connectionRetryDelay = func(int) time.Duration { return 0 }
+	device := DeviceRegistration{
+		ClientInstanceID: "88a4e639-54f9-4b57-9460-671c95136adf",
+		ReportedName:     "Tecno-09",
+		DeviceType:       "desktop",
+	}
+	result, err := client.CreateConnection(context.Background(), "server-one", "stable-public-key", device, ConnectionReasonUser)
+	if err != nil || result.PeerID != "peer-one" {
+		t.Fatalf("CreateConnection() = %+v, %v", result, err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if requests != 4 {
+		t.Fatalf("requests = %d, want 4", requests)
+	}
+	for index := 1; index < len(bodies); index++ {
+		if !bytes.Equal(bodies[0], bodies[index]) {
+			t.Fatalf("retry %d changed idempotent request body", index+1)
+		}
+	}
+}
+
+func TestCreateConnectionDoesNotRetryDefinitiveConflict(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok": false, "code": "device_limit_reached", "error": "device limit reached",
+		})
+	}))
+	defer server.Close()
+	client := New(server.URL, "client", func() string { return "token" }, nil)
+	client.connectionRetryDelay = func(int) time.Duration { return 0 }
+	_, err := client.CreateConnection(context.Background(), "server-one", "public-key", DeviceRegistration{}, ConnectionReasonUser)
+	if ErrorCode(err) != "device_limit_reached" || requests != 1 {
+		t.Fatalf("error = %v requests = %d, want definitive single attempt", err, requests)
 	}
 }
 
