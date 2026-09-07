@@ -11,6 +11,12 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    # typescript-eslint 8.69.0 requires TypeScript >=4.8.4 <6.1.0.
+    # Remove this series-only exclusion when its stable peer range supports 7.x.
+    ignore:
+      - dependency-name: "typescript"
+        versions:
+          - ">=7.0.0 <8.0.0"
 
   - package-ecosystem: "gomod"
     directory: "/agent"
