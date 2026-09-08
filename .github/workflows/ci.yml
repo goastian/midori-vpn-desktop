@@ -25,18 +25,12 @@ jobs:
         run: go vet ./... && go test -v -race ./...
 
       - name: Run Staticcheck on Agent
-        uses: dominikh/staticcheck-action@9716614d4101e79b4340dd97b10e54d68234e431 # v1.4.1
-        with:
-          working-directory: agent
-          version: "2026.2.1"
-          install-go: false
+        working-directory: agent
+        run: go run honnef.co/go/tools/cmd/staticcheck@2026.2.1 ./...
 
       - name: Run Govulncheck on Agent
-        uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
-        with:
-          go-version-input: '1.27.x'
-          work-dir: agent
-          go-package: ./...
+        working-directory: agent
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
   test-frontend:
     name: Frontend Lint, TypeCheck & Vitest
