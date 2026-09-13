@@ -6,6 +6,9 @@ All notable MidoriVPN Desktop changes are documented here.
 
 Major Release with a verified WireGuard transport contract, native Go 1.27 agent, and hardened Linux RPM package.
 
+- Refreshed the supported Node 24 UI toolchain to ESLint Vue 10.11.0,
+  happy-dom 20.14.5, TypeScript-ESLint 8.70.0 and Vite 8.3.0.
+
 - Added a repository-local AGPL-3.0-or-later license, private vulnerability
   reporting policy and contribution guide; public status now distinguishes
   implemented source, artifact-specific certification and pending release
