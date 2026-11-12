@@ -84,6 +84,12 @@ func (m *Manager) Connect(cfg *Config) error {
 	if m.dev != nil {
 		return fmt.Errorf("already connected")
 	}
+	if m.dnsBackendKindLocked() != dns.KindResolved {
+		return fmt.Errorf("DNS protection requires systemd-resolved managing /etc/resolv.conf")
+	}
+	if len(cfg.DNS) == 0 {
+		return fmt.Errorf("VPN DNS servers are required")
+	}
 
 	// Tear down existing connection.
 	m.shutdownLocked()

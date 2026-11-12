@@ -39,6 +39,29 @@ explicit choices because they have different connection and recovery costs.
 - Before local tunnel teardown, the agent records the exact backend peer in `${XDG_STATE_HOME:-$HOME/.local/state}/midorivpn/pending-connection-cleanup.json`. The mode-`0600` atomic queue survives restarts and retains failed cleanup until the backend accepts its idempotent removal; it contains peer UUIDs, never keys or tokens. If the initial Connect response is ambiguous, the agent retries the same request with the same public key and accepts the existing durable session; definitive client errors are not retried. The local connect RPC has a 70-second operation budget and a slightly longer response deadline so this recovery path returns structured JSON instead of being cut off by the generic 30-second RPC limit.
 - WSS/MASQUE use short-lived tokens bound to the active peer and server.
 
+### MVP platform limits
+
+Mesh and exit-node sharing are unavailable in this release, including for
+previously saved preferences. The application does not start an exit proxy or
+enable sharing after login. The tray disconnects the current connection using
+its connection identity; quitting delegates ordered cleanup to the agent.
+
+The agent accepts only `CAP_NET_ADMIN` and `CAP_NET_RAW`, never filesystem
+override or immutable-file capabilities, root or SUID. A package upgrade
+requires fresh network permission consent. DNS protection currently requires
+**systemd-resolved managing `/etc/resolv.conf`** and working per-link resolver
+authorization. Other resolver configurations fail closed; the application does
+not rewrite or lock the system resolver. Administrators must recover any stale
+resolver state left by an older release before connecting. Do not grant broader
+capabilities to work around an unsupported resolver.
+
+`XDG_RUNTIME_DIR` must be an absolute, user-owned directory with mode `0700`.
+RPC tokens are generated locally for each new session, not read from an
+environment variable; an in-process restart retains the protected session so
+the existing browser tab and tray can reconnect. These changes do not replace
+the installed PolicyKit, AppArmor, Secret Service and real-tunnel acceptance
+tests or independent review of the privileged networking surface.
+
 ## Build and test
 
 The pinned rootless runner discovers this repository either below the Core

@@ -21,6 +21,7 @@
 #include <QTcpSocket>
 #include <QTimer>
 #include <QUrl>
+#include "rpc_contract.h"
 
 #if defined(Q_OS_LINUX)
 #include <signal.h>
@@ -96,8 +97,12 @@ public:
     if (id.isEmpty()) return;
     request("POST", QStringLiteral("vpn/connect"), QJsonObject{{QStringLiteral("server_id"), id}, {QStringLiteral("protocol"), protocol}});
   }
-  Q_INVOKABLE void disconnectVPN() { request("POST", QStringLiteral("vpn/disconnect"), QJsonObject{}); }
-  Q_INVOKABLE void toggleMesh() { request("POST", isMeshActive ? QStringLiteral("mesh/disable") : QStringLiteral("mesh/enable"), QJsonObject{}); }
+  Q_INVOKABLE void disconnectVPN() {
+    // Fetch current identity rather than disconnecting a stale cached session.
+    request("GET", QStringLiteral("status"), QJsonObject{}, [this](const QJsonObject &snapshot) {
+      if (const auto body = disconnectRequest(snapshot)) request("POST", QStringLiteral("vpn/disconnect"), *body);
+    });
+  }
   Q_INVOKABLE void setStartMinimized(bool value) {
     request("POST", QStringLiteral("settings"), QJsonObject{{QStringLiteral("mesh"), QJsonObject{{QStringLiteral("start_disabled"), meshStartDisabled}}}, {QStringLiteral("autostart"), QJsonObject{{QStringLiteral("enabled"), autostartEnabledValue}}}, {QStringLiteral("ui"), QJsonObject{{QStringLiteral("start_minimized"), value}}}}, [this, value](const QJsonObject &) {
       minimized = value;
@@ -124,7 +129,7 @@ public:
     if (stopping) return;
     stopping = true;
     poll.stop();
-    request("POST", QStringLiteral("vpn/disconnect"), QJsonObject{});
+    // app/quit performs the agent's ordered disconnect and DNS cleanup.
     request("POST", QStringLiteral("app/quit"), QJsonObject{});
     QTimer::singleShot(3000, &app, &QCoreApplication::quit);
   }
@@ -240,6 +245,7 @@ private:
   void startAgent() {
     agent.setProgram(agentPath);
     agent.setArguments({QStringLiteral("--port"), QString::number(port), QStringLiteral("--ui-dir"), uiDir,
+                        QStringLiteral("--parent-pid"), QString::number(QCoreApplication::applicationPid()),
                         launchedByAutostart ? QStringLiteral("--background") : QStringLiteral("--open-ui")});
     agent.setProcessChannelMode(QProcess::ForwardedErrorChannel);
 #if defined(Q_OS_LINUX)

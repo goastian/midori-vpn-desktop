@@ -55,7 +55,6 @@
 
       <nav class="nav" v-if="$route.path !== '/login'">
         <RouterLink to="/" class="nav-link" :class="{ active: $route.path === '/' }">{{ t('nav.vpn') }}</RouterLink>
-        <RouterLink to="/mesh" class="nav-link" :class="{ active: $route.path === '/mesh' }">{{ t('nav.mesh') }}</RouterLink>
         <RouterLink to="/settings" class="nav-link" :class="{ active: $route.path === '/settings' }">{{ t('nav.settings') }}</RouterLink>
       </nav>
       <main class="main" :class="{ 'main--login': $route.path === '/login' }">

@@ -35,13 +35,16 @@ import (
 // route their traffic through the mesh exit node.
 const localFwdPort = 8889
 
+// Mesh/exit nodes are not part of this MVP. This is a release constraint, not
+// a user preference or environment flag; old settings cannot enable it.
+const meshAvailable = false
+
 // Server is the local RPC HTTP server.
 type Server struct {
 	agent             *state.Agent
 	port              int
 	wgMgr             *wg.Manager
 	guard             *netguard.Guard
-	proxySrv          *proxy.Server
 	socks5Srv         *proxy.SOCKS5Server
 	proxyCtx          context.CancelFunc
 	localFwd          *proxy.LocalForwarder
@@ -250,6 +253,9 @@ func (s *Server) Init(ctx context.Context) error {
 // On a fresh install with no stored tokens this returns quickly without
 // doing anything — the OAuth callback will trigger mesh enable after login.
 func (s *Server) AutoEnableMesh(ctx context.Context) {
+	if !meshAvailable {
+		return
+	}
 	if s.settings != nil && s.settings.Get().Mesh.StartDisabled {
 		slog.Info("auto-mesh: skipped (user opted out)")
 		return
@@ -358,6 +364,9 @@ func (s *Server) handleSetTokens(w http.ResponseWriter, r *http.Request) {
 	// Auto-activate mesh on login (best-effort, non-blocking) unless the
 	// user has explicitly disabled mesh-at-startup.
 	go func() {
+		if !meshAvailable {
+			return
+		}
 		if s.settings != nil && s.settings.Get().Mesh.StartDisabled {
 			return
 		}

@@ -9,6 +9,20 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
 - Refreshed the supported Node 24 UI toolchain to ESLint Vue 10.11.0,
   happy-dom 20.14.5, TypeScript-ESLint 8.70.0 and Vite 8.3.0.
 
+### Security
+
+- Restrict agent grants and startup to network-only capabilities; harden
+  private runtime session files and use internally generated RPC tokens.
+  Direct system-resolver writes are disabled: DNS currently requires
+  systemd-resolved managing `/etc/resolv.conf`, not broader privileges.
+- Disable mesh/exit-node activation and hide sharing controls for the MVP,
+  including when old preferences requested automatic sharing.
+- Bind tray Disconnect to the current connection identity and rearm parent
+  supervision after executing a capability-enabled agent. Declare portable
+  RPM helper dependencies and make OpenVPN/strongSwan optional.
+- Use `vpn.astian.org` by default, refresh patched Go build dependencies and
+  narrow the AppArmor profile to match the network-only permission model.
+
 - Added a repository-local AGPL-3.0-or-later license, private vulnerability
   reporting policy and contribution guide; public status now distinguishes
   implemented source, artifact-specific certification and pending release

@@ -1,6 +1,6 @@
 module github.com/goastian/midorivpn-agent
 
-go 1.27
+go 1.27.4
 
 require (
 	github.com/coder/websocket v1.8.15
@@ -9,8 +9,8 @@ require (
 	github.com/quic-go/masque-go v0.5.0
 	github.com/quic-go/quic-go v0.62.0
 	github.com/yosida95/uritemplate/v3 v3.0.2
-	golang.org/x/crypto v0.56.0
-	golang.org/x/sys v0.47.0
+	golang.org/x/crypto v0.59.0
+	golang.org/x/sys v0.50.0
 	golang.zx2c4.com/wireguard v0.0.0-20260522210424-ecfc5a8d5446
 )
 
@@ -27,7 +27,7 @@ require (
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
 	github.com/valyala/fastjson v1.6.10 // indirect
-	golang.org/x/net v0.58.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
+	golang.org/x/text v0.44.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 )

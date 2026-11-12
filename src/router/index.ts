@@ -5,14 +5,13 @@ import { useAuthStore } from '../stores/auth'
 // auth store, the router, and shared infrastructure. Each view becomes its
 // own chunk fetched on first navigation.
 const Dashboard = () => import('../views/Dashboard.vue')
-const Mesh = () => import('../views/Mesh.vue')
 const Settings = () => import('../views/Settings.vue')
 const Login = () => import('../views/Login.vue')
 
 const routes = [
   { path: '/login', component: Login, meta: { public: true } },
   { path: '/', component: Dashboard },
-  { path: '/mesh', component: Mesh },
+  { path: '/mesh', redirect: '/' },
   { path: '/settings', component: Settings },
 ]
 

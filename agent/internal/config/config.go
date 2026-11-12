@@ -68,8 +68,8 @@ func Load() Config {
 // available through the normal precedence chain.
 func productionConfig() Config {
 	return Config{
-		APIURL:               "https://vpn.dorrejo.com",
-		AccountURL:           "https://vpn.dorrejo.com",
+		APIURL:               "https://vpn.astian.org",
+		AccountURL:           "https://vpn.astian.org",
 		AuthentikIssuer:      "https://accounts.astian.org/",
 		AuthentikClientID:    "Wbc5hsIaK6kDp4cCFvzTtgAnEc5qNfWWARMmYXTn",
 		AuthentikAuthURL:     "https://accounts.astian.org/application/o/authorize/",

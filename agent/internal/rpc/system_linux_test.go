@@ -14,9 +14,20 @@ func TestCapabilitySetUsesLeastPrivilegeByDefault(t *testing.T) {
 	}
 }
 
-func TestCapabilitySetAddsExtendedCapabilitiesOnlyWhenRequested(t *testing.T) {
-	if got, want := capabilitySet(true), "cap_net_admin,cap_net_raw,cap_dac_override,cap_linux_immutable=ep"; got != want {
-		t.Fatalf("extended capability set = %q, want %q", got, want)
+func TestCapabilitySetNeverGrantsFilesystemPowers(t *testing.T) {
+	if got, want := capabilitySet(true), "cap_net_admin,cap_net_raw=ep"; got != want {
+		t.Fatalf("legacy extended request = %q, want %q", got, want)
+	}
+}
+
+func TestFileCapabilitiesRejectsAnyAdditionalPowers(t *testing.T) {
+	for _, value := range []string{"", "cap_net_admin=ep", "cap_net_admin,cap_net_raw,cap_dac_override=ep", "cap_net_admin,cap_net_raw,cap_sys_admin=ep", "cap_net_admin,cap_net_raw=eip"} {
+		if fileCapabilitiesSafe("/usr/libexec/midorivpn-agent " + value) {
+			t.Fatalf("accepted %q", value)
+		}
+	}
+	if !fileCapabilitiesSafe("/usr/libexec/midorivpn-agent cap_net_admin,cap_net_raw=ep\n") {
+		t.Fatal("minimal file capabilities rejected")
 	}
 }
 

@@ -1,19 +1,6 @@
 <template>
   <div>
     <div class="card">
-      <div class="section-title">{{ t('settings.sectionMesh') }}</div>
-      <div class="row">
-        <div>
-          <div style="font-size:14px;">{{ t('settings.meshAutoStart') }}</div>
-          <div class="label" style="margin-top:4px;">{{ t('settings.meshAutoStartHint') }}</div>
-        </div>
-        <ToggleSwitch :checked="meshAutoStart" :label="t('settings.meshAutoStart')" :disabled="featuresLocked" @change="toggleMeshAutoStart" />
-      </div>
-      <div v-if="featuresLocked" class="setting-blocked-hint">{{ t('settings.permissionsRequired') }}</div>
-      <div v-if="meshSettingsError" class="error" style="margin-top:8px;" role="alert">{{ meshSettingsError }}</div>
-    </div>
-
-    <div class="card">
       <div class="section-title">{{ t('settings.protocolTitle') }}</div>
       <div class="row" style="flex-direction:column; align-items:flex-start; gap:8px;">
         <div>
@@ -136,14 +123,12 @@ const { t, locale } = useI18n()
 const appVersion = __APP_VERSION__
 
 const autostart = ref(false)
-const meshAutoStart = ref(true)
 const startMinimized = ref(false)
 const selectedProtocolPolicy = ref('smart_auto')
 const autostartError = ref<string | null>(null)
-const meshSettingsError = ref<string | null>(null)
 const uiSettingsError = ref<string | null>(null)
 const vpn = useVpnStore()
-const { featuresLocked, capsGranted, capsGranting, capsError, revertCaps } = useCaps()
+const { capsGranted, capsGranting, capsError, revertCaps } = useCaps()
 const revertResult = ref<'idle' | 'ok' | 'err'>('idle')
 const certificates = ref<DeviceCertificate[]>([])
 const certificatesLoading = ref(false)
@@ -246,10 +231,9 @@ onMounted(async () => {
   // Mesh boot preference comes from the agent settings store.
   try {
     const s = await agent.settings.get() as AgentSettings
-    meshAutoStart.value = !(s?.mesh?.start_disabled ?? false)
     startMinimized.value = s?.ui?.start_minimized ?? false
   } catch (e) {
-    meshSettingsError.value = toErrorMessage(e)
+    uiSettingsError.value = toErrorMessage(e)
   }
 })
 
@@ -264,27 +248,11 @@ async function toggleAutostart() {
   }
 }
 
-async function toggleMeshAutoStart() {
-  const next = !meshAutoStart.value
-  meshSettingsError.value = null
-  try {
-    await agent.settings.put({
-      mesh: { start_disabled: !next },
-      autostart: { enabled: autostart.value },
-      ui: { start_minimized: startMinimized.value },
-    })
-    meshAutoStart.value = next
-  } catch (e) {
-    meshSettingsError.value = toErrorMessage(e)
-  }
-}
-
 async function toggleStartMinimized() {
   const next = !startMinimized.value
   uiSettingsError.value = null
   try {
     await agent.settings.put({
-      mesh: { start_disabled: !meshAutoStart.value },
       autostart: { enabled: autostart.value },
       ui: { start_minimized: next },
     })

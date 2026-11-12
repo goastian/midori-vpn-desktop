@@ -246,6 +246,9 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Trigger mesh activation in background unless the user opted out.
 	go func() {
+		if !meshAvailable {
+			return
+		}
 		if s.settings != nil && s.settings.Get().Mesh.StartDisabled {
 			return
 		}

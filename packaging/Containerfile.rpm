@@ -2,7 +2,7 @@ FROM docker.io/library/node:24.20.0-bookworm-slim@sha256:6642ef280aebc09c4541bee
 
 RUN npm install --global npm@12.0.2
 
-FROM docker.io/library/golang:1.27.0-bookworm@sha256:ba5ef6614ca131b80a635fc6a7b715d9ee8a7f333debdbb81afb68259c7d48d4 AS go_runtime
+FROM docker.io/library/golang:1.27.4-bookworm@sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea AS go_runtime
 
 FROM docker.io/library/fedora:44@sha256:be9d65e2344d805cc11114319c685ecaa96b6d9b4350a0a6460cdb931babbd19
 

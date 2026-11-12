@@ -48,19 +48,24 @@ func installedCapabilitiesGranted() bool {
 	if err != nil {
 		return false
 	}
-	text := string(out)
-	for _, capability := range []string{"cap_net_admin", "cap_net_raw", "cap_dac_override", "cap_linux_immutable"} {
-		if !strings.Contains(text, capability) {
-			return false
-		}
+	return fileCapabilitiesSafe(string(out))
+}
+
+func fileCapabilitiesSafe(output string) bool {
+	fields := strings.Fields(output)
+	if len(fields) != 2 {
+		return false
 	}
-	return true
+	grant, ok := strings.CutSuffix(fields[1], "=ep")
+	if !ok {
+		return false
+	}
+	names := strings.Split(grant, ",")
+	return len(names) == 2 && ((names[0] == "cap_net_admin" && names[1] == "cap_net_raw") || (names[1] == "cap_net_admin" && names[0] == "cap_net_raw"))
 }
 
 func capabilitySet(extended bool) string {
-	if extended {
-		return "cap_net_admin,cap_net_raw,cap_dac_override,cap_linux_immutable=ep"
-	}
+	// Older UIs may still send extended=true; never grant filesystem powers.
 	return "cap_net_admin,cap_net_raw=ep"
 }
 
@@ -159,11 +164,20 @@ func setAutostart(enabled bool, port int, uiDir string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(body), 0o600); err != nil {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".midorivpn-autostart-*")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	defer os.Remove(tmp.Name())
+	_, err = tmp.WriteString(body)
+	closeErr := tmp.Close()
+	if err != nil {
+		return err
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	return os.Rename(tmp.Name(), path)
 }
 
 func inspectSystemSecurity() []securityIssue {

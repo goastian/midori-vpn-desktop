@@ -3,7 +3,7 @@
 //
 // Used for preferences the user explicitly requested:
 //   - Mesh.StartDisabled: when true, the agent does NOT auto-enable the
-//     mesh node on startup. Default false (mesh is always-on).
+//     mesh node on startup. Default true; mesh is unavailable in the MVP.
 //   - Autostart.Enabled: tracks whether the user opted out of XDG autostart.
 //     The actual XDG entry is managed by the desktop shell.
 //   - UI.StartMinimized: starts the Qt desktop shell in the system tray when
@@ -48,8 +48,7 @@ type VPNSettings struct {
 
 type MeshSettings struct {
 	// StartDisabled, when true, prevents auto-enable of the mesh on agent
-	// startup. The default (false) honours the product decision: "always ON
-	// unless explicit opt-out".
+	// startup. The MVP additionally blocks all mesh activation at the RPC layer.
 	StartDisabled bool `json:"start_disabled"`
 }
 
@@ -66,7 +65,7 @@ type UISettings struct {
 // defaults returns the product-mandated defaults.
 func defaults() Settings {
 	return Settings{
-		Mesh:      MeshSettings{StartDisabled: false},
+		Mesh:      MeshSettings{StartDisabled: true},
 		Autostart: AutostartSettings{Enabled: true},
 		UI:        UISettings{StartMinimized: false},
 		VPN:       VPNSettings{SelectionMode: SelectionModeAutomatic},

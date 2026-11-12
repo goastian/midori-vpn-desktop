@@ -40,18 +40,13 @@ export function useCaps() {
     * On success, restarts the agent process so it picks up the newly-applied
     * file capabilities in its effective set.
    */
-  /**
-   * Single-prompt grant. On Linux we always request the extended cap set so
-   * the agent can manage DNS regardless of the host's resolver (systemd-
-   * resolved or plain /etc/resolv.conf). This makes the post-login UX a
-   * single polkit dialog and avoids the "permission denied" on /etc/resolv.conf
-   * that surfaces when only the minimal caps are applied on resolvconf hosts.
-   */
+  // Authorize only network capabilities. Unsupported DNS backends must not
+  // be made to work by granting filesystem override privileges.
   async function grantCapsSmart(): Promise<boolean> {
     capsGranting.value = true
     capsError.value = ''
     try {
-      const ok = await invokePlatform<boolean>('grant_dns_protection_caps')
+      const ok = await invokePlatform<boolean>('grant_agent_permissions')
       if (!ok) {
         capsError.value = text('errors.capsApplyFailed')
         return false

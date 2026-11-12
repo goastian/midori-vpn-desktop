@@ -27,6 +27,8 @@ describe('useCaps', () => {
 
     await expect(useCaps().grantCapsSmart()).resolves.toBe(true)
 
+    expect(invoke).toHaveBeenNthCalledWith(1, 'grant_agent_permissions')
+    expect(invoke).not.toHaveBeenCalledWith('grant_dns_protection_caps')
     expect(changed).toHaveBeenCalledOnce()
     window.removeEventListener(CAPABILITIES_CHANGED_EVENT, changed)
   })

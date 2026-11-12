@@ -2,6 +2,12 @@ package settings
 
 import "testing"
 
+func TestMeshDefaultsDisabled(t *testing.T) {
+	if !defaults().Mesh.StartDisabled {
+		t.Fatal("mesh must default disabled")
+	}
+}
+
 func TestUIStartMinimizedPersists(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 

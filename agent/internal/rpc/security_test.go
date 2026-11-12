@@ -15,22 +15,14 @@ import (
 // Agent RPC token gate
 // ---------------------------------------------------------------------------
 
-func TestResolveAgentTokenRequiresTokenByDefault(t *testing.T) {
-	t.Setenv("MIDORIVPN_AGENT_TOKEN", "")
-	_, err := resolveAgentToken()
-	if err == nil || !strings.Contains(err.Error(), "MIDORIVPN_AGENT_TOKEN") {
-		t.Fatalf("expected missing token error, got %v", err)
+func TestAgentTokenRequiresFullRandomSessionValue(t *testing.T) {
+	for _, token := range []string{"", "secret", strings.Repeat("z", 64), strings.Repeat("a", 62)} {
+		if err := validateAgentToken(token); err == nil {
+			t.Fatal("accepted missing or malformed session token")
+		}
 	}
-}
-
-func TestResolveAgentTokenReturnsConfiguredToken(t *testing.T) {
-	t.Setenv("MIDORIVPN_AGENT_TOKEN", "secret")
-	token, err := resolveAgentToken()
-	if err != nil {
-		t.Fatalf("expected configured token to pass: %v", err)
-	}
-	if token != "secret" {
-		t.Fatalf("expected token, got %q", token)
+	if err := validateAgentToken(strings.Repeat("ab", 32)); err != nil {
+		t.Fatal(err)
 	}
 }
 

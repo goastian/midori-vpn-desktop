@@ -5,11 +5,24 @@ profile midorivpn-agent /usr/libexec/midorivpn-agent {
   #include <abstractions/nameservice>
   #include <abstractions/openssl>
   #include <abstractions/ssl_certs>
+  #include <abstractions/dbus-session-strict>
+  #include <abstractions/dbus-strict>
+
+  dbus (send)
+    bus=session
+    path=/org/freedesktop/secrets{,/**}
+    peer=(name=org.freedesktop.secrets),
+  dbus (receive)
+    bus=session
+    path=/org/freedesktop/secrets{,/**}
+    peer=(name=org.freedesktop.secrets),
+  dbus (send)
+    bus=system
+    path=/org/freedesktop/resolve1{,/**}
+    peer=(name=org.freedesktop.resolve1),
 
   capability net_admin,
   capability net_raw,
-  capability dac_override,
-  capability linux_immutable,
 
   /dev/net/tun rw,
   network inet stream,
@@ -24,6 +37,13 @@ profile midorivpn-agent /usr/libexec/midorivpn-agent {
 
   owner @{HOME}/.config/midorivpn/ rw,
   owner @{HOME}/.config/midorivpn/** rwk,
+  owner @{HOME}/.local/state/midorivpn/ rw,
+  owner @{HOME}/.local/state/midorivpn/** rwk,
+  owner @{HOME}/.config/autostart/ rw,
+  owner @{HOME}/.config/autostart/midorivpn.desktop rw,
+  owner @{HOME}/.config/autostart/.midorivpn-autostart-* rw,
+  owner /run/user/[0-9]*/ r,
+  owner /run/user/[0-9]*/.midorivpn-* rw,
   owner /run/user/[0-9]*/midorivpn-agent.lock rwk,
   owner /run/user/[0-9]*/midorivpn-agent.token rwk,
   owner /run/user/[0-9]*/midorivpn-launch.html rwk,
@@ -42,20 +62,24 @@ profile midorivpn-agent /usr/libexec/midorivpn-agent {
   /usr/sbin/openvpn rix,
   /usr/libexec/ipsec/charon rix,
   /usr/lib/ipsec/charon rix,
+  /usr/libexec/ipsec/charon-systemd rix,
+  /usr/lib/ipsec/charon-systemd rix,
   /usr/sbin/swanctl rix,
   /usr/bin/swanctl rix,
   /etc/strongswan.d/** r,
   /usr/lib64/ipsec/** mr,
   /usr/bin/resolvectl rix,
   /bin/resolvectl rix,
-  /usr/bin/chattr rix,
-  /bin/chattr rix,
+  /usr/sbin/getcap rix,
+  /usr/bin/getcap rix,
+  /sbin/getcap rix,
+  /bin/getcap rix,
   /usr/bin/systemctl rix,
   /bin/systemctl rix,
   /usr/bin/pkexec Pixr,
   /usr/bin/xdg-open rix,
 
-  /etc/resolv.conf rw,
+  /etc/resolv.conf r,
   /proc/sys/net/ipv4/ip_forward rw,
   /proc/sys/net/ipv6/conf/*/forwarding rw,
   /proc/*/net/route r,

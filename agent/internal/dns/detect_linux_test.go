@@ -24,8 +24,8 @@ func TestKindNeedsExtraCaps(t *testing.T) {
 	if KindResolved.NeedsExtraCaps() {
 		t.Error("resolved must not require extra caps")
 	}
-	if !KindResolvconf.NeedsExtraCaps() {
-		t.Error("resolvconf must require extra caps")
+	if KindResolvconf.NeedsExtraCaps() {
+		t.Error("unsupported resolvconf must never request filesystem privileges")
 	}
 	if KindNone.NeedsExtraCaps() {
 		t.Error("none must not require extra caps")

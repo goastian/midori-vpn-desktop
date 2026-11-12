@@ -1,13 +1,12 @@
 // Package dns abstracts the platform-specific way the agent installs and
 // restores DNS configuration while the VPN tunnel is active.
 //
-// Two Linux backends are provided:
+// On Linux:
 //   - "resolved":  talks to systemd-resolved via resolvectl. Requires no extra
 //     Linux capabilities beyond CAP_NET_ADMIN/CAP_NET_RAW already used to
 //     configure the WireGuard interface.
-//   - "resolvconf": writes /etc/resolv.conf directly and marks it immutable
-//     with chattr +i to defeat NetworkManager / resolvconf overwrites.
-//     Requires CAP_DAC_OVERRIDE and CAP_LINUX_IMMUTABLE.
+//   - "resolvconf": unsupported; connection fails closed rather than granting
+//     the agent filesystem override capabilities to write system files.
 //
 // Detect() picks the safest available backend at runtime. The wg manager
 // only cares about the Backend interface.
@@ -21,7 +20,7 @@ const (
 	KindNone Kind = iota
 	// KindResolved uses systemd-resolved via resolvectl (no extra caps).
 	KindResolved
-	// KindResolvconf edits /etc/resolv.conf + chattr +i (needs extra caps).
+	// KindResolvconf identifies an unsupported direct-file resolver.
 	KindResolvconf
 )
 
@@ -37,10 +36,10 @@ func (k Kind) String() string {
 	}
 }
 
-// NeedsExtraCaps reports whether the backend requires CAP_DAC_OVERRIDE and
-// CAP_LINUX_IMMUTABLE on the agent binary to function correctly.
+// NeedsExtraCaps is retained for older RPC clients. No DNS backend may request
+// filesystem capabilities; unsupported backends return an error from Apply.
 func (k Kind) NeedsExtraCaps() bool {
-	return k == KindResolvconf
+	return false
 }
 
 // Backend installs and restores DNS configuration for the active tunnel.

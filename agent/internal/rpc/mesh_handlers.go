@@ -52,6 +52,9 @@ func (s *Server) handleMeshEnable(w http.ResponseWriter, r *http.Request) {
 // enableMesh activates this node as a mesh member + exit node.
 // It is idempotent: calling it when mesh is already active is a no-op.
 func (s *Server) enableMesh(ctx context.Context) error {
+	if !meshAvailable {
+		return fmt.Errorf("mesh is unavailable in this release")
+	}
 	s.meshMu.Lock()
 	defer s.meshMu.Unlock()
 
@@ -159,7 +162,6 @@ func (s *Server) handleMeshDisable(w http.ResponseWriter, r *http.Request) {
 	if s.proxyCtx != nil {
 		s.proxyCtx()
 		s.proxyCtx = nil
-		s.proxySrv = nil
 		s.socks5Srv = nil
 	}
 

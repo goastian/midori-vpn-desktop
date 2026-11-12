@@ -6,17 +6,23 @@ package main
 func restartArgs(args []string) []string {
 	clean := make([]string, 0, len(args)+1)
 	backgroundPresent := false
+	resumePresent := false
 	for _, arg := range args {
 		switch arg {
 		case "--open-ui", "-open-ui":
 			continue
 		case "--background", "-background", "--autostart", "-autostart":
 			backgroundPresent = true
+		case "--resume-session", "-resume-session":
+			resumePresent = true
 		}
 		clean = append(clean, arg)
 	}
 	if !backgroundPresent {
 		clean = append(clean, "--background")
+	}
+	if !resumePresent {
+		clean = append(clean, "--resume-session")
 	}
 	return clean
 }

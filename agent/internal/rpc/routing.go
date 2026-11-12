@@ -4,11 +4,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -33,12 +33,12 @@ func setLocalSecurityHeaders(w http.ResponseWriter) {
 	w.Header().Set("Referrer-Policy", "no-referrer")
 }
 
-func resolveAgentToken() (string, error) {
-	token := os.Getenv("MIDORIVPN_AGENT_TOKEN")
-	if token == "" {
-		return "", fmt.Errorf("MIDORIVPN_AGENT_TOKEN is required")
+func validateAgentToken(token string) error {
+	decoded, err := hex.DecodeString(token)
+	if err != nil || len(decoded) != 32 {
+		return fmt.Errorf("a fresh 256-bit agent session token is required")
 	}
-	return token, nil
+	return nil
 }
 
 func isLoopbackRemote(remoteAddr string) bool {
@@ -127,6 +127,15 @@ func (s *Server) newMux(agentToken string) http.Handler {
 	wrapSSE := func(h http.Handler) http.Handler {
 		return requireLocalAuth(withLocalCORS(h), agentToken, true)
 	}
+	wrapMesh := func(h http.HandlerFunc) http.Handler {
+		return wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !meshAvailable {
+				writeError(w, http.StatusNotImplemented, "mesh_unavailable_in_this_release")
+				return
+			}
+			h(w, r)
+		}))
+	}
 
 	mux.Handle("GET /status", wrap(http.HandlerFunc(s.handleStatus)))
 	mux.Handle("GET /events", wrapSSE(http.HandlerFunc(s.handleSSE)))
@@ -145,17 +154,17 @@ func (s *Server) newMux(agentToken string) http.Handler {
 	mux.Handle("POST /vpn/connect", wrap(http.HandlerFunc(s.handleVPNConnect)))
 	mux.Handle("POST /vpn/disconnect", wrap(http.HandlerFunc(s.handleVPNDisconnect)))
 
-	mux.Handle("POST /mesh/enable", wrap(http.HandlerFunc(s.handleMeshEnable)))
-	mux.Handle("POST /mesh/disable", wrap(http.HandlerFunc(s.handleMeshDisable)))
+	mux.Handle("POST /mesh/enable", wrapMesh(s.handleMeshEnable))
+	mux.Handle("POST /mesh/disable", wrapMesh(s.handleMeshDisable))
+	mux.Handle("GET /mesh/exit-nodes", wrapMesh(s.handleListExitNodes))
+	mux.Handle("POST /mesh/exit-node", wrapMesh(s.handleSetExitNode))
+	mux.Handle("DELETE /mesh/exit-node", wrapMesh(s.handleClearExitNode))
+	mux.Handle("POST /mesh/full-tunnel/enable", wrapMesh(s.handleMeshFullTunnelEnable))
+	mux.Handle("POST /mesh/full-tunnel/disable", wrapMesh(s.handleMeshFullTunnelDisable))
 
 	mux.Handle("GET /settings", wrap(http.HandlerFunc(s.handleGetSettings)))
 	mux.Handle("PUT /settings", wrap(http.HandlerFunc(s.handlePutSettings)))
 	mux.Handle("POST /settings", wrap(http.HandlerFunc(s.handlePutSettings)))
-	mux.Handle("GET /mesh/exit-nodes", wrap(http.HandlerFunc(s.handleListExitNodes)))
-	mux.Handle("POST /mesh/exit-node", wrap(http.HandlerFunc(s.handleSetExitNode)))
-	mux.Handle("DELETE /mesh/exit-node", wrap(http.HandlerFunc(s.handleClearExitNode)))
-	mux.Handle("POST /mesh/full-tunnel/enable", wrap(http.HandlerFunc(s.handleMeshFullTunnelEnable)))
-	mux.Handle("POST /mesh/full-tunnel/disable", wrap(http.HandlerFunc(s.handleMeshFullTunnelDisable)))
 
 	mux.Handle("GET /public-ip", wrap(http.HandlerFunc(s.handlePublicIP)))
 	mux.Handle("GET /dns/status", wrap(http.HandlerFunc(s.handleDNSStatus)))
@@ -178,21 +187,22 @@ func (s *Server) newMux(agentToken string) http.Handler {
 }
 
 // Start begins serving. It blocks until ctx is cancelled.
-func (s *Server) Start(ctx context.Context) error {
+func (s *Server) Start(ctx context.Context, agentToken string) error {
 	defer s.authHTTPClient.CloseIdleConnections()
 	defer s.publicIPClient.CloseIdleConnections()
 	defer s.edgeProbeClient.CloseIdleConnections()
 	defer s.apiClient.CloseIdleConnections()
-	agentToken, err := resolveAgentToken()
-	if err != nil {
+	if err := validateAgentToken(agentToken); err != nil {
 		return err
 	}
 
-	go func() {
-		if err := s.localFwd.Start(ctx); err != nil {
-			slog.Error("local forwarder error", "err", err)
-		}
-	}()
+	if meshAvailable {
+		go func() {
+			if err := s.localFwd.Start(ctx); err != nil {
+				slog.Error("local forwarder error", "err", err)
+			}
+		}()
+	}
 	go s.runConnectionCleanup(ctx)
 
 	srv := httpx.NewAPIServer(fmt.Sprintf("127.0.0.1:%d", s.port), s.newMux(agentToken))

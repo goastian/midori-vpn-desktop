@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/goastian/midorivpn-agent/internal/caps"
+	"github.com/goastian/midorivpn-agent/internal/dns"
 	"github.com/goastian/midorivpn-agent/internal/httpx"
 )
 
@@ -39,26 +39,16 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, snap)
 }
 
-// handleDNSStatus reports the active DNS backend so the UI can decide whether
-// to prompt the user for the extra CAP_DAC_OVERRIDE + CAP_LINUX_IMMUTABLE
-// capabilities required by the resolvconf backend.
+// handleDNSStatus never suggests granting broad filesystem capabilities.
 func (s *Server) handleDNSStatus(w http.ResponseWriter, r *http.Request) {
 	kind := s.wgMgr.DNSBackendKind()
-	needsExtra := kind.NeedsExtraCaps()
-	missing := []string{}
-	if needsExtra {
-		if !caps.HasDacOverride() {
-			missing = append(missing, "cap_dac_override")
-		}
-		if !caps.HasLinuxImmutable() {
-			missing = append(missing, "cap_linux_immutable")
-		}
-	}
+	supported := kind == dns.KindResolved
 	writeJSON(w, map[string]any{
 		"backend":          kind.String(),
-		"needs_extra_caps": needsExtra,
-		"caps_missing":     missing,
-		"caps_ok":          len(missing) == 0,
+		"needs_extra_caps": false,
+		"caps_missing":     []string{},
+		"caps_ok":          supported,
+		"supported":        supported,
 	})
 }
 

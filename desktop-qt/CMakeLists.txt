@@ -20,3 +20,10 @@ target_link_libraries(midorivpn-desktop-ui PRIVATE
 )
 
 install(TARGETS midorivpn-desktop-ui RUNTIME DESTINATION libexec)
+
+include(CTest)
+if(BUILD_TESTING)
+  qt_add_executable(rpc-contract-test rpc_contract_test.cpp)
+  target_link_libraries(rpc-contract-test PRIVATE Qt6::Core)
+  add_test(NAME disconnect-contract COMMAND rpc-contract-test)
+endif()

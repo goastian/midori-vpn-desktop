@@ -11,7 +11,7 @@ func TestProductionConfigIsComplete(t *testing.T) {
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("production configuration must be usable without a config file: %v", err)
 	}
-	if cfg.APIURL != "https://vpn.dorrejo.com" {
+	if cfg.APIURL != "https://vpn.astian.org" {
 		t.Fatalf("production APIURL = %q", cfg.APIURL)
 	}
 }

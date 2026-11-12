@@ -9,15 +9,15 @@ BuildArch:      x86_64
 Requires:       bash
 Requires:       curl
 Requires:       gawk
-Requires:       e2fsprogs
 Requires:       jq
-Requires:       libcap-progs
+Requires:       /usr/sbin/setcap
+Requires:       /usr/sbin/getcap
 Requires:       nftables
-Requires:       openvpn >= 2.7
-Requires:       strongswan >= 6.0
+Suggests:       openvpn >= 2.7
+Suggests:       strongswan >= 6.0
 Requires:       polkit
+Requires:       /usr/bin/pkexec
 Requires:       /usr/bin/ip
-Requires:       wireguard-tools
 Requires:       xdg-utils
 # Qt shared-library capabilities are derived automatically from the tray
 # executable. Do not hard-code distribution-specific Qt package names.
@@ -25,8 +25,10 @@ Recommends:     checkpolicy
 Recommends:     policycoreutils
 
 %description
-MidoriVPN is the Linux client for secure WireGuard, authenticated encapsulated
-transports, OpenVPN 2.7/DCO and strongSwan 6/IKEv2 EAP-TLS gateways. The package includes
+MidoriVPN is the Linux client for WireGuard and authenticated encapsulated
+transports. OpenVPN and strongSwan are optional and require certified gateways.
+DNS protection currently requires systemd-resolved managing /etc/resolv.conf.
+The package includes
 a native Go agent and a Qt 6 system-tray integration that opens the
 authenticated Vue dashboard.
 
