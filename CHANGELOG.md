@@ -8,6 +8,8 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
 
 - Refreshed the supported Node 24 UI toolchain to ESLint Vue 10.11.0,
   happy-dom 21.0.4, TypeScript-ESLint 8.70.0 and Vite 8.3.5.
+- Align CI Staticcheck with the pinned local 2026.2.2 release so it can read
+  Go 1.27 export data; retain all agent analysis and security gates.
 
 ### Security
 

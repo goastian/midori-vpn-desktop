@@ -26,7 +26,7 @@ jobs:
 
       - name: Run Staticcheck on Agent
         working-directory: agent
-        run: go run honnef.co/go/tools/cmd/staticcheck@2026.2.1 ./...
+        run: go run honnef.co/go/tools/cmd/staticcheck@2026.2.2 ./...
 
       - name: Run Govulncheck on Agent
         working-directory: agent
