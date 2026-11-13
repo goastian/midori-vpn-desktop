@@ -5,34 +5,34 @@
   "type": "module",
   "description": "Secure Midori VPN client for Linux",
   "main": "index.js",
-  "packageManager": "npm@12.0.2",
+  "packageManager": "npm@12.2.2",
   "engines": {
     "node": ">=24.19.0 <25"
   },
   "dependencies": {
-    "pinia": "^4.0.3",
-    "vue": "3.5.42",
-    "vue-i18n": "11.4.17",
-    "vue-router": "5.3.1"
+    "pinia": "^4.1.0",
+    "vue": "3.5.45",
+    "vue-i18n": "11.4.19",
+    "vue-router": "5.5.0"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@vitejs/plugin-vue": "^6.0.8",
-    "@vitest/coverage-v8": "5.0.5",
-    "@vue/test-utils": "2.5.0",
-    "eslint": "10.10.0",
-    "eslint-plugin-vue": "10.11.0",
-    "globals": "17.12.0",
+    "@vitejs/plugin-vue": "^6.0.11",
+    "@vitest/coverage-v8": "5.1.0",
+    "@vue/test-utils": "2.5.1",
+    "eslint": "10.14.0",
+    "eslint-plugin-vue": "10.12.1",
+    "globals": "17.14.0",
     "happy-dom": "21.0.4",
     "typescript": "^6.0.3",
-    "typescript-eslint": "8.70.0",
-    "vite": "8.3.5",
-    "vitest": "5.0.5",
-    "vue-tsc": "^3.3.11"
+    "typescript-eslint": "8.72.2",
+    "vite": "8.3.8",
+    "vitest": "5.1.0",
+    "vue-tsc": "^3.3.14"
   },
   "overrides": {
-    "glob": "14.0.3",
-    "minimatch": "11.0.3"
+    "glob": "14.0.6",
+    "minimatch": "11.0.8"
   },
   "scripts": {
     "dev": "vite",

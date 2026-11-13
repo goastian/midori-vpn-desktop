@@ -6,6 +6,11 @@ All notable MidoriVPN Desktop changes are documented here.
 
 Major Release with a verified WireGuard transport contract, native Go 1.27 agent, and hardened Linux RPM package.
 
+- Refresh Node 24.22.3/npm 12.2.2, Vue/Router/Pinia/i18n, Vite 8.3.8/Vitest
+  5.1, compatible lint/type tooling and the Fedora 44 RPM builder image.
+- Refresh JWX, D-Bus, WireGuard and compatible Go transitives; align
+  Govulncheck 1.9, Syft 1.57.1 and verified CI Action pins. Preserve the
+  network-only privilege model and deliberately pinned QUIC/MASQUE pair.
 - Refreshed the supported Node 24 UI toolchain to ESLint Vue 10.11.0,
   happy-dom 21.0.4, TypeScript-ESLint 8.70.0 and Vite 8.3.5.
 - Align CI Staticcheck with the pinned local 2026.2.2 release so it can read

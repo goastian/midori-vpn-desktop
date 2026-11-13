@@ -4,7 +4,7 @@ set -euo pipefail
 
 tool="${1:-all}"
 
-: "${GOVULNCHECK_VERSION:=v1.3.0}"
+: "${GOVULNCHECK_VERSION:=v1.9.0}"
 
 install_govulncheck() {
   go install "golang.org/x/vuln/cmd/govulncheck@$GOVULNCHECK_VERSION"

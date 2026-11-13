@@ -3,8 +3,8 @@ set -Eeuo pipefail
 
 DESKTOP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="${DESKTOP_DIR}/dist-packages"
-FEDORA_IMAGE="docker.io/library/fedora:44@sha256:be9d65e2344d805cc11114319c685ecaa96b6d9b4350a0a6460cdb931babbd19"
-SYFT_IMAGE="ghcr.io/anchore/syft@sha256:41f8289664101d6ebab30a97ac8df6b6f86b92d8343285ca90f428e2bc353106"
+FEDORA_IMAGE="docker.io/library/fedora:44@sha256:15da97ed9aa94dd3d92c3925eb89520f6c80e07ea7ee24cba848d1f8b6912b3e"
+SYFT_IMAGE="ghcr.io/anchore/syft@sha256:03215d0e98b661d0ecbc8575dbc14d65be1743b5de5df6410aecb7e80f95b060"
 PUBLIC_KEY="${DIST_DIR}/RPM-GPG-KEY-midorivpn"
 
 for command_name in date git jq podman sha256sum; do
