@@ -7,7 +7,7 @@ All notable MidoriVPN Desktop changes are documented here.
 Major Release with a verified WireGuard transport contract, native Go 1.27 agent, and hardened Linux RPM package.
 
 - Refreshed the supported Node 24 UI toolchain to ESLint Vue 10.11.0,
-  happy-dom 20.14.5, TypeScript-ESLint 8.70.0 and Vite 8.3.0.
+  happy-dom 21.0.4, TypeScript-ESLint 8.70.0 and Vite 8.3.5.
 
 ### Security
 
@@ -22,6 +22,18 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
   RPM helper dependencies and make OpenVPN/strongSwan optional.
 - Use `vpn.astian.org` by default, refresh patched Go build dependencies and
   narrow the AppArmor profile to match the network-only permission model.
+- Updated `vue-i18n` to 11.4.17, removing high-severity `@intlify` advisories
+  where `escapeParameter` did not fully prevent XSS through translation
+  message parameters, including via `srcdoc` and mixed named/list arguments.
+- Updated `vite` to 8.3.5 and `vitest`/`@vitest/coverage-v8` to 5.0.5,
+  removing high-severity `vite`/`launch-editor` advisories and a moderate
+  `@vitest/mocker` code-injection advisory, all development-only.
+- Updated `happy-dom` to 21.0.4, removing high-severity SSRF and incomplete
+  code-execution-fix advisories in the Vitest DOM test environment.
+- Added `glob` and `minimatch` overrides (14.0.3 / 11.0.3) to the transitive
+  ESLint/TypeScript-ESLint toolchain, removing a high-severity `source-map-js`
+  event-loop denial-of-service advisory pulled in via `vue` and moderate
+  `glob`/`minimatch` denial-of-service advisories, all development-only.
 
 - Added a repository-local AGPL-3.0-or-later license, private vulnerability
   reporting policy and contribution guide; public status now distinguishes
