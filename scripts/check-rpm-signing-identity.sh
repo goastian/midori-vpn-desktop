@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-EXPECTED_PRIMARY_FINGERPRINT="BE000EFBCD8F4CDA53FC1A9F13FC1FEEE3315359"
-EXPECTED_SIGNING_FINGERPRINT="84218F95A58E644EDB6947336CF4082EE316F221"
+EXPECTED_PRIMARY_FINGERPRINT="F848EF47481B45DA34469E6BAF9D3E9CF7E34163"
+EXPECTED_SIGNING_FINGERPRINT="C6833E4CA9141C07AD1564FCB5382507F46384A6"
 
 command -v gpg >/dev/null || { echo "error: gpg is required" >&2; exit 1; }
 
@@ -13,24 +13,29 @@ if ! secret_listing="$(gpg --batch --with-colons --fingerprint --fingerprint \
   exit 1
 fi
 
-mapfile -t fingerprints < <(awk -F: '$1 == "fpr" {print toupper($10)}' <<<"${secret_listing}")
-contains_fingerprint() {
-  local expected="$1"
-  local fingerprint
-  for fingerprint in "${fingerprints[@]}"; do
-    [[ "${fingerprint}" == "${expected}" ]] && return 0
-  done
-  return 1
-}
-
-contains_fingerprint "${EXPECTED_PRIMARY_FINGERPRINT}" || {
-  echo "error: RPM primary fingerprint does not match the established trust anchor" >&2
+if ! awk -F: \
+  -v primary="${EXPECTED_PRIMARY_FINGERPRINT}" \
+  -v signing="${EXPECTED_SIGNING_FINGERPRINT}" \
+  -v now="$(date +%s)" '
+  function active() {
+    return validity !~ /^(r|e|d|i)$/ && index(capabilities, "D") == 0 &&
+      (expires == "" || expires == "0" || (expires ~ /^[0-9]+$/ && expires > now))
+  }
+  $1 == "sec" || $1 == "ssb" {
+    kind = $1; validity = $2; expires = $7; capabilities = $12; available = $15
+  }
+  $1 == "fpr" && kind == "sec" && toupper($10) == primary {
+    primary_ok = active() && index(capabilities, "c") > 0
+  }
+  $1 == "fpr" && kind == "ssb" && toupper($10) == signing {
+    signing_ok = active() && index(capabilities, "s") > 0 &&
+      available != "" && available != "#"
+  }
+  END { exit !(primary_ok && signing_ok) }
+' <<<"${secret_listing}"; then
+  echo "error: the trusted RPM identity and an active, available signing subkey are required" >&2
   exit 1
-}
-contains_fingerprint "${EXPECTED_SIGNING_FINGERPRINT}" || {
-  echo "error: the established RPM signing subkey is unavailable" >&2
-  exit 1
-}
+fi
 
 requested_key="${RPM_SIGNING_KEY_ID:-${EXPECTED_PRIMARY_FINGERPRINT}}"
 requested_key="${requested_key^^}"

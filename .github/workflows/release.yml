@@ -28,6 +28,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Require the approved tag and explicit confirmation
         env:
@@ -35,15 +36,17 @@ jobs:
           CORE_LICENSE_COMMIT: ${{ inputs.core_license_commit }}
         run: |
           set -Eeuo pipefail
+          test "$GITHUB_REPOSITORY" = "goastian/midori-vpn-desktop"
           test "$GITHUB_REF" = "refs/tags/v2.0.0"
           test "$CONFIRM_SIGNING" = "sign-v2.0.0"
           test "$(node -p "require('./package.json').version")" = "2.0.0"
           git tag --points-at HEAD | grep -Fx "v2.0.0"
           test "$(git cat-file -t refs/tags/v2.0.0)" = "tag"
+          test "$(git rev-list -n 1 v2.0.0)" = "$GITHUB_SHA"
           [[ "$CORE_LICENSE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
 
   build-signed-evidence:
-    name: Build and sign private RPM evidence
+    name: Build and sign approved RPM evidence
     needs: validate-release-ref
     runs-on: ubuntu-24.04
     environment:
@@ -53,6 +56,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Require the environment signing switch
         env:
@@ -73,17 +77,32 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gnupg jq podman rpm
 
-      - name: Import the established RPM signing identity
-        env:
-          RPM_SIGNING_PRIVATE_KEY: ${{ secrets.RPM_SIGNING_PRIVATE_KEY }}
+      - name: Prepare an isolated private keyring
         run: |
           set -Eeuo pipefail
+          keyring="$(mktemp -d "$RUNNER_TEMP/midorivpn-rpm-signing.XXXXXX")"
+          chmod 0700 "$keyring"
+          printf 'GNUPGHOME=%s\n' "$keyring" >> "$GITHUB_ENV"
+
+      - name: Import the protected RPM signing subkey
+        env:
+          RPM_SIGNING_PRIVATE_KEY: ${{ secrets.RPM_SIGNING_PRIVATE_KEY }}
+          RPM_SIGNING_PASSPHRASE: ${{ secrets.RPM_SIGNING_PASSPHRASE }}
+        run: |
+          set -Eeuo pipefail
+          umask 077
           test -n "$RPM_SIGNING_PRIVATE_KEY"
-          printf '%s' "$RPM_SIGNING_PRIVATE_KEY" | gpg --batch --import
+          test -n "$RPM_SIGNING_PASSPHRASE"
+          test -d "$GNUPGHOME"
+          key_file="$(mktemp "$RUNNER_TEMP/midorivpn-rpm-import.XXXXXX")"
+          trap 'rm -f -- "$key_file"' EXIT
+          printf '%s' "$RPM_SIGNING_PRIVATE_KEY" > "$key_file"
+          printf '%s\n' "$RPM_SIGNING_PASSPHRASE" |
+            gpg --batch --pinentry-mode loopback --passphrase-fd 0 --import "$key_file"
 
       - name: Verify the exact trust identity before building
         env:
-          RPM_SIGNING_KEY_ID: BE000EFBCD8F4CDA53FC1A9F13FC1FEEE3315359
+          RPM_SIGNING_KEY_ID: F848EF47481B45DA34469E6BAF9D3E9CF7E34163
         run: bash scripts/check-rpm-signing-identity.sh
 
       - name: Define the reproducible build epoch
@@ -92,8 +111,18 @@ jobs:
       - name: Build signed RPM and release evidence
         env:
           MIDORIVPN_LICENSE_FILE: ${{ github.workspace }}/.release-license/LICENSE
-          RPM_SIGNING_KEY_ID: BE000EFBCD8F4CDA53FC1A9F13FC1FEEE3315359
+          RPM_SIGNING_KEY_ID: F848EF47481B45DA34469E6BAF9D3E9CF7E34163
+          RPM_SIGNING_PASSPHRASE: ${{ secrets.RPM_SIGNING_PASSPHRASE }}
         run: bash scripts/build-rpm.sh
+
+      - name: Remove isolated private signing material
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          if test -n "${GNUPGHOME:-}" && test -d "$GNUPGHOME"; then
+            gpgconf --homedir "$GNUPGHOME" --kill gpg-agent
+            rm -rf -- "$GNUPGHOME"
+          fi
 
       - name: Retain signed evidence for release review
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -102,3 +131,4 @@ jobs:
           path: dist-packages/
           if-no-files-found: error
           retention-days: 14
+          include-hidden-files: false

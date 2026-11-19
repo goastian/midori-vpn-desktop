@@ -18,6 +18,11 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
 
 ### Security
 
+- Rotate the unavailable RPM signing identity to a new pinned primary/signing
+  subkey, reject inactive or unavailable signing keys, and support protected
+  noninteractive signing without changing the operator's global RPM settings.
+- Restrict signed RPM Actions builds to the approved public release environment;
+  use only a signing-subkey export and remove the isolated private keyring.
 - Restrict agent grants and startup to network-only capabilities; harden
   private runtime session files and use internally generated RPC tokens.
   Direct system-resolver writes are disabled: DNS currently requires

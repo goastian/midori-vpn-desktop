@@ -7,6 +7,18 @@ on:
     branches: [ main, dev ]
 
 jobs:
+  test-signing-policy:
+    name: Validate RPM signing policy without private keys
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Test signing identity policy
+        run: bash scripts/test-signing-identity.sh
+
   test-agent:
     name: Test Go Agent
     runs-on: ubuntu-24.04
