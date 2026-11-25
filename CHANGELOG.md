@@ -18,6 +18,9 @@ Major Release with a verified WireGuard transport contract, native Go 1.27 agent
 
 ### Security
 
+- Align packaged OIDC defaults with the public MidoriVPN application and its
+  JWKS endpoint; preserve operator configuration precedence, PKCE and the
+  loopback callback.
 - Rotate the unavailable RPM signing identity to a new pinned primary/signing
   subkey, reject inactive or unavailable signing keys, and support protected
   noninteractive signing without changing the operator's global RPM settings.

@@ -62,6 +62,22 @@ the existing browser tab and tray can reconnect. These changes do not replace
 the installed PolicyKit, AppArmor, Secret Service and real-tunnel acceptance
 tests or independent review of the privileged networking surface.
 
+## Public OIDC configuration
+
+The packaged agent defaults to the public `midori-vpn` application at
+`accounts.astian.org`, with issuer `https://accounts.astian.org/`, JWKS at
+`/application/o/midori-vpn/jwks/` and client ID
+`60mBgw8BHTvKRPYVhDTJGoKEt30QYG3b7Sv0RFNd`. Authorization uses PKCE and
+`http://127.0.0.1:7071/oauth/callback`; no client secret is embedded.
+
+Defaults do not replace existing configuration. Local `.env`/`config.env`,
+`/etc/midorivpn/config.env`, the per-user
+`${XDG_CONFIG_HOME:-$HOME/.config}/midorivpn/config.env` and finally process
+environment variables retain their precedence. Operators with historical
+`AUTHENTIK_*` overrides must review them explicitly; upgrading does not rewrite
+their files or migrate their saved sessions. Public discovery verification is
+not an installed-client login acceptance test.
+
 ## Build and test
 
 The pinned rootless runner discovers this repository either below the Core

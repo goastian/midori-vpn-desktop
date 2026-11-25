@@ -16,6 +16,61 @@ func TestProductionConfigIsComplete(t *testing.T) {
 	}
 }
 
+func TestProductionOIDCIdentityMatchesMidoriVPN(t *testing.T) {
+	cfg := productionConfig()
+	for name, check := range map[string]struct{ got, want string }{
+		"issuer":        {cfg.AuthentikIssuer, "https://accounts.astian.org/"},
+		"client":        {cfg.AuthentikClientID, "60mBgw8BHTvKRPYVhDTJGoKEt30QYG3b7Sv0RFNd"},
+		"authorization": {cfg.AuthentikAuthURL, "https://accounts.astian.org/application/o/authorize/"},
+		"token":         {cfg.AuthentikTokenURL, "https://accounts.astian.org/application/o/token/"},
+		"userinfo":      {cfg.AuthentikUserinfoURL, "https://accounts.astian.org/application/o/userinfo/"},
+		"jwks":          {cfg.AuthentikJWKSURL, "https://accounts.astian.org/application/o/midori-vpn/jwks/"},
+		"callback":      {cfg.AuthentikRedirectURI, "http://127.0.0.1:7071/oauth/callback"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if check.got != check.want {
+				t.Fatalf("production OIDC %s = %q, want %q", name, check.got, check.want)
+			}
+		})
+	}
+}
+
+func TestLoadPreservesOIDCUserAndEnvironmentOverrides(t *testing.T) {
+	for _, key := range knownKeys() {
+		t.Setenv(key, "")
+	}
+	t.Chdir(t.TempDir())
+	configRoot := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configRoot)
+	userDir := filepath.Join(configRoot, "midorivpn")
+	if err := os.Mkdir(userDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	content := "AUTHENTIK_CLIENT_ID=operator-public-client\n" +
+		"AUTHENTIK_ISSUER=https://accounts.example.test/\n" +
+		"AUTHENTIK_JWKS_URL=https://accounts.example.test/application/o/custom/jwks/\n" +
+		"AUTHENTIK_REDIRECT_URI=http://127.0.0.1:7071/oauth/callback\n"
+	if err := os.WriteFile(filepath.Join(userDir, "config.env"), []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	fromFile := Load()
+	if fromFile.AuthentikClientID != "operator-public-client" ||
+		fromFile.AuthentikIssuer != "https://accounts.example.test/" ||
+		fromFile.AuthentikJWKSURL != "https://accounts.example.test/application/o/custom/jwks/" {
+		t.Fatalf("user OIDC config did not override production defaults: %#v", fromFile)
+	}
+
+	t.Setenv("AUTHENTIK_CLIENT_ID", "environment-public-client")
+	t.Setenv("AUTHENTIK_JWKS_URL", "https://accounts.example.test/application/o/environment/jwks/")
+	fromEnv := Load()
+	if fromEnv.AuthentikClientID != "environment-public-client" ||
+		fromEnv.AuthentikJWKSURL != "https://accounts.example.test/application/o/environment/jwks/" ||
+		fromEnv.AuthentikIssuer != fromFile.AuthentikIssuer ||
+		fromEnv.AuthentikRedirectURI != fromFile.AuthentikRedirectURI {
+		t.Fatalf("environment OIDC precedence changed: %#v", fromEnv)
+	}
+}
+
 func TestAPIURLFromEnvVar(t *testing.T) {
 	t.Setenv("API_URL", "https://test.vpn.example.com")
 	defer os.Unsetenv("API_URL")

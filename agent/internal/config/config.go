@@ -71,11 +71,11 @@ func productionConfig() Config {
 		APIURL:               "https://vpn.astian.org",
 		AccountURL:           "https://vpn.astian.org",
 		AuthentikIssuer:      "https://accounts.astian.org/",
-		AuthentikClientID:    "Wbc5hsIaK6kDp4cCFvzTtgAnEc5qNfWWARMmYXTn",
+		AuthentikClientID:    "60mBgw8BHTvKRPYVhDTJGoKEt30QYG3b7Sv0RFNd",
 		AuthentikAuthURL:     "https://accounts.astian.org/application/o/authorize/",
 		AuthentikTokenURL:    "https://accounts.astian.org/application/o/token/",
 		AuthentikUserinfoURL: "https://accounts.astian.org/application/o/userinfo/",
-		AuthentikJWKSURL:     "https://accounts.astian.org/application/o/elrealplatano/jwks/",
+		AuthentikJWKSURL:     "https://accounts.astian.org/application/o/midori-vpn/jwks/",
 		AuthentikRedirectURI: "http://127.0.0.1:7071/oauth/callback",
 	}
 }
